@@ -1,0 +1,84 @@
+# The model
+
+Let $X^{(t)} \in \mathbb{R}^{p}$ be given fixed design points and $Y_i^{(t)}  \in \mathbb{R}^{d}$ be the observed dependent variables, for $1 \le i \le n_t, \ 1 \le t \le T$. We model $Y_i^{(t)}$ as i.i.d. draws from $K$ different $d-$dimensional log-concave distributions, conditioning on  $X^{(t)}$. Let $Z_i^{(t)}$ denote the (latent) cluster membership so that $P(Z_i^{(t)} =k|X^{(t)} ) = \pi_k(X^{(t)} )$, for $1 \le k \le K$. Let $\mu_k:\mathbb{R}^{p+1} \rightarrow \mathbb{R}^{d}$ be the unknown regression function, for $1 \le k \le K$ and $\mu_k$ is assumed to belong to a given family $M$, which is closed under scalar addition. We further assume that $M$ is the set of all affine functions so that $\mu_k \in M$ if and only if $\mu_k (x) = \theta_{k0} + \theta_k^T x$ for some coefficients $\theta_{k0} \in \mathbb{R}^{d}$ and $\theta_k \in \mathbb{R}^{p \times d}$. The conditional error $\varepsilon_i^{(t)} |Z_i^{(t)}  =k$ follows a mean zero, $d-$dimensional log-concave density $exp(g_k)$ so that
+$Y_i^{(t)}  = \theta_{k0} + \theta_k^T X^{(t)} + \varepsilon_i^{(t)}, \text{ if } Z_i^{(t)} =k$. 
+
+Then, 
+$$
+Y_i^{(t)} |Z_i^{(t)}  = k, X^{(t)}  \ \sim \ exp[g_k(\cdot - \theta_{k0} - \theta_k^T X^{(t)} )]
+$$
+so that
+$$
+Y_i^{(t)} | X^{(t)}  \ \sim \ \sum_{k=1}^K exp[g_k(\cdot - \theta_{k0} - \theta_k^T X^{(t)} )]\pi_k(X^{(t)} ) 
+$$
+
+We model 
+$$
+\pi_{tk}(\alpha ) = \pi_k(X^{(t)} ; \alpha) 
+= \frac{exp(\alpha_{k0} + \alpha_k^T X^{(t)} )}{\sum_{l=1}^K exp(\alpha_{l0} + \alpha_l^T X^{(t)} )}
+$$
+where $\alpha = \{ \alpha_{k0}, \alpha_{k} \}_{k=1}^K$ is a collection of coefficients $\alpha_{k0} \in \mathbb{R}$ and $\alpha_k \in \mathbb{R}^{p}$ for $1 \le k \le K$.
+
+What we want to maximize here is the mixture of log-likelihood:
+
+\begin{align*}
+L(\alpha, \theta, g; X, Y) 
+&= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \log \mathbb{P}(Y_i^{(t)}  |X^{(t)} ) \\
+&= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \log \left[ \sum_{k=1}^K exp \left( g_k \left(Y_i^{(t)} -\theta_{k0} - \theta_k^T X^{(t)}  \right) \right) \cdot \pi_{tk}(\alpha) \right]
+\end{align*}
+
+where the parameters are  $\alpha,\ \theta = \{ \theta_{k0},\theta_k \}_{k=1}^K,\ g = \{ g_k \}_{k=1}^K$ where $g_k$ is a logdensity of a logconcave density $exp(g_k)$ for $1 \le k \le K$, and $X = \{X^{(t)} \}_{t=1}^T,\ Y = \{ Y_i^{(t)} \}_{i = 1,..., n_t}^{t = 1,..., T},\ N = \sum_{t=1}^T n_t$
+
+But directly optimizing $L(\alpha, \theta, g; X, Y)$ is difficult due to its non-convexity. Instead, using the membership $Z_i^{(t)}$, we define the joint log-likelihood:
+
+\begin{align*}
+\Lambda(\alpha, \theta, g; X, Y, Z) 
+&= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \sum_{k=1}^K  \mathbb{I}\{Z_i^{(t)}  =k\} \log \mathbb{P}(Y_i^{(t)} , Z_i^{(t)}  = k |X^{(t)} ) \\
+&= \frac{1}{N} \sum_{t, i,k}  \mathbb{I}\{Z_i^{(t)}  =k\} \left[ g_k \left(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)}  \right) + \log \pi_{tk}(\alpha)  \right]
+\end{align*}
+Since we can't observe $Z_i^{(t)}$, we define the surrogate function, which is the conditional expectation of $\Lambda(\alpha, g, \theta; X, Y, Z)$ with respect to the membership $Z_i^{(t)}$, conditioning on $X^{(t)}$ and $Y_i^{(t)}$:
+
+$$
+Q(\alpha, g, \theta) = Q(\alpha, g, \theta; X, Y) = \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \sum_{k=1}^K r_{tik} \left[ g_k \left(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)}  \right)) + \log \pi_{tk}(\alpha)  \right]
+$$
+where the responsibility $r_{tik}$ is defined
+\begin{align*}
+r_{tik} = r_{tik}(\alpha, \theta, g) = P(Z_i^{(t)}  = k |Y_i^{(t)} , X^{(t)} ; \alpha, \theta, g)
+&= \frac{exp(g_k(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)} )) \pi_{tk}(\alpha)}
+{\sum_{l=1}^K exp(g_l(Y_i^{(t)} -\theta_{l0} -\theta_l^T X^{(t)} )) \pi_{tl}(\alpha) }
+\end{align*}
+
+
+Note that the responsibility is a probability, so it should sum up to one with respect to k in the sense that
+
+$$
+\sum_{k=1}^K r_{tik} = \sum_{k=1}^K P(Z_i^{(t)}  = k |Y_i^{(t)} , X^{(t)} ) = 1
+$$
+It will be useful to have data generated from this model for testing purposes, so we begin by defining a function for simulating from this model.
+
+
+
+We've used some functions from other packages, so let's include those in our package:
+
+```{r}
+usethis::use_pipe()
+usethis::use_package("flowmix")
+usethis::use_package("logcondens")
+usethis::use_package("glmnet")
+usethis::use_package("Matrix")
+usethis::use_package("lpSolve")
+usethis::use_package("Rsymphony")
+usethis::use_package("ggplot2")
+usethis::use_package("parallel")
+usethis::use_package("assertthat")
+usethis::use_package("stats")
+usethis::use_package("sn")
+```
+
+
+
+
+
+
+
+

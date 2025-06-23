@@ -1,0 +1,26 @@
+Package: LCDmix
+Title: Mixture of log-concave regressions
+Version: 0.0.0.9000
+Authors@R: 
+    person("Sang-wook", "Lee", , "sangwook@usc.edu", role = c("aut", "cre"))
+Description: This package uses mixture of log-concave regressions to
+    analyze complex and heterogenous data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: 
+    assertthat,
+    flowmix,
+    ggplot2,
+    glmnet,
+    logcondens,
+    lpSolve,
+    magrittr,
+    Matrix,
+    parallel,
+    Rsymphony,
+    sn,
+    stats
+LitrVersionUsed: 0.9.2
+LitrId: 3ea3e50ffe3d1acb1326672169f93c14

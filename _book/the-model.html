@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>2 The model | Creating the LCDmix R package</title>
+<meta name="description" content="2 The model | Creating the LCDmix R package">
+<meta name="generator" content="bookdown 0.43 and GitBook 2.6.7">
+<meta property="og:title" content="2 The model | Creating the LCDmix R package">
+<meta property="og:type" content="book">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="2 The model | Creating the LCDmix R package">
+<meta name="author" content="Sang-wook Lee">
+<meta name="date" content="2025-06-23">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="prev" href="index.html">
+<link rel="next" href="the-method.html">
+<script src="libs/jquery-3.6.0/jquery-3.6.0.min.js"></script><script src="https://cdn.jsdelivr.net/npm/fuse.js@6.4.6/dist/fuse.min.js"></script><link href="libs/gitbook-2.6.7/css/style.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-table.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-bookdown.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-highlight.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-search.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-fontsettings.css" rel="stylesheet">
+<link href="libs/gitbook-2.6.7/css/plugin-clipboard.css" rel="stylesheet">
+<link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet">
+<link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet">
+<script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script><style type="text/css">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+<style type="text/css">
+  
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+</style>
+<style type="text/css">fieldset.chunkfield {border:1px dotted black;padding-bottom: 0px;padding-top: 0px;margin:0 2px;padding:.35em .625em .75em}
+    legend.chunklegend {padding:0;width:auto;border:0; border-bottom: none; margin-bottom:0}
+    </style>
+</head>
+<body>
+
+
+
+  <div class="book without-animation with-summary font-size-2 font-family-1" data-basepath=".">
+
+    <div class="book-summary">
+      <nav role="navigation"><ul class="summary">
+<li class="chapter" data-level="1" data-path="index.html">
+<a href="index.html"><i class="fa fa-check"></i><b>1</b> Preliminaries</a>
+<ul>
+<li class="chapter" data-level="1.1" data-path="index.html"><a href="index.html#description-file"><i class="fa fa-check"></i><b>1.1</b> DESCRIPTION file</a></li>
+<li class="chapter" data-level="1.2" data-path="index.html"><a href="index.html#package-level-documentation"><i class="fa fa-check"></i><b>1.2</b> Package-level documentation</a></li>
+</ul>
+</li>
+<li class="chapter" data-level="2" data-path="the-model.html"><a href="the-model.html"><i class="fa fa-check"></i><b>2</b> The model</a></li>
+<li class="chapter" data-level="3" data-path="the-method.html"><a href="the-method.html"><i class="fa fa-check"></i><b>3</b> The method</a></li>
+<li class="chapter" data-level="4" data-path="conclude.html"><a href="conclude.html"><i class="fa fa-check"></i><b>4</b> Conclusion</a></li>
+</ul></nav>
+</div>
+
+    <div class="book-body">
+      <div class="body-inner">
+        <div class="book-header" role="navigation">
+          <h1>
+            <i class="fa fa-circle-o-notch fa-spin"></i><a href="./">Creating the <code>LCDmix</code> R package</a>
+          </h1>
+        </div>
+
+        <div class="page-wrapper" tabindex="-1" role="main">
+          <div class="page-inner">
+
+            <section class="normal" id="section-"><div id="the-model" class="section level1 hasAnchor" number="2">
+<h1>
+<span class="header-section-number">2</span> The model<a href="the-model.html#the-model" class="anchor-section" aria-label="Anchor link to header"></a>
+</h1>
+<p>Let <span class="math inline">\(X^{(t)} \in \mathbb{R}^{p}\)</span> be given fixed design points and <span class="math inline">\(Y_i^{(t)}  \in \mathbb{R}^{d}\)</span> be the observed dependent variables, for <span class="math inline">\(1 \le i \le n_t, \ 1 \le t \le T\)</span>. We model <span class="math inline">\(Y_i^{(t)}\)</span> as i.i.d. draws from <span class="math inline">\(K\)</span> different <span class="math inline">\(d-\)</span>dimensional log-concave distributions, conditioning on <span class="math inline">\(X^{(t)}\)</span>. Let <span class="math inline">\(Z_i^{(t)}\)</span> denote the (latent) cluster membership so that <span class="math inline">\(P(Z_i^{(t)} =k|X^{(t)} ) = \pi_k(X^{(t)} )\)</span>, for <span class="math inline">\(1 \le k \le K\)</span>. Let <span class="math inline">\(\mu_k:\mathbb{R}^{p+1} \rightarrow \mathbb{R}^{d}\)</span> be the unknown regression function, for <span class="math inline">\(1 \le k \le K\)</span> and <span class="math inline">\(\mu_k\)</span> is assumed to belong to a given family <span class="math inline">\(M\)</span>, which is closed under scalar addition. We further assume that <span class="math inline">\(M\)</span> is the set of all affine functions so that <span class="math inline">\(\mu_k \in M\)</span> if and only if <span class="math inline">\(\mu_k (x) = \theta_{k0} + \theta_k^T x\)</span> for some coefficients <span class="math inline">\(\theta_{k0} \in \mathbb{R}^{d}\)</span> and <span class="math inline">\(\theta_k \in \mathbb{R}^{p \times d}\)</span>. The conditional error <span class="math inline">\(\varepsilon_i^{(t)} |Z_i^{(t)}  =k\)</span> follows a mean zero, <span class="math inline">\(d-\)</span>dimensional log-concave density <span class="math inline">\(exp(g_k)\)</span> so that
+<span class="math inline">\(Y_i^{(t)}  = \theta_{k0} + \theta_k^T X^{(t)} + \varepsilon_i^{(t)}, \text{ if } Z_i^{(t)} =k\)</span>.</p>
+<p>Then,
+<span class="math display">\[
+Y_i^{(t)} |Z_i^{(t)}  = k, X^{(t)}  \ \sim \ exp[g_k(\cdot - \theta_{k0} - \theta_k^T X^{(t)} )]
+\]</span>
+so that
+<span class="math display">\[
+Y_i^{(t)} | X^{(t)}  \ \sim \ \sum_{k=1}^K exp[g_k(\cdot - \theta_{k0} - \theta_k^T X^{(t)} )]\pi_k(X^{(t)} )
+\]</span></p>
+<p>We model
+<span class="math display">\[
+\pi_{tk}(\alpha ) = \pi_k(X^{(t)} ; \alpha)
+= \frac{exp(\alpha_{k0} + \alpha_k^T X^{(t)} )}{\sum_{l=1}^K exp(\alpha_{l0} + \alpha_l^T X^{(t)} )}
+\]</span>
+where <span class="math inline">\(\alpha = \{ \alpha_{k0}, \alpha_{k} \}_{k=1}^K\)</span> is a collection of coefficients <span class="math inline">\(\alpha_{k0} \in \mathbb{R}\)</span> and <span class="math inline">\(\alpha_k \in \mathbb{R}^{p}\)</span> for <span class="math inline">\(1 \le k \le K\)</span>.</p>
+<p>What we want to maximize here is the mixture of log-likelihood:</p>
+<p><span class="math display">\[\begin{align*}
+L(\alpha, \theta, g; X, Y)
+&amp;= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \log \mathbb{P}(Y_i^{(t)}  |X^{(t)} ) \\
+&amp;= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \log \left[ \sum_{k=1}^K exp \left( g_k \left(Y_i^{(t)} -\theta_{k0} - \theta_k^T X^{(t)}  \right) \right) \cdot \pi_{tk}(\alpha) \right]
+\end{align*}\]</span></p>
+<p>where the parameters are <span class="math inline">\(\alpha,\ \theta = \{ \theta_{k0},\theta_k \}_{k=1}^K,\ g = \{ g_k \}_{k=1}^K\)</span> where <span class="math inline">\(g_k\)</span> is a logdensity of a logconcave density <span class="math inline">\(exp(g_k)\)</span> for <span class="math inline">\(1 \le k \le K\)</span>, and <span class="math inline">\(X = \{X^{(t)} \}_{t=1}^T,\ Y = \{ Y_i^{(t)} \}_{i = 1,..., n_t}^{t = 1,..., T},\ N = \sum_{t=1}^T n_t\)</span></p>
+<p>But directly optimizing <span class="math inline">\(L(\alpha, \theta, g; X, Y)\)</span> is difficult due to its non-convexity. Instead, using the membership <span class="math inline">\(Z_i^{(t)}\)</span>, we define the joint log-likelihood:</p>
+<p><span class="math display">\[\begin{align*}
+\Lambda(\alpha, \theta, g; X, Y, Z)
+&amp;= \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \sum_{k=1}^K  \mathbb{I}\{Z_i^{(t)}  =k\} \log \mathbb{P}(Y_i^{(t)} , Z_i^{(t)}  = k |X^{(t)} ) \\
+&amp;= \frac{1}{N} \sum_{t, i,k}  \mathbb{I}\{Z_i^{(t)}  =k\} \left[ g_k \left(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)}  \right) + \log \pi_{tk}(\alpha)  \right]
+\end{align*}\]</span>
+Since we can’t observe <span class="math inline">\(Z_i^{(t)}\)</span>, we define the surrogate function, which is the conditional expectation of <span class="math inline">\(\Lambda(\alpha, g, \theta; X, Y, Z)\)</span> with respect to the membership <span class="math inline">\(Z_i^{(t)}\)</span>, conditioning on <span class="math inline">\(X^{(t)}\)</span> and <span class="math inline">\(Y_i^{(t)}\)</span>:</p>
+<p><span class="math display">\[
+Q(\alpha, g, \theta) = Q(\alpha, g, \theta; X, Y) = \frac{1}{N} \sum_{t=1}^T \sum_{i=1}^{n_t} \sum_{k=1}^K r_{tik} \left[ g_k \left(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)}  \right)) + \log \pi_{tk}(\alpha)  \right]
+\]</span>
+where the responsibility <span class="math inline">\(r_{tik}\)</span> is defined
+<span class="math display">\[\begin{align*}
+r_{tik} = r_{tik}(\alpha, \theta, g) = P(Z_i^{(t)}  = k |Y_i^{(t)} , X^{(t)} ; \alpha, \theta, g)
+&amp;= \frac{exp(g_k(Y_i^{(t)} -\theta_{k0} -\theta_k^T X^{(t)} )) \pi_{tk}(\alpha)}
+{\sum_{l=1}^K exp(g_l(Y_i^{(t)} -\theta_{l0} -\theta_l^T X^{(t)} )) \pi_{tl}(\alpha) }
+\end{align*}\]</span></p>
+<p>Note that the responsibility is a probability, so it should sum up to one with respect to k in the sense that</p>
+<p><span class="math display">\[
+\sum_{k=1}^K r_{tik} = \sum_{k=1}^K P(Z_i^{(t)}  = k |Y_i^{(t)} , X^{(t)} ) = 1
+\]</span>
+It will be useful to have data generated from this model for testing purposes, so we begin by defining a function for simulating from this model.</p>
+<p>We’ve used some functions from other packages, so let’s include those in our package:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="the-model.html#cb4-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_pipe</span>()</span></code></pre></div>
+<pre><code>## ✔ Adding magrittr to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ✔ Writing 'R/utils-pipe.R'.</code></pre>
+<pre><code>## ☐ Run `devtools::document()` to update 'NAMESPACE'.</code></pre>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="the-model.html#cb8-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"flowmix"</span>)</span></code></pre></div>
+<pre><code>## Registered S3 methods overwritten by 'RcppEigen':
+##   method               from         
+##   predict.fastLm       RcppArmadillo
+##   print.fastLm         RcppArmadillo
+##   summary.fastLm       RcppArmadillo
+##   print.summary.fastLm RcppArmadillo</code></pre>
+<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLmPure' by
+## 'RcppEigen::fastLmPure' when loading 'flowmix'</code></pre>
+<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLm' by
+## 'RcppEigen::fastLm' when loading 'flowmix'</code></pre>
+<pre><code>## ✔ Adding flowmix to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `flowmix::fun()`.</code></pre>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="the-model.html#cb14-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"logcondens"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding logcondens to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `logcondens::fun()`.</code></pre>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="the-model.html#cb17-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"glmnet"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding glmnet to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `glmnet::fun()`.</code></pre>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="the-model.html#cb20-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"Matrix"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding Matrix to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `Matrix::fun()`.</code></pre>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="the-model.html#cb23-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"lpSolve"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding lpSolve to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `lpSolve::fun()`.</code></pre>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="the-model.html#cb26-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"Rsymphony"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding Rsymphony to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `Rsymphony::fun()`.</code></pre>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="the-model.html#cb29-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"ggplot2"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding ggplot2 to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `ggplot2::fun()`.</code></pre>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="the-model.html#cb32-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"parallel"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding parallel to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `parallel::fun()`.</code></pre>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="the-model.html#cb35-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"assertthat"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding assertthat to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `assertthat::fun()`.</code></pre>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="the-model.html#cb38-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"stats"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding stats to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `stats::fun()`.</code></pre>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="the-model.html#cb41-1" tabindex="-1"></a>usethis<span class="sc">::</span><span class="fu">use_package</span>(<span class="st">"sn"</span>)</span></code></pre></div>
+<pre><code>## ✔ Adding sn to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `sn::fun()`.</code></pre>
+
+</div>
+            </section>
+</div>
+        </div>
+      </div>
+<a href="index.html" class="navigation navigation-prev " aria-label="Previous page"><i class="fa fa-angle-left"></i></a>
+<a href="the-method.html" class="navigation navigation-next " aria-label="Next page"><i class="fa fa-angle-right"></i></a>
+    </div>
+  </div>
+<script src="libs/gitbook-2.6.7/js/app.min.js"></script><script src="libs/gitbook-2.6.7/js/clipboard.min.js"></script><script src="libs/gitbook-2.6.7/js/plugin-search.js"></script><script src="libs/gitbook-2.6.7/js/plugin-sharing.js"></script><script src="libs/gitbook-2.6.7/js/plugin-fontsettings.js"></script><script src="libs/gitbook-2.6.7/js/plugin-bookdown.js"></script><script src="libs/gitbook-2.6.7/js/jquery.highlight.js"></script><script src="libs/gitbook-2.6.7/js/plugin-clipboard.js"></script><script>
+gitbook.require(["gitbook"], function(gitbook) {
+gitbook.start({
+  "sharing": {
+    "github": false,
+    "facebook": true,
+    "twitter": true,
+    "linkedin": false,
+    "weibo": false,
+    "instapaper": false,
+    "vk": false,
+    "whatsapp": false,
+    "all": ["facebook", "twitter", "linkedin", "weibo", "instapaper"]
+  },
+  "fontsettings": {
+    "theme": "white",
+    "family": "sans",
+    "size": 2
+  },
+  "edit": {
+    "link": null,
+    "text": null
+  },
+  "history": {
+    "link": null,
+    "text": null
+  },
+  "view": {
+    "link": null,
+    "text": null
+  },
+  "download": null,
+  "search": {
+    "engine": "fuse",
+    "options": null
+  },
+  "toc": {
+    "collapse": "subsection"
+  }
+});
+});
+</script><!-- dynamically load mathjax for compatibility with self-contained --><script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    var src = "true";
+    if (src === "" || src === "true") src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/latest.js?config=TeX-MML-AM_CHTML";
+    if (location.protocol !== "file:")
+      if (/^https?:/.test(src))
+        src = src.replace(/^https?:/, '');
+    script.src = src;
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+</body>
+</html>

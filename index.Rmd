@@ -1,0 +1,55 @@
+---
+title: "Creating the ``r params$package_name`` R package"
+author: "Sang-wook Lee"
+date: "`r Sys.Date()`"
+site: bookdown::bookdown_site
+knit: litr::render
+output: litr::litr_gitbook
+params:
+  package_name: "LCDmix" # <-- change this to your package name
+  package_parent_dir: "." # <-- relative to this file's location
+documentclass: book
+---
+
+# Preliminaries
+
+This document uses [litr](https://jacobbien.github.io/litr-project/) to define the ``r params$package_name`` R package.  
+
+```{r, eval = FALSE}
+#remotes::install_github("jacobbien/litr-project@*release", subdir = "litr")
+
+litr::render("index.Rmd")
+
+
+```
+
+## DESCRIPTION file
+
+```{r package-setup, message=FALSE, results='hide'}
+usethis::create_package(
+  path = ".",
+  fields = list(
+    Package = params$package_name,
+    Version = "0.0.0.9000",
+    Title = "Mixture of log-concave regressions",
+    Description = "This package uses mixture of log-concave regressions to analyze complex and heterogenous data.",
+    `Authors@R` = person(
+      given = "Sang-wook",
+      family = "Lee",
+      email = "sangwook@usc.edu",
+      role = c("aut", "cre")
+      )
+  )
+)
+usethis::use_mit_license(copyright_holder = "F. Last")
+```
+
+## Package-level documentation
+
+```{package_doc}
+#' Mixture of log-concave regressions modeling
+#'
+#' This package uses mixture of log-concave regressions to analyze complex and heterogenous data.
+#' 
+#' @docType package
+```
