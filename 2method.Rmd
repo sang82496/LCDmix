@@ -689,10 +689,9 @@ LP_logcondens = function(Y_bin,
   }
   
   # solving LP
-  lp_res = Rsymphony::Rsymphony_solve_LP(obj = obj_coef, mat = const_mat, dir = const_dir, rhs = const_vec,  max = T)
+  lp_res = lpSolve::lp(obj = obj_coef, const.mat = const_mat, const.dir = const_dir, const.rhs = const_vec,  direction = "max")
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
-    lp_res = lpSolve::lp(obj = obj_coef, const.mat = const_mat, const.dir = const_dir, const.rhs = const_vec,  direction = "max")
   }
   theta0_k = lp_res$solution[n+1] - lp_res$solution[2*n+p+2]
   theta_k = lp_res$solution[(n+2):(n+p+1)] - lp_res$solution[(2*n+p+3):(2*(n+p+1))]
