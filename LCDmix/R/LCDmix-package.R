@@ -9,3 +9,1065 @@
 ## usethis namespace: start
 ## usethis namespace: end
 NULL
+
+main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambda_theta = 1e-3, nrep_flowmix = 1, 
+                max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3){
+  
+  # binning
+  if (binned){
+    Y_bin = Y
+    bin_mass = biomass
+  } else {
+    bin = binning(Y, biomass, B)
+    Y_bin = bin$Y_bin
+    bin_mass = bin$bin_mass
+  }
+  print('passed binning')
+
+  # initial GMR
+  initial = initialization(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar)
+  print('passed init')
+  
+  # iteration
+  iter = iteration(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta, max_iter, maxdev, r_bar)
+  
+  return(list(Y_bin = Y_bin,
+              X = X,
+              bin_mass = bin_mass,
+              initial = initial,
+              iter = iter))
+}
+
+
+
+
+binning = function(Y, biomass, B = 40){
+  TT = length(Y)
+  if (B == 0){
+    Y_bin = list()
+    bin_mass = list()
+    for (t in 1:TT){
+      tmp = tapply(biomass[[t]], factor(Y[[t]]), sum)
+      Y_bin[[t]] = matrix(as.numeric(names(tmp)), ncol = 1)
+      bin_mass[[t]] = as.numeric(tmp)
+      }
+  } else {
+      Y_range = range(Y)
+      bin = seq(from = Y_range[1], to = Y_range[2], length = B + 1)
+      binnedY = lapply(Y, findInterval, bin, rightmost.closed = T)
+      binnedY = lapply(binnedY, factor, levels = 1:B)
+      mid = rep(0, B)
+      for (i in 1:B){
+        mid[i] = (bin[i+1] + bin[i])/2
+      }
+      Y_bin = list()
+      bin_mass = list()
+      for (t in 1:TT){
+        bin_mass[[t]] = tapply(biomass[[t]], binnedY[[t]], sum)
+        # removing bins with zero counts
+        tmp = !is.na(bin_mass[[t]])
+        Y_bin[[t]] = matrix(mid[tmp], ncol = 1)
+        bin_mass[[t]] = c(bin_mass[[t]][tmp])
+      }
+      names(Y_bin) = names(Y)
+  }
+  return(list(Y_bin = Y_bin,
+           bin_mass = bin_mass))
+}
+# could be improved using levels(factor(unlist(Y)))
+
+
+
+
+
+
+initialization = function(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar){
+  
+  flow = flowmix::flowmix(Y_bin, X, bin_mass, numclust = K, prob_lambda = lambda_alpha, mean_lambda = lambda_theta, nrep = nrep_flowmix, maxdev = maxdev)
+  print('passed flowmix')
+  
+  ## initial alpha
+  alpha_init = flow$alpha
+  
+  ## initial theta
+  theta0_init = list()
+  theta_init = list()
+  for (k in 1:K){
+    theta0_init[[k]] = flow$beta[[k]][1]
+    theta_init[[k]] = flow$beta[[k]][2:(ncol(X)+1)]
+  }
+  resi_init = calc_resi(Y_bin, X, theta0_init, theta_init)
+
+  ## initial resp
+  likeli = list()
+  resp_init = list()
+  weight_init = list()
+  idx_init = list()
+  P = pi_k(X, alpha_init)
+  
+  for (t in 1:length(Y_bin)){
+    likeli[[t]] = matrix(0, nrow = nrow(Y_bin[[t]]), ncol = K)
+    idx_init[[t]] = matrix(F, nrow = nrow(Y_bin[[t]]), ncol = K)
+    for (k in 1:K){
+      likeli[[t]][,k] = dnorm(resi_init[[t]][,k], flow$mn[t,1,k], sqrt(flow$sigma[k])) * P[t,k]
+    }
+    resp_init[[t]] = likeli[[t]]/rowSums(likeli[[t]])
+    idx_init[[t]] = resp_init[[t]] > r_bar     
+    weight_init[[t]] = resp_init[[t]] * bin_mass[[t]]
+  }
+  
+  ## initial theta shift
+  theta0_init = Mstep_shift(Y_bin, X, weight_init, idx_init, theta_init)
+  resi_init = calc_resi(Y_bin, X, theta0_init, theta_init)
+  
+  ## initial g
+  g_init = Mstep_g_logcondens(resi_init, weight_init, idx_init)
+
+  ## initial Q
+  Q = calc_surr_logcondens(X, g_init, resi_init, theta_init, alpha_init, idx_init, weight_init, lambda_alpha, lambda_theta)
+  Q_every = Q
+  
+  return(list(flow = flow,
+       idx_init = idx_init,
+       resp_init = resp_init,
+       weight_init = weight_init,
+       theta0_init = theta0_init,
+       theta_init = theta_init,
+       alpha_init = alpha_init,
+       resi_init = resi_init,
+       g_init = g_init,
+       Q = Q,
+       Q_every = Q_every))
+}
+
+
+#' calculating \pi_{tk}(\alpha) = P(Z_i^{(t)} = k| X^(t))
+#' 
+pi_k = function(X, 
+                alpha){
+  p = dim(X)[2]
+  TT = dim(X)[1]
+  K = dim(alpha)[1]
+  tmp = exp(t(matrix(alpha[,1], ncol = TT, nrow = K)) + X %*% t(alpha[,2:(p+1)]))
+  pi_k = tmp / rowSums(tmp) # TT by K matrix
+  return(pi_k) 
+}
+
+
+
+
+Mstep_shift = function(Y_bin,
+                       X,
+                       weight,
+                       idx,
+                       theta){
+  theta0 = list()
+  for (k in 1:length(theta)){
+    # except for the intercept term
+    up = 0
+    down = 0
+    for (t in 1:length(Y_bin)){
+      idx_tk = idx[[t]][,k]
+      weight_tk = weight[[t]][idx_tk,k]
+      up = up + weight_tk %*% Y_bin[[t]][idx_tk] - sum(weight_tk) * sum(X[t,] * theta[[k]])
+      down = down + sum(weight_tk)
+    }
+    theta0[[k]] = up/down
+  }
+  return(theta0)
+}
+
+
+calc_resi = function(Y_bin,
+                     X,
+                     theta0,
+                     theta){
+  resi = list()
+  K = length(theta0)
+  for (t in 1:length(Y_bin)){
+    resi[[t]] = matrix(0, nrow = length(Y_bin[[t]]), ncol = K)
+    for (k in 1:K){
+      resi[[t]][,k] = Y_bin[[t]] - c(theta0[[k]] + sum(X[t,] * theta[[k]]))
+    }
+  }
+  return(resi) # length TT list, with `resi[[t]]` being N_t by K matrix
+}
+
+
+
+Mstep_g_logcondens = function(resi, 
+                              weight,
+                              idx){
+  TT = length(weight)
+  K = dim(idx[[1]])[2]
+  
+  g = list()
+  for (k in 1:K){
+    resi_k = c()
+    w_k = c()
+    for (t in 1:TT){
+      idx_tk = idx[[t]][,k]
+      weight_tk = weight[[t]][idx_tk,k]
+      resi_k = c(resi_k, resi[[t]][idx_tk,k])
+      w_k = c(w_k, weight_tk)
+    }
+    uniq_resi_k = unique(resi_k)
+    M = length(uniq_resi_k)
+    if (M < 5) {
+      print(paste("There are only", M, "points in Cluster", k))
+    }
+    uniq_wk = rep(0, M)
+    for (j in 1:M){
+      uniq_wk[j] = sum(w_k[uniq_resi_k[j] == resi_k])
+    }
+    #g[[k]] = logcondens::activeSetLogCon(uniq_resi_k, w = uniq_wk / sum(uniq_wk), print = FALSE)
+    g[[k]] = modified_logcondens(uniq_resi_k, w = uniq_wk / sum(uniq_wk), print = FALSE)
+  }
+  return(g)
+}
+
+modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
+    prec <- 1e-10
+    xn <- sort(x)
+    if ((!identical(xgrid, NULL) & (!identical(w, NA)))) {
+        stop("If w != NA then xgrid must be NULL!\n")
+    }
+    if (identical(w, NA)) {
+        tmp <- logcondens::preProcess(x, xgrid = xgrid)
+        x <- tmp$x
+        w <- tmp$w
+        sig <- tmp$sig
+    }
+    if (!identical(w, NA)) {
+        tmp <- cbind(x, w)
+        tmp <- tmp[order(x), ]
+        x <- tmp[, 1]
+        w <- tmp[, 2]
+        est.m <- sum(w * x)
+        est.sd <- sum(w * (x - est.m)^2)
+        est.sd <- sqrt(est.sd * length(x)/(length(x) - 1))
+        sig <- est.sd
+    }
+    n <- length(x)
+    phi <- logcondens::LocalNormalize(x, 1:n * 0)
+    IsKnot <- 1:n * 0
+    IsKnot[c(1, n)] <- 1
+    res1 <- logcondens::LocalMLE(x = x, w = w, IsKnot = IsKnot, phi_o = phi, 
+        prec = prec)
+    phi <- res1$phi
+    L <- res1$L
+    conv <- res1$conv
+    H <- res1$H
+    iter1 <- 1
+    while ((iter1 < 500) & (max(H) > prec * mean(abs(H)))) {
+        IsKnot_old <- IsKnot
+        iter1 <- iter1 + 1
+        tmp <- max(H)
+        k <- (1:n) * (H == tmp)
+        k <- min(k[k > 0])
+        IsKnot[k] <- 1
+        res2 <- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+        phi_new <- res2$phi
+        L <- res2$L
+        conv_new <- res2$conv
+        H <- res2$H
+        while ((max(conv_new) > prec * max(abs(conv_new)))) {
+            JJ <- (1:n) * (conv_new > 0)
+            JJ <- JJ[JJ > 0]
+            if (length(JJ) == 1 && conv[JJ] == conv_new[JJ]){ # inserted
+              print('break')
+              break
+              } 
+            tmp <- conv[JJ]/(conv[JJ] - conv_new[JJ])
+            lambda <- min(tmp)
+            KK <- (1:length(JJ)) * (tmp == lambda)
+            KK <- KK[KK > 0]
+            IsKnot[JJ[KK]] <- 0
+            phi <- (1 - lambda) * phi + lambda * phi_new
+            conv <- pmin(c(logcondens::LocalConvexity(x, phi), 0))
+            res3 <- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+            phi_new <- res3$phi
+            L <- res3$L
+            conv_new <- res3$conv
+            H <- res3$H
+        }
+        phi <- phi_new
+        conv <- conv_new
+        if (sum(IsKnot != IsKnot_old) == 0) {
+            break
+        }
+        if (print == TRUE) {
+            print(paste("iter1 = ", iter1 - 1, " / L = ", round(L, 
+                4), " / max(H) = ", round(max(H), 4), " / #knots = ", 
+                sum(IsKnot), sep = ""))
+        }
+    }
+    Fhat <- logcondens::LocalF(x, phi)
+    res <- list(xn = xn, x = x, w = w, phi = as.vector(phi), 
+        IsKnot = IsKnot, L = L, Fhat = as.vector(Fhat), H = as.vector(H), 
+        n = length(xn), m = n, knots = x[IsKnot == 1], mode = x[phi == 
+            max(phi)], sig = sig)
+    return(res)
+}
+
+
+
+
+#' calculating the surrogate loglikelihood Q
+#' 
+calc_surr_logcondens = function(X,
+                                g, 
+                                resi, 
+                                theta,
+                                alpha, 
+                                idx,
+                                weight,
+                                lambda_alpha,
+                                lambda_theta){
+  K = length(g)
+  N = sum(unlist(weight))
+  P = pi_k(X, alpha) # TT by K matrix
+  p = dim(X)[2]
+  TT = dim(X)[1]
+  total = 0
+  for (k in 1:K){
+    for (t in 1:TT){
+      idx_tk = idx[[t]][,k]
+      resi_tk = resi[[t]][idx_tk,k]
+      weight_tk = weight[[t]][idx_tk,k]
+      if (length(weight_tk) > 0) {
+        suppressWarnings({tmp = weight_tk * logcondens::evaluateLogConDens(resi_tk, g[[k]])[,2]})
+        total = total + sum(tmp[!is.infinite(tmp)]) + sum(weight_tk[!is.infinite(tmp)]) * log(P[t,k])
+      }
+    }
+  }
+  Q = total/N - lambda_alpha * sum(abs(alpha[,2:(p+1)])) - lambda_theta * sum(abs(unlist(theta)))
+  return(Q)
+}
+
+
+
+
+#Y_bin = Y_tr
+#X = X_tr
+#bin_mass = bin_mass_tr
+
+
+iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta = 1e-6, max_iter = 30, maxdev, r_bar){
+  
+  K = length(initial$g_init)
+  p = dim(X)[2]
+  TT = dim(X)[1]
+  
+  idx_old = initial$idx_init
+  resp_old = initial$resp_init
+  weight_old = initial$weight_init
+  resi_old = initial$resi_init
+  alpha_old = initial$alpha_init
+  theta0_old = initial$theta0_init
+  theta_old = initial$theta_init
+  g_old = initial$g_init
+  Q = initial$Q
+  Q_every = initial$Q_every
+  
+  # iteration
+  for (i in seq(max_iter)) {
+    
+    ## E-step: update responsibilities
+    Estep = E_step_logcondens(X, bin_mass, resi_old, alpha_old, g_old, r_bar)
+    idx_new = Estep$idx
+    resp_new = Estep$resp
+    weight_new = Estep$weight
+#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_old, theta_old, alpha_old, idx_new, weight_new, lambda_alpha, lambda_theta))
+    print('passed Estep')
+    
+    ## M-step: update estimates of (alpha,theta,g)
+  
+    ### Mstep_alpha
+    alpha_new = Mstep_alpha(X, weight_new, idx_new, lambda_alpha)
+#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_old, theta_old, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
+    print('passed alpha')
+    
+    ### Mstep_theta
+    M_theta = Mstep_theta_logcondens(Y_bin, X, weight_new, resi_old, g_old, idx_old, theta0_old, theta_old, lambda_theta, maxdev)
+    theta0_new = M_theta$theta0
+    theta_new = M_theta$theta
+    print('passed theta')
+    
+    ### Mstep_shift
+    theta0_new = Mstep_shift(Y_bin, X, weight_new, idx_new, theta_new)
+    resi_new = calc_resi(Y_bin, X, theta0_new, theta_new)
+#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_new, theta_new, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
+    
+#    save(resi_new, weight_new, idx_new, file = file.path('.', paste0(i, '.Rdata')))
+#    print(paste0(i, 'th input saved'))
+    
+    ### Mstep_g
+    g_new = Mstep_g_logcondens(resi_new, weight_new, idx_new)
+    Q_every = append(Q_every, calc_surr_logcondens(X, g_new, resi_new, theta_new, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
+    print('passed g')
+    
+    ### loglikelihood
+    Q = append(Q, Q_every[length(Q_every)])
+    
+    ## termination criteria
+    print(i)
+    inc = (Q[i+1]-Q[i])/abs(Q[i])
+    if (inc < 0) {
+     idx_new = idx_old
+     resp_new = resp_old
+     resi_new = resi_old
+     alpha_new = alpha_old
+     theta0_new = theta0_old
+     theta_new = theta_old
+     weight_new = weight_old
+     g_new = g_old
+     print("The loglikelihood decreased in the last iteration. Will return the previous parameters")
+     break;
+    } else if (inc <= iter_eta  | i==max_iter){
+      break;
+    } else {
+      idx_old = idx_new
+      resi_old = resi_new
+      alpha_old = alpha_new
+      theta0_old = theta0_new
+      theta_old = theta_new
+      weight_old = weight_new
+      g_old = g_new
+    }
+  }
+  print(i)
+  
+  return(list(idx_new = idx_new,
+              resp_new = resp_new,
+              weight_new = weight_new,
+              resi_new = resi_new,
+              alpha_new = alpha_new,
+              theta0_new = theta0_new,
+              theta_new = theta_new,
+              g_new = g_new,
+              lambda_alpha = lambda_alpha, 
+              lambda_theta = lambda_theta,
+              Q = Q,
+              Q_every = Q_every))
+}
+
+
+#' Updating responsibility
+#' 
+E_step_logcondens = function(X,
+                             bin_mass,
+                             resi,
+                             alpha,
+                             g,
+                             r_bar){
+  K = length(g)
+  TT = dim(X)[1]
+  p = dim(X)[2]
+  
+  # initial clusters
+  likeli = list()
+  resp = list()
+  weight = list()
+  idx = list()
+  for (t in 1:TT){
+    likeli[[t]] = matrix(0, nrow = nrow(resi[[t]]), ncol = K)
+    idx[[t]] = matrix(F, nrow = nrow(resi[[t]]), ncol = K)
+    for (k in 1:K){
+      suppressWarnings({likeli[[t]][,k] = logcondens::evaluateLogConDens(resi[[t]][,k], g[[k]])[,3] * pi_k(X, alpha)[t,k]})
+    }
+    resp[[t]] = likeli[[t]]/rowSums(likeli[[t]])
+    idx[[t]] = resp[[t]] > r_bar     
+    weight[[t]] = resp[[t]] * bin_mass[[t]]
+  }
+  return(list(resp = resp,
+              weight = weight,
+              idx = idx
+              ))
+}
+
+
+
+
+#' updating alpha
+#' 
+Mstep_alpha = function(X,
+                       weight,
+                       idx,
+                       lambda_alpha){
+  
+  TT = dim(X)[1]
+  K = dim(idx[[1]])[2]
+  lambda_max = lambda_alpha * 100
+  lambdas = exp(seq(from = log(lambda_max), to = log(lambda_alpha), length = 30))
+  
+  weight.sum = matrix(0, nrow = TT, ncol = K)
+  for (t in 1:TT){
+    for (k in 1:K){
+      idx_tk = idx[[t]][,k]
+      weight.sum[t,k] = sum(weight[[t]][idx_tk,k])
+    }
+  }
+  fit = glmnet::glmnet(x = X,
+                        y = weight.sum,
+                        lambda = lambdas,
+                        family = "multinomial",
+                        intercept = TRUE)
+  coefs = glmnet::coef.glmnet(fit, s = lambda_alpha)
+  alpha = t(as.matrix(do.call(cbind, coefs)))
+  return(alpha)  # (p+1) by K matrix
+}
+
+
+
+
+#' Updating theta
+#' 
+Mstep_theta_logcondens = function(Y_bin,
+                                  X,
+                                  weight,
+                                  resi,
+                                  g,
+                                  idx_old,
+                                  theta0,
+                                  theta,
+                                  lambda_theta,
+                                  maxdev){
+  K = length(g)
+  theta0_new = list()
+  theta_new = list()
+  for (k in 1:K){
+    tmp = LP_logcondens(Y_bin, X, weight, resi, g[[k]], idx_old, theta0[[k]], theta[[k]], lambda_theta, k, maxdev)
+    theta0_new[[k]] = tmp$theta0_k
+    theta_new[[k]] = tmp$theta_k
+  }
+  return(list('theta0' = theta0_new , 'theta' = theta_new ))
+}
+
+
+
+#' Updating theta for each k (switching i and j)
+#' 
+LP_logcondens = function(Y_bin,
+                         X,
+                         weight,
+                         resi,
+                         g_k,
+                         idx,
+                         theta0_k,
+                         theta_k,
+                         lambda_theta,
+                         k,
+                         maxdev){
+  TT = length(Y_bin)
+  N = sum(unlist(weight))
+  p = dim(X)[2]
+  resi_k = c()
+  w_k = c()
+  idx_k = c()
+  Y_idx = c()
+  X_idx = c()
+  n_to_skip = c()
+  for (t in 1:TT){
+    idx_tk = idx[[t]][,k]
+    nt = sum(idx_tk)
+    if (nt != 0) {
+      idx_k = c(idx_k, idx_tk)
+      resi_k = c(resi_k, resi[[t]][idx_tk,k])
+      w_k = c(w_k, weight[[t]][idx_tk,k])
+      Y_idx = c(Y_idx, Y_bin[[t]][idx_tk,])
+      X_t = matrix(rep(X[t,], nt), byrow = T, ncol = p)
+      X_idx = rbind(X_idx, X_t)
+    } else {
+      n_to_skip = c(n_to_skip, t)
+    } 
+  }
+  n = length(Y_idx) # the number of points in C_n
+  
+  x_m = g_k$x[as.logical(g_k$IsKnot)]
+  phi_m = g_k$phi[as.logical(g_k$IsKnot)]
+  J = length(x_m) - 1 # the number of affine functions
+  beta = rep(0, J)
+  b = rep(0, J)
+  for (j in 1:J){
+    b[j] = (phi_m[j+1] - phi_m[j])/(x_m[j+1] - x_m[j])
+    beta[j] = b[j] * x_m[j] - phi_m[j]
+  }
+   
+  L = min(resi_k)
+  U = max(resi_k) 
+  const_mat = c()
+  const_vec = c()
+  
+  # epigraph part
+  for (j in 1:J){
+    tmp = cbind(Matrix::Diagonal(n), b[j], b[j]*X_idx)
+    const_mat = rbind(const_mat, cbind(tmp, -tmp))
+    const_vec = c(const_vec, b[j]*Y_idx-beta[j])
+  }
+  
+  # feasibility part
+  if (length(n_to_skip) == 0) {
+    TT_new = TT
+    X_new = X
+  } else {
+    TT_new = TT - length(n_to_skip)
+    X_new = X[-n_to_skip,]
+  }
+  tmp = cbind(matrix(0, nrow = TT_new, ncol = n), matrix(1, nrow = TT_new, ncol = 1), X_new)
+  const_mat = rbind(const_mat, cbind(tmp, -tmp), cbind(-tmp, tmp))
+  
+  tmp = rep(0, 2*TT_new)
+  count = 1
+  for (t in 1:TT){
+    idx_tk = idx[[t]][,k]
+    if (sum(idx_tk) > 0){
+      tmp[count] = min(Y_bin[[t]][idx_tk])- L
+      tmp[TT_new + count] = U - max(Y_bin[[t]][idx_tk])
+      count = count + 1
+    }
+  }
+  const_vec = c(const_vec, tmp)
+  
+#  print(dim(const_mat))
+#  print(format(object.size(const_mat), "Mb"))
+  
+  obj_coef = c(w_k, 0, rep(-N*lambda_theta, p), -w_k, 0, rep(-N*lambda_theta, p))
+  const_dir = rep("<=", J*n + 2*TT_new)
+  
+  
+  if (!is.null(maxdev)) {
+    tmp = cbind(matrix(0, nrow = TT_new, ncol = n+1), X_new)
+    const_mat = rbind(const_mat, cbind(tmp, -tmp), cbind(-tmp, tmp))
+    const_vec = c(const_vec, rep(maxdev, 2*TT_new))
+    const_dir = c(const_dir, rep("<=", 2*TT_new))
+  }
+  
+  # solving LP
+  lp_res = Rsymphony::Rsymphony_solve_LP(obj = obj_coef, mat = const_mat, dir = const_dir, rhs = const_vec,  max = T)
+  if (lp_res$status != 0) {
+    print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
+    lp_res = lpSolve::lp(obj = obj_coef, const.mat = const_mat, const.dir = const_dir, const.rhs = const_vec,  direction = "max")
+  }
+  theta0_k = lp_res$solution[n+1] - lp_res$solution[2*n+p+2]
+  theta_k = lp_res$solution[(n+2):(n+p+1)] - lp_res$solution[(2*n+p+3):(2*(n+p+1))]
+  return(list(theta0_k = theta0_k, theta_k = theta_k)) #theta
+}
+
+
+
+L1_diff = function(true, est){
+  diff1 = sum(abs(true - est))
+  diff2 = sum(abs(true[,1] - est[,2]) + abs(true[,2] - est[,1]))
+  return(min(diff1, diff2))
+}
+
+
+isIncreasing = function(v){
+  n = length(v)
+  for (i in 2:n){
+    if (v[i] < v[i-1]) {
+      return(F)
+    } 
+  }
+  return(T)
+}
+
+weightedHist = function(g_k, B = 30){
+  minY = min(g_k$xn)
+  maxY = max(g_k$xn)
+  bin = seq(from=minY, to=maxY, length= B + 1)
+  binnedY = findInterval(g_k$xn, bin, rightmost.closed = T)
+  binnedY = factor(binnedY, levels = 1:B)
+  w = tapply(g_k$w, binnedY , sum)
+  w[is.na(w)] = 0
+  w = w * B /(sum(w) *(maxY-minY))
+  
+  mid = rep(0, B)
+  for (i in 1:B){mid[i] = (bin[i+1] + bin[i])/2}
+  return(list(mid = mid,
+              w = w))
+}
+
+weighted_quantile = function(x, w, thr = 0.05){
+  mat = cbind(x, w)
+  mat = mat[order(x),]
+  thr = thr * sum(w)
+  tot = 0
+  i = 1
+  while (i < length(w) & tot < thr){
+    tot = tot + w[i]
+    i = i + 1
+  }
+  return(mat[i,1])
+}
+
+
+eval_LCD = function(LCDmix,
+                    Y_new,
+                    X_new,
+                    biomass_new, 
+                    trim_thr = 0.05){
+  g = LCDmix$g_new
+  theta = LCDmix$theta_new
+  theta0 = LCDmix$theta0_new
+  alpha = LCDmix$alpha_new
+  resp = LCDmix$resp_new
+  lambda_alpha = LCDmix$lambda_alpha
+  lambda_theta = LCDmix$lambda_theta
+  
+  K = length(g)
+  N = sum(unlist(biomass_new))
+  P = pi_k(X_new, alpha) # TT by K matrix
+  p = dim(X_new)[2]
+  TT = dim(X_new)[1]
+  w_tt = unlist(biomass_new)
+  loglike = c()
+  for (t in 1:TT){
+    loglike_tk = rep(0, length(Y_new[[t]]))
+    for (k in 1:K){
+      resi_tk = Y_new[[t]] - c(theta0[[k]] + sum(X_new[t,] * theta[[k]]))
+      suppressWarnings({tmp = logcondens::evaluateLogConDens(resi_tk, g[[k]])[,3] * P[t,k]})
+      loglike_tk = loglike_tk + tmp
+      }
+    loglike = c(loglike, log(loglike_tk))
+    }
+  prop = mean(is.infinite(loglike))
+  q = weighted_quantile(loglike, w_tt, trim_thr)
+  trimmed = loglike[loglike > q]
+  w_trimmed = w_tt[loglike > q]
+  trimmed_logl = sum(trimmed * w_trimmed) / sum(w_trimmed) - lambda_alpha * sum(abs(alpha[,2:(p+1)])) - lambda_theta * sum(abs(unlist(theta)))
+  return(list(loglike = loglike,
+              w_tt = w_tt,
+              prop = prop,
+              trimmed = trimmed,
+              w_trimmed = w_trimmed,
+              trimmed_logl = trimmed_logl))
+}
+  
+
+
+make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
+  iimat = expand.grid(1:nfold,1:nrep,1:cv_gridsize,1:cv_gridsize)
+  iimat = cbind(ialpha = iimat[,4], 
+                itheta = iimat[,3], 
+                irep = iimat[,2], 
+                ifold = iimat[,1],
+                lambda_alpha = alpha_lambdas[iimat[,4]], 
+                lambda_theta = theta_lambdas[iimat[,3]])
+  return(as.matrix(iimat))
+}
+
+
+
+
+CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result'){
+
+  alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
+  theta_lambdas = sort(flowmix::logspace(min = lambda_theta_range[1], max = lambda_theta_range[2], length = cv_gridsize), decreasing = F)
+  print(alpha_lambdas)
+  print(theta_lambdas)
+  
+  folds = flowmix::make_cv_folds(ylist = Y_bin, nfold = nfold, blocksize = blocksize)
+  
+  iimat = make_iimat(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas)
+  print(iimat)
+
+  cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "iimat", "folds", "save_folder"), envir = environment())
+  logs = parallel::parLapply(cl, 1:nrow(iimat), function(ii){
+    ialpha = iimat[ii, 1]
+    itheta = iimat[ii, 2]
+    irep = iimat[ii, 3]
+    ifold = iimat[ii, 4]
+    lambda_alpha = iimat[ii, 5]
+    lambda_theta = iimat[ii, 6]
+    
+    log_msg = paste("lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold started\n")
+
+    Y_tr = Y_bin[-folds[[ifold]]]
+    bin_mass_tr = bin_mass[-folds[[ifold]]]
+    X_tr= X[-folds[[ifold]], ]
+    set.seed(irep)
+    out_log = capture.output({res_ii = tryCatch({
+      main(Y_tr, X_tr, bin_mass_tr, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar)},
+      error = function(e) {
+        message(paste0("Error for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold."))
+        return(NA)})})
+    log_msg = paste0(log_msg, paste0(out_log, collapse = ""))
+    
+    if (is.list(res_ii)){
+      Y_test = Y_bin[folds[[ifold]]]
+      bin_mass_test = bin_mass[folds[[ifold]]]
+      X_test= X[folds[[ifold]], ]
+      eval_ii = eval_LCD(res_ii$iter, Y_test, X_test, bin_mass_test, trim_thr = trim_thr)
+      prop_CV = eval_ii$prop
+      trimmed_CV = eval_ii$trimmed_logl
+      log_msg = paste0(log_msg, "Saved results for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold.\n")
+    } else {
+      prop_CV = NA
+      trimmed_CV = NA
+      log_msg = paste0(log_msg, "Error for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold!\n")
+    }
+    save_path <- file.path(save_folder, paste0('/', ialpha, '-', itheta, '-', irep, '-', ifold, '.Rdata'))
+    save(prop_CV, trimmed_CV, file = save_path)
+    return(log_msg)
+        })
+  parallel::stopCluster(cl)
+    num_NA = sapply(logs, function(x){
+    if (substring(x, nchar(x)-1, nchar(x)-1) == '!') {
+      return(1)
+    } else {return(0)}
+  })
+  logs = append(logs, 
+                   paste0("There are ", sum(num_NA), "NA results out of ", 
+                          length(num_NA), "results (", round(100 *mean(num_NA), 2), "%)." ))
+  
+  return(list(logs = logs,
+              iimat = iimat))
+}
+
+
+
+
+
+CV_summary = function(iimat, save_folder = './result'){
+  n = nrow(iimat)
+  CVmat = cbind(iimat, rep(NA, n), rep(NA, n))
+  
+  for (ii in 1:nrow(iimat)){
+    ialpha = iimat[ii, 1]
+    itheta = iimat[ii, 2]
+    irep = iimat[ii, 3]
+    ifold = iimat[ii, 4]
+    lambda_alpha = iimat[ii, 5]
+    lambda_theta = iimat[ii, 6]
+    
+    file_name = paste0(save_folder,  paste0('/', ialpha, '-', itheta, '-', irep, '-', ifold, '.Rdata'))
+    load(file_name)
+    CVmat[ii, 7] = prop_CV
+    CVmat[ii, 8] = trimmed_CV
+  }
+  colnames(CVmat)[7:8] = c('prop_CV', 'trimmed_CV')
+  max_NA_prop = max(CVmat[,7], na.rm = T)
+  
+  reduced_mat = c()
+  nrep = length(table(iimat[,'irep']))
+  nfold = length(table(iimat[,'ifold']))
+  nchunk = length(table(iimat[, 'ialpha']))**2
+  
+  size = nrep * nfold
+  cnt_NA = 0
+  for (i in 1:nchunk){
+    tmp = CVmat[((i-1)*size+1):(i*size), ]
+    if (length(table(tmp[,5])) > 1 | length(table(tmp[,6])) > 1){
+      print('error')
+    }
+    tmp_CV = max(tapply(tmp[,'trimmed_CV'], factor(tmp[,'irep']), mean, na.rm = T))
+    reduced_mat = rbind(reduced_mat, cbind(tmp[1,5], tmp[1,6], tmp_CV))
+  }
+  rownames(reduced_mat) = c()
+  colnames(reduced_mat)[1:2] = c("lambda_alpha", "lambda_theta")
+  opt_lambdas = reduced_mat[which.max(reduced_mat[,3]), 1:2]
+  return(list(CVmat = CVmat,
+              reduced_mat = reduced_mat,
+              opt_lambdas = opt_lambdas,
+              max_NA_prop = max_NA_prop))
+}
+
+
+refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result'){
+  
+  lambda_alpha = opt_lambdas[1]
+  lambda_theta = opt_lambdas[2]
+
+  cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "save_folder"), envir = environment())
+  logs = parallel::parLapply(cl, 1:nrep, function(ii){
+    log_msg = paste(ii, "th refit started\n")
+    set.seed(ii)
+    out_log = capture.output({res_ii = tryCatch({
+      main(Y_bin, X, bin_mass, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar)},
+      error = function(e) {
+        message(paste0("Error for ", ii, "th rep."))
+        return(NA)})})
+    log_msg = paste0(log_msg, paste0(out_log, collapse = ""))
+    
+    if (is.list(res_ii)){
+      #eval_ii = eval_LCD(res_ii$iter, Y_bin, X, bin_mass, trim_thr = trim_thr)
+      refit_Q = res_ii$iter$Q[length(res_ii$iter$Q)]
+      log_msg = paste0(log_msg, "Saved results for ", ii, "th rep.\n")
+    } else {
+      refit_Q = NA
+      res_ii = NA
+      log_msg = paste0(log_msg, "Error for ", ii, "th rep on!\n")
+    }
+    save_path <- file.path(save_folder, paste0('/refit', ii,'.Rdata'))
+    save(refit_Q, res_ii, file = save_path)
+    return(log_msg)
+        })
+  parallel::stopCluster(cl)
+    
+  refit_QQ = rep(0, nrep)
+  refit_res = list()
+  for (ii in 1:nrep){
+    file_name = paste0(save_folder, paste0('/refit', ii,'.Rdata'))
+    load(file_name)
+    refit_QQ[ii] = refit_Q
+    refit_res[[ii]] = res_ii
+  }
+  logs = append(logs, 
+                   paste0("There are ", sum(is.na(refit_Q)), "NA results" ))
+  
+  return(list(logs = logs,
+              refit_QQ = refit_QQ,
+              refit_res = refit_res[[which.max(refit_QQ)]]))
+}
+
+
+generate_skewed_data <- function(seed=NULL, 
+                                nt = 200,
+                                beta_par = 0.5,
+                                p = 3, ## Number of total covariates
+                                dat.gridsize = 30,
+                                skew_alpha = 10,
+                                gap = 3,
+                                TT = 100){
+
+  ## Setup and basic checks
+  assertthat::assert_that(nt %% 5 ==0)
+  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
+  numclust = 2
+  stopifnot(p >= 3)
+  
+  ## Generate covariate
+  par <- c(
+  1807.884, 168.2681, 0.0006315789, -0.0139, -0.01336364, -0.014, -0.013125, -0.014,
+  -0.0128, 0.218, 0.3867778, 23.893, 3320.086, 3278.974, 3584.604, 3769.884,
+  3124.176, 3210.607, 2222.561, 2619.597, 1457.061, 87.64753, 0.03627778, -0.009875,
+  -0.002125, 0.372, 0.526, 32.36786, 317.9361, 784.968, 1448.081, 1624.513,
+  2499.522, 2059.033, 2005.622, 1719.437, 1811.938, 2868.744, 1851.804, 1101.775,
+  646.0992, 27.92433, 0.6711875, -0.013, -0.01711765, -0.014125, -0.0134, -0.01175,
+  0.01726316, 0.3675625, 0.4200588, 35.718, 272.8423, 655.5318, 872.1162, 1685.27,
+  2138.353, 2799.593, 3552.781, 3003.885, 2739.476, 2525.467, 1645.232, 1257.148,
+  322.8541, 54.98407, 1.811, -0.006733333, -0.009428571, -0.0069, -0.005692308, -0.0107,
+  -0.009923077, 0.2817778, 1.216714, 76.83171, 211.934, 373.5088, 518.5455, 792.2462,
+  931.5338, 1421.289, 913.1166, 841.0782, 922.5017, 788.3413, 685.737, 291.6708,
+  122.616, 34.555, 0.422, -0.009333333, -0.0095, -0.01375, -0.01181818, -0.01192308,
+  -0.009, -0.01041667, 0.6727857, 81.47508, 279.9459, 870.0117, 1304.603, 1713.278,
+  2235.767, 1578.55, 1455.561, 1173.019, 386.7722, 57.29713, 0.8726, -0.006333333,
+  -0.008833333, -0.008857143, -0.009375, -0.00925, -0.015, 0.3832, 0.4872308, 30.92275,
+  213.5052, 462.9413, 692.3243, 1132.996, 2123.787, 2373.636, 2605.431, 2730.907,
+  2340.096, 1557.706, 860.8426, 743.79, 315.8718, 83.95737, 0.2305, -0.005583333,
+  -0.002230769, -0.003636364, -0.006181818, -0.001235294, 0.1075625, 0.3570769, 0.4778889, 49.719,
+  354.4997, 817.8346, 1259.956, 2148.988, 2673.856, 2670.551, 2690.914, 2648.071,
+  2759.417, 2783.573, 2852.975, 2533.883, 1810.079, 422.1133, 0.9876316, -0.0025,
+  0.00006666667, -0.005777778, -0.004642857, -0.005333333, -0.0072, 0.2985, 0.4086667, 75.63286,
+  353.0761, 724.7677, 1230.961, 1749.818, 2318.679, 2721.202, 3232.953, 3081.986,
+  2675.911, 2377.742, 1600.023, 999.8954, 0.061, -0.01078571, -0.0075, -0.008666667,
+  -0.008777778, -0.007166667, -0.008823529, -0.009875, 0.01844444, 26.37, 179.0059, 551.9136,
+  1019.848, 1489.251, 1818.534, 2081.818, 2362.124, 2111.173, 1787.832, 1234.41,
+  603.6168, 219.7619, 40.71359, 0.04358824, -0.00525, -0.005, -0.004, -0.00575,
+  -0.008266667, -0.003777778, 0.3596875, 0.3949444, 42.80317, 262.8376, 800.8294, 1031.592,
+  1414.766, 2902.38, 3331.281, 3102.55, 3314.92, 3258.176, 2502.952, 1913.286,
+  908.4718, 317.1317, 44.07631, 0.01391667, -0.010875, -0.008, -0.005352941, -0.003705882,
+  -0.003263158, 0.01389474, 0.3741875, 0.40085, 97.6352, 526.4492, 1717.746, 2481.61,
+  2660.157, 3574.407, 3236.346, 3144.131, 3512.318, 3191.223, 3414.783, 2315.886,
+  1544.328, 845.7028, 48.32487, 0.0098, -0.004, -0.0035, -0.006, -0.0053125,
+  -0.00525, -0.0007272727, 0.251125, 0.3925625, 31.10895, 349.4825, 989.3238, 1673.217,
+  3008.452, 3327.474, 3668.375, 3520.383, 3809.708, 3307.647, 3284.979, 3025.367,
+  2197.985, 1805.234, 36.2584, -0.0096, -0.01033333, -0.006142857, -0.007416667, -0.0052,
+  -0.007666667, -0.006375, -0.009923077, -0.005222222, 31.77713, 260.5398, 854.8976, 2440.643,
+  3061.953, 3348.637, 3232.407, 3626.341, 4077.914, 2544.177, 1044.943, 464.6145,
+  21.11, -0.01592308, -0.0135, -0.01288889, -0.01535714, -0.01515789, -0.01415, -0.01206667,
+  -0.01313333, -0.01109091, 1818.87, 1880.722
+  )
+  par = stats::ksmooth(x = 1:length(par), y = par, bandwidth = 5, x.points = 1:length(par))$y
+  
+  if(!is.null(seed)) set.seed(seed)
+  Xrest = do.call(cbind, lapply(1:(p-2), function(ii) stats::rnorm(TT)) )
+  X = cbind(scale(par[1:TT]),
+            c(rep(0, TT/2), rep(1, TT/2)),
+            Xrest)## p-2 columns
+  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+  
+  ## Beta coefficients
+  beta = matrix(0, ncol = numclust, nrow = p+1)
+  beta[0+1,1] = 0
+  beta[1+1,1] = beta_par
+  beta[0+1,2] = gap
+  beta[1+1,2] = -beta_par
+  colnames(beta) = paste0("clust", 1:numclust)
+  rownames(beta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  ## alpha coefficients
+  alpha = matrix(0, ncol = numclust, nrow = p+1)
+  alpha[0+1, 2] = -10
+  alpha[2+1, 2] = 10 + log(1/4)
+
+  colnames(alpha) = paste0("clust", 1:numclust)
+  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  mnmat = cbind(1, X) %*% beta
+  prob = exp(cbind(1,X) %*% alpha)
+  prob = prob/rowSums(prob)
+  
+  ## Samples |nt| memberships out of (1:numclust) according to the probs in prob.
+  ## Data is a probabilistic mixture from these two means, over time.
+  ylist = lapply(1:TT,
+                 function(tt){
+                   draws = sample(1:numclust,
+                                  size = ntlist[tt], replace = TRUE,
+                                  ## prob = c(prob[[tt]], 1-prob[[tt]]))
+                                  prob = c(prob[tt,1], prob[tt,2]))
+                   mns = mnmat[tt,]
+                   means = mns[draws]
+
+                   ## Add noise to obtain data points.
+                   omega = sqrt(1/(1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
+                   mn_shift = omega * skew_alpha * (1 / sqrt(1+skew_alpha^2)) * sqrt(2/pi)
+                   noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
+                   datapoints = means + noise
+                   cbind(datapoints)
+                 })
+    ## stop("Binning doesn't work yet! make_grid and bin_many_cytograms aren't written for 1d data yet.")
+
+    ## 1. Make grid
+    dat.grid = flowmix::make_grid(ylist, gridsize = dat.gridsize)
+
+    ## 2. Bin with just counts
+    mc.cores = 4
+    obj = flowmix::bin_many_cytograms(ylist, dat.grid, mc.cores = mc.cores, verbose = TRUE)
+    ybin_list = obj$ybin_list
+    counts_list = obj$counts_list
+    sparsecounts_list = obj$sparsecounts_list ## new
+
+    ## 4. (NOT USED) Also obtain all the binned midpoints, in a (d^3 x 3) matrix.
+    ## ybin_all = make_ybin(counts = NULL, midpoints = make_midpoints(dat.grid))
+    ybin_all = obj$ybin_all ## new
+
+    ## Assign binned data to static names |ylist| and |countslist|.
+    ylist = ybin_list
+    countslist = counts_list
+  
+  ## Other things about the true generating model
+  sigma = array(NA, dim=c(2,1,1))
+  sigma[1,1,1] = sigma[2,1,1] = 1
+  mn = array(NA,dim=c(100,1,2))
+  mn[,1,] = mnmat
+  numclust=2
+
+  return(list(ylist = ylist, 
+              X = X,
+              countslist = countslist,
+              ## The true generating model:
+              mnmat = mnmat,
+              prob = prob,
+              mn = mn,
+              numclust = numclust,
+              alpha = alpha,
+              beta = beta,
+              sigma = sigma))
+}
+
+

@@ -19,8 +19,6 @@ This document uses [litr](https://jacobbien.github.io/litr-project/) to define t
 #remotes::install_github("jacobbien/litr-project@*release", subdir = "litr")
 
 litr::render("index.Rmd")
-
-
 ```
 
 ## DESCRIPTION file
