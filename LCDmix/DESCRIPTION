@@ -19,8 +19,7 @@ Imports:
     magrittr,
     Matrix,
     parallel,
-    Rsymphony,
     sn,
     stats
 LitrVersionUsed: 0.9.2
-LitrId: 912693a19e716c6ab0b00408be24b455
+LitrId: 6fb226e04b4f4a8d353309e0147d018e
