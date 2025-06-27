@@ -10,6 +10,9 @@
 ## usethis namespace: end
 NULL
 
+#' main
+#' 
+#' @export
 main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambda_theta = 1e-3, nrep_flowmix = 1, 
                 max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3){
   
@@ -37,9 +40,6 @@ main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambd
               initial = initial,
               iter = iter))
 }
-
-
-
 
 binning = function(Y, biomass, B = 40){
   TT = length(Y)
