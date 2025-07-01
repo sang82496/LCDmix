@@ -14,7 +14,7 @@ NULL
 #' 
 #' @export
 main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambda_theta = 1e-3, nrep_flowmix = 1, 
-                max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3){
+                max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, sparseMatrix = T){
   
   # binning
   if (binned){
@@ -32,7 +32,7 @@ main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambd
   print('passed init')
   
   # iteration
-  iter = iteration(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta, max_iter, maxdev, r_bar)
+  iter = iteration(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta, max_iter, maxdev, r_bar, sparseMatrix)
   
   return(list(Y_bin = Y_bin,
               X = X,
@@ -353,7 +353,7 @@ calc_surr_logcondens = function(X,
 #bin_mass = bin_mass_tr
 
 
-iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta = 1e-6, max_iter = 30, maxdev, r_bar){
+iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta = 1e-6, max_iter = 30, maxdev, r_bar, sparseMatrix = T){
   
   K = length(initial$g_init)
   p = dim(X)[2]
@@ -389,7 +389,7 @@ iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, it
     print('passed alpha')
     
     ### Mstep_theta
-    M_theta = Mstep_theta_logcondens(Y_bin, X, weight_new, resi_old, g_old, idx_old, theta0_old, theta_old, lambda_theta, maxdev)
+    M_theta = Mstep_theta_logcondens(Y_bin, X, weight_new, resi_old, g_old, idx_old, theta0_old, theta_old, lambda_theta, maxdev, sparseMatrix)
     theta0_new = M_theta$theta0
     theta_new = M_theta$theta
     print('passed theta')
@@ -532,12 +532,13 @@ Mstep_theta_logcondens = function(Y_bin,
                                   theta0,
                                   theta,
                                   lambda_theta,
-                                  maxdev){
+                                  maxdev,
+                                  sparseMatrix){
   K = length(g)
   theta0_new = list()
   theta_new = list()
   for (k in 1:K){
-    tmp = LP_logcondens(Y_bin, X, weight, resi, g[[k]], idx_old, theta0[[k]], theta[[k]], lambda_theta, k, maxdev)
+    tmp = LP_logcondens(Y_bin, X, weight, resi, g[[k]], idx_old, theta0[[k]], theta[[k]], lambda_theta, k, maxdev, sparseMatrix)
     theta0_new[[k]] = tmp$theta0_k
     theta_new[[k]] = tmp$theta_k
   }
@@ -558,7 +559,8 @@ LP_logcondens = function(Y_bin,
                          theta_k,
                          lambda_theta,
                          k,
-                         maxdev){
+                         maxdev,
+                         sparseMatrix){
   TT = length(Y_bin)
   N = sum(unlist(weight))
   p = dim(X)[2]
@@ -641,6 +643,10 @@ LP_logcondens = function(Y_bin,
     const_mat = rbind(const_mat, cbind(tmp, -tmp), cbind(-tmp, tmp))
     const_vec = c(const_vec, rep(maxdev, 2*TT_new))
     const_dir = c(const_dir, rep("<=", 2*TT_new))
+  }
+  
+  if (!sparseMatrix){
+    const_mat = as.matrix(const_mat)
   }
   
   # solving LP
