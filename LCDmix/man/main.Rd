@@ -17,7 +17,8 @@ main(
   max_iter = 30,
   iter_eta = 0.001,
   maxdev = NULL,
-  r_bar = 0.001
+  r_bar = 0.001,
+  sparseMatrix = T
 )
 }
 \description{

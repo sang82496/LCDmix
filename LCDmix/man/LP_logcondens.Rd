@@ -15,7 +15,8 @@ LP_logcondens(
   theta_k,
   lambda_theta,
   k,
-  maxdev
+  maxdev,
+  sparseMatrix
 )
 }
 \description{

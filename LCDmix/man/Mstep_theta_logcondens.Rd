@@ -14,7 +14,8 @@ Mstep_theta_logcondens(
   theta0,
   theta,
   lambda_theta,
-  maxdev
+  maxdev,
+  sparseMatrix
 )
 }
 \description{
