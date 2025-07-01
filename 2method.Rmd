@@ -811,7 +811,7 @@ make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
 
 
 
-CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T){
+CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
 
   alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
   theta_lambdas = sort(flowmix::logspace(min = lambda_theta_range[1], max = lambda_theta_range[2], length = cv_gridsize), decreasing = F)
@@ -822,8 +822,12 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
   
   iimat = make_iimat(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas)
   print(iimat)
-
-  cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  
+  if (ncores == 'max') {
+    cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  } else {
+    cl = parallel::makeCluster(ncores)
+  }
   parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "iimat", "folds", "save_folder", "sparseMatrix"), envir = environment())
   logs = parallel::parLapply(cl, 1:nrow(iimat), function(ii){
     ialpha = iimat[ii, 1]
@@ -870,8 +874,8 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
     } else {return(0)}
   })
   logs = append(logs, 
-                   paste0("There are ", sum(num_NA), "NA results out of ", 
-                          length(num_NA), "results (", round(100 *mean(num_NA), 2), "%)." ))
+                   paste0("There are ", sum(num_NA), " NA results out of ", 
+                          length(num_NA), " results (", round(100 *mean(num_NA), 2), "%)." ))
   
   return(list(logs = logs,
               iimat = iimat))
@@ -926,12 +930,16 @@ CV_summary = function(iimat, save_folder = './result'){
 }
 
 
-refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T){
+refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
   
   lambda_alpha = opt_lambdas[1]
   lambda_theta = opt_lambdas[2]
 
-  cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  if (ncores == 'max') {
+    cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  } else {
+    cl = parallel::makeCluster(ncores)
+  }
   parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "save_folder"), envir = environment())
   logs = parallel::parLapply(cl, 1:nrep, function(ii){
     log_msg = paste(ii, "th refit started\n")
