@@ -766,7 +766,7 @@ make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
 
 
 
-CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result'){
+CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T){
 
   alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
   theta_lambdas = sort(flowmix::logspace(min = lambda_theta_range[1], max = lambda_theta_range[2], length = cv_gridsize), decreasing = F)
@@ -779,7 +779,7 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
   print(iimat)
 
   cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
-  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "iimat", "folds", "save_folder"), envir = environment())
+  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "iimat", "folds", "save_folder", "sparseMatrix"), envir = environment())
   logs = parallel::parLapply(cl, 1:nrow(iimat), function(ii){
     ialpha = iimat[ii, 1]
     itheta = iimat[ii, 2]
@@ -795,7 +795,7 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
     X_tr= X[-folds[[ifold]], ]
     set.seed(irep)
     out_log = capture.output({res_ii = tryCatch({
-      main(Y_tr, X_tr, bin_mass_tr, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar)},
+      main(Y_tr, X_tr, bin_mass_tr, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar, sparseMatrix)},
       error = function(e) {
         message(paste0("Error for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold."))
         return(NA)})})
@@ -881,7 +881,7 @@ CV_summary = function(iimat, save_folder = './result'){
 }
 
 
-refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result'){
+refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T){
   
   lambda_alpha = opt_lambdas[1]
   lambda_theta = opt_lambdas[2]
@@ -892,7 +892,7 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
     log_msg = paste(ii, "th refit started\n")
     set.seed(ii)
     out_log = capture.output({res_ii = tryCatch({
-      main(Y_bin, X, bin_mass, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar)},
+      main(Y_bin, X, bin_mass, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar, sparseMatrix)},
       error = function(e) {
         message(paste0("Error for ", ii, "th rep."))
         return(NA)})})
