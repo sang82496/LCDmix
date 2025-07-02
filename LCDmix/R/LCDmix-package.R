@@ -895,7 +895,7 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
   } else {
     cl = parallel::makeCluster(ncores)
   }
-  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "cv_rep", "trim_thr", "save_folder", "sparseMatrix"), envir = environment())
+  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "cv_rep", "trim_thr", "save_folder", "sparseMatrix"), envir = environment())
   logs = parallel::parLapply(cl, 1:cv_rep, function(ii){
     log_msg = paste(ii, "th refit started\n")
     set.seed(ii)
@@ -905,7 +905,7 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
         message(paste0("Error for ", ii, "th rep."))
         return(NA)})})
     log_msg = paste0(log_msg, paste0(out_log, collapse = ""))
-    
+
     if (is.list(res_ii)){
       #eval_ii = eval_LCD(res_ii$iter, Y_bin, X, bin_mass, trim_thr = trim_thr)
       refit_Q = res_ii$iter$Q[length(res_ii$iter$Q)]
