@@ -766,7 +766,7 @@ make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
 
 
 
-CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
+CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
 
   alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
   theta_lambdas = sort(flowmix::logspace(min = lambda_theta_range[1], max = lambda_theta_range[2], length = cv_gridsize), decreasing = F)
@@ -775,7 +775,7 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
   
   folds = flowmix::make_cv_folds(ylist = Y_bin, nfold = nfold, blocksize = blocksize)
   
-  iimat = make_iimat(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas)
+  iimat = make_iimat(cv_gridsize, nfold, cv_rep, alpha_lambdas, theta_lambdas)
   print(iimat)
   
   if (ncores == 'max') {
@@ -861,11 +861,11 @@ CV_summary = function(iimat, save_folder = './result'){
   max_NA_prop = max(CVmat[,7], na.rm = T)
   
   reduced_mat = c()
-  nrep = length(table(iimat[,'irep']))
+  cv_rep = length(table(iimat[,'irep']))
   nfold = length(table(iimat[,'ifold']))
   nchunk = length(table(iimat[, 'ialpha']))**2
   
-  size = nrep * nfold
+  size = cv_rep * nfold
   cnt_NA = 0
   for (i in 1:nchunk){
     tmp = CVmat[((i-1)*size+1):(i*size), ]
@@ -885,7 +885,7 @@ CV_summary = function(iimat, save_folder = './result'){
 }
 
 
-refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nrep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
+refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
   
   lambda_alpha = opt_lambdas[1]
   lambda_theta = opt_lambdas[2]
@@ -895,8 +895,8 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
   } else {
     cl = parallel::makeCluster(ncores)
   }
-  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "nrep", "trim_thr", "save_folder"), envir = environment())
-  logs = parallel::parLapply(cl, 1:nrep, function(ii){
+  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "cv_rep", "trim_thr", "save_folder", "sparseMatrix"), envir = environment())
+  logs = parallel::parLapply(cl, 1:cv_rep, function(ii){
     log_msg = paste(ii, "th refit started\n")
     set.seed(ii)
     out_log = capture.output({res_ii = tryCatch({
@@ -921,9 +921,9 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
         })
   parallel::stopCluster(cl)
     
-  refit_QQ = rep(0, nrep)
+  refit_QQ = rep(0, cv_rep)
   refit_res = list()
-  for (ii in 1:nrep){
+  for (ii in 1:cv_rep){
     file_name = paste0(save_folder, paste0('/refit', ii,'.Rdata'))
     load(file_name)
     refit_QQ[ii] = refit_Q
