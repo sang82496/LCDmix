@@ -659,7 +659,8 @@ LP_logcondens = function(Y_bin,
   }
   theta0_k = lp_res$solution[n+1] - lp_res$solution[2*n+p+2]
   theta_k = lp_res$solution[(n+2):(n+p+1)] - lp_res$solution[(2*n+p+3):(2*(n+p+1))]
-  remove(const_mat)
+  rm(const_mat)
+  gc()
   return(list(theta0_k = theta0_k, theta_k = theta_k)) #theta
 }
 
