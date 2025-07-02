@@ -631,8 +631,8 @@ LP_logcondens = function(Y_bin,
   }
   const_vec = c(const_vec, tmp)
   
-#  print(dim(const_mat))
-#  print(format(object.size(const_mat), "Mb"))
+  print(dim(const_mat))
+  print(format(object.size(const_mat), "Gb"))
   
   obj_coef = c(w_k, 0, rep(-N*lambda_theta, p), -w_k, 0, rep(-N*lambda_theta, p))
   const_dir = rep("<=", J*n + 2*TT_new)
@@ -648,6 +648,9 @@ LP_logcondens = function(Y_bin,
   if (!sparseMatrix){
     const_mat = as.matrix(const_mat)
   }
+  
+  print(dim(const_mat))
+  print(format(object.size(const_mat), "Gb"))
   
   # solving LP
   lp_res = lpSolve::lp(obj = obj_coef, const.mat = const_mat, const.dir = const_dir, const.rhs = const_vec,  direction = "max")
