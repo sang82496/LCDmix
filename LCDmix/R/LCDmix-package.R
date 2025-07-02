@@ -632,7 +632,7 @@ LP_logcondens = function(Y_bin,
   const_vec = c(const_vec, tmp)
   
   print(dim(const_mat))
-  print(format(object.size(const_mat), "Gb"))
+  print(format(object.size(const_mat), "Mb"))
   
   obj_coef = c(w_k, 0, rep(-N*lambda_theta, p), -w_k, 0, rep(-N*lambda_theta, p))
   const_dir = rep("<=", J*n + 2*TT_new)
