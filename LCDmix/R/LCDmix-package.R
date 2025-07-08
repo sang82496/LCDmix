@@ -41,6 +41,9 @@ main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambd
               iter = iter))
 }
 
+#' binning
+#' 
+#' @export
 binning = function(Y, biomass, B = 40){
   TT = length(Y)
   if (B == 0){
@@ -76,11 +79,9 @@ binning = function(Y, biomass, B = 40){
 }
 # could be improved using levels(factor(unlist(Y)))
 
-
-
-
-
-
+#' initialization
+#' 
+#' @export
 initialization = function(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar){
   
   flow = flowmix::flowmix(Y_bin, X, bin_mass, numclust = K, prob_lambda = lambda_alpha, mean_lambda = lambda_theta, nrep = nrep_flowmix, maxdev = maxdev)
@@ -140,9 +141,9 @@ initialization = function(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nre
        Q_every = Q_every))
 }
 
-
 #' calculating \pi_{tk}(\alpha) = P(Z_i^{(t)} = k| X^(t))
 #' 
+#' @export
 pi_k = function(X, 
                 alpha){
   p = dim(X)[2]
@@ -153,9 +154,9 @@ pi_k = function(X,
   return(pi_k) 
 }
 
-
-
-
+#' Mstep_shift
+#' 
+#' @export
 Mstep_shift = function(Y_bin,
                        X,
                        weight,
@@ -177,7 +178,9 @@ Mstep_shift = function(Y_bin,
   return(theta0)
 }
 
-
+#' calc_resi
+#' 
+#' @export
 calc_resi = function(Y_bin,
                      X,
                      theta0,
@@ -193,8 +196,9 @@ calc_resi = function(Y_bin,
   return(resi) # length TT list, with `resi[[t]]` being N_t by K matrix
 }
 
-
-
+#' Mstep_g_logcondens
+#' 
+#' @export
 Mstep_g_logcondens = function(resi, 
                               weight,
                               idx){
@@ -226,6 +230,9 @@ Mstep_g_logcondens = function(resi,
   return(g)
 }
 
+#' modified_logcondens
+#' 
+#' @export
 modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
     prec <- 1e-10
     xn <- sort(x)
@@ -310,11 +317,9 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
     return(res)
 }
 
-
-
-
 #' calculating the surrogate loglikelihood Q
 #' 
+#' @export
 calc_surr_logcondens = function(X,
                                 g, 
                                 resi, 
@@ -345,14 +350,9 @@ calc_surr_logcondens = function(X,
   return(Q)
 }
 
-
-
-
-#Y_bin = Y_tr
-#X = X_tr
-#bin_mass = bin_mass_tr
-
-
+#' iteration
+#' 
+#' @export
 iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta = 1e-6, max_iter = 30, maxdev, r_bar, sparseMatrix = T){
   
   K = length(initial$g_init)
@@ -452,9 +452,9 @@ iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, it
               Q_every = Q_every))
 }
 
-
-#' Updating responsibility
+#' E_step_logcondens
 #' 
+#' @export
 E_step_logcondens = function(X,
                              bin_mass,
                              resi,
@@ -486,11 +486,9 @@ E_step_logcondens = function(X,
               ))
 }
 
-
-
-
-#' updating alpha
+#' Mstep_alpha
 #' 
+#' @export
 Mstep_alpha = function(X,
                        weight,
                        idx,
@@ -518,11 +516,9 @@ Mstep_alpha = function(X,
   return(alpha)  # (p+1) by K matrix
 }
 
-
-
-
-#' Updating theta
+#' Mstep_theta_logcondens
 #' 
+#' @export
 Mstep_theta_logcondens = function(Y_bin,
                                   X,
                                   weight,
@@ -545,10 +541,9 @@ Mstep_theta_logcondens = function(Y_bin,
   return(list('theta0' = theta0_new , 'theta' = theta_new ))
 }
 
-
-
-#' Updating theta for each k (switching i and j)
+#' Updating theta for each k 
 #' 
+#' @export
 LP_logcondens = function(Y_bin,
                          X,
                          weight,
@@ -664,15 +659,18 @@ LP_logcondens = function(Y_bin,
   return(list(theta0_k = theta0_k, theta_k = theta_k)) #theta
 }
 
-
-
+#' L1_diff
+#' 
+#' @export
 L1_diff = function(true, est){
   diff1 = sum(abs(true - est))
   diff2 = sum(abs(true[,1] - est[,2]) + abs(true[,2] - est[,1]))
   return(min(diff1, diff2))
 }
 
-
+#' isIncreasing
+#' 
+#' @export
 isIncreasing = function(v){
   n = length(v)
   for (i in 2:n){
@@ -683,6 +681,9 @@ isIncreasing = function(v){
   return(T)
 }
 
+#' weightedHist
+#' 
+#' @export
 weightedHist = function(g_k, B = 30){
   minY = min(g_k$xn)
   maxY = max(g_k$xn)
@@ -699,6 +700,9 @@ weightedHist = function(g_k, B = 30){
               w = w))
 }
 
+#' weighted_quantile
+#' 
+#' @export
 weighted_quantile = function(x, w, thr = 0.05){
   mat = cbind(x, w)
   mat = mat[order(x),]
@@ -712,7 +716,9 @@ weighted_quantile = function(x, w, thr = 0.05){
   return(mat[i,1])
 }
 
-
+#' eval_LCD
+#' 
+#' @export
 eval_LCD = function(LCDmix,
                     Y_new,
                     X_new,
@@ -754,9 +760,10 @@ eval_LCD = function(LCDmix,
               w_trimmed = w_trimmed,
               trimmed_logl = trimmed_logl))
 }
-  
 
-
+#' make_iimat
+#' 
+#' @export
 make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
   iimat = expand.grid(1:nfold,1:nrep,1:cv_gridsize,1:cv_gridsize)
   iimat = cbind(ialpha = iimat[,4], 
@@ -768,9 +775,9 @@ make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
   return(as.matrix(iimat))
 }
 
-
-
-
+#' CV_LCD_parallel
+#' 
+#' @export
 CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
 
   alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
@@ -841,10 +848,9 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
               iimat = iimat))
 }
 
-
-
-
-
+#' CV_summary
+#' 
+#' @export
 CV_summary = function(iimat, save_folder = './result'){
   n = nrow(iimat)
   CVmat = cbind(iimat, rep(NA, n), rep(NA, n))
@@ -889,7 +895,9 @@ CV_summary = function(iimat, save_folder = './result'){
               max_NA_prop = max_NA_prop))
 }
 
-
+#' refit
+#' 
+#' @export
 refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
   
   lambda_alpha = opt_lambdas[1]
@@ -942,7 +950,9 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
               refit_res = refit_res[[which.max(refit_QQ)]]))
 }
 
-
+#' generate_skewed_data
+#' 
+#' @export
 generate_skewed_data <- function(seed=NULL, 
                                 nt = 200,
                                 beta_par = 0.5,
@@ -1087,5 +1097,3 @@ generate_skewed_data <- function(seed=NULL,
               beta = beta,
               sigma = sigma))
 }
-
-

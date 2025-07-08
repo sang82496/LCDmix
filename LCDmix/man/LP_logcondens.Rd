@@ -2,7 +2,7 @@
 % Please edit documentation in _main.Rmd.
 \name{LP_logcondens}
 \alias{LP_logcondens}
-\title{Updating theta for each k (switching i and j)}
+\title{Updating theta for each k}
 \usage{
 LP_logcondens(
   Y_bin,
@@ -20,5 +20,5 @@ LP_logcondens(
 )
 }
 \description{
-Updating theta for each k (switching i and j)
+Updating theta for each k
 }

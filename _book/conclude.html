@@ -12,7 +12,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="4 Conclusion | Creating the LCDmix R package">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-07-02">
+<meta name="date" content="2025-07-08">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -135,19 +135,36 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span class="header-section-number">4</span> Conclusion<a href="conclude.html#conclude" class="anchor-section" aria-label="Anchor link to header"></a>
 </h1>
 <p>When you are done defining the package, it remains to convert the Roxygen to documentation.</p>
-<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="conclude.html#cb43-1" tabindex="-1"></a>litr<span class="sc">::</span><span class="fu">document</span>() <span class="co"># &lt;-- use instead of devtools::document()</span></span></code></pre></div>
+<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="conclude.html#cb66-1" tabindex="-1"></a>litr<span class="sc">::</span><span class="fu">document</span>() <span class="co"># &lt;-- use instead of devtools::document()</span></span></code></pre></div>
 <pre><code>## ℹ Updating LCDmix documentation
 ## Writing 'NAMESPACE'
 ## ℹ Loading LCDmix
 ## Writing 'NAMESPACE'
 ## Writing 'LCDmix-package.Rd'
 ## Writing 'main.Rd'
+## Writing 'binning.Rd'
+## Writing 'initialization.Rd'
 ## Writing 'pi_k.Rd'
+## Writing 'Mstep_shift.Rd'
+## Writing 'calc_resi.Rd'
+## Writing 'Mstep_g_logcondens.Rd'
+## Writing 'modified_logcondens.Rd'
 ## Writing 'calc_surr_logcondens.Rd'
+## Writing 'iteration.Rd'
 ## Writing 'E_step_logcondens.Rd'
 ## Writing 'Mstep_alpha.Rd'
 ## Writing 'Mstep_theta_logcondens.Rd'
 ## Writing 'LP_logcondens.Rd'
+## Writing 'L1_diff.Rd'
+## Writing 'isIncreasing.Rd'
+## Writing 'weightedHist.Rd'
+## Writing 'weighted_quantile.Rd'
+## Writing 'eval_LCD.Rd'
+## Writing 'make_iimat.Rd'
+## Writing 'CV_LCD_parallel.Rd'
+## Writing 'CV_summary.Rd'
+## Writing 'refit.Rd'
+## Writing 'generate_skewed_data.Rd'
 ## Writing 'pipe.Rd'</code></pre>
 <p>You can also add some extra things to your package here if you like, such as a README, some vignettes, a <a href="https://pkgdown.r-lib.org/">pkgdown</a> site, etc. See <a href="https://github.com/jacobbien/litr-project/tree/main/examples/make-an-r-package-with-extras">here</a> for an example of how to do this with <code>litr</code>.</p>
 

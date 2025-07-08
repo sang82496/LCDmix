@@ -2,10 +2,10 @@
 % Please edit documentation in _main.Rmd.
 \name{E_step_logcondens}
 \alias{E_step_logcondens}
-\title{Updating responsibility}
+\title{E_step_logcondens}
 \usage{
 E_step_logcondens(X, bin_mass, resi, alpha, g, r_bar)
 }
 \description{
-Updating responsibility
+E_step_logcondens
 }
