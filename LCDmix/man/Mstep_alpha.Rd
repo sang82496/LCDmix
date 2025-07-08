@@ -2,10 +2,10 @@
 % Please edit documentation in _main.Rmd.
 \name{Mstep_alpha}
 \alias{Mstep_alpha}
-\title{updating alpha}
+\title{Mstep_alpha}
 \usage{
 Mstep_alpha(X, weight, idx, lambda_alpha)
 }
 \description{
-updating alpha
+Mstep_alpha
 }

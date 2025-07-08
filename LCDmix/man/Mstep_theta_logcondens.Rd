@@ -2,7 +2,7 @@
 % Please edit documentation in _main.Rmd.
 \name{Mstep_theta_logcondens}
 \alias{Mstep_theta_logcondens}
-\title{Updating theta}
+\title{Mstep_theta_logcondens}
 \usage{
 Mstep_theta_logcondens(
   Y_bin,
@@ -19,5 +19,5 @@ Mstep_theta_logcondens(
 )
 }
 \description{
-Updating theta
+Mstep_theta_logcondens
 }
