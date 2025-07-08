@@ -9,17 +9,5 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Imports: 
-    assertthat,
-    flowmix,
-    ggplot2,
-    glmnet,
-    logcondens,
-    lpSolve,
-    magrittr,
-    Matrix,
-    parallel,
-    sn,
-    stats
 LitrVersionUsed: 0.9.2
-LitrId: 701bfa25e74a21b280c2b1435ecef2b6
+LitrId: ae406141b9fc6422ac626c4527f3d534

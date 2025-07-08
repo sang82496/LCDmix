@@ -1,5 +1,126 @@
-# Generated from create-rleastsquares.Rmd: do not edit by hand
+---
+title: "Creating the ``r params$package_name`` R package"
+author: "Sang-wook Lee"
+date: "`r Sys.Date()`"
+knit: litr::render
+output: litr::litr_html_document
+params:
+  package_name: "LCDmix"
+  package_parent_dir: "." # <-- relative to this file's location
+---
 
+<!-- This Rmd file contains all the code needed to define an R package.  Press "Knit" in RStudio or more generally run `litr::render("name-of-this-file.Rmd")` to generate the R package.  Remember that when you want to modify anything about the R package, you should modify this document rather than the package that is outputted.
+-->
+
+## Package setup
+
+We start by specifying the information needed in the DESCRIPTION file of the R package.
+
+```{r package-setup, message=FALSE, results='hide'}
+usethis::create_package(
+  path = ".",
+  fields = list(
+    Package = params$package_name,
+    Version = "0.0.0.9000",
+    Title = "Mixture of log-concave regressions",
+    Description = "This package uses mixture of log-concave regressions to analyze complex and heterogenous data.",
+    `Authors@R` = person(
+      given = "Sang-wook",
+      family = "Lee",
+      email = "sangwook@usc.edu",
+      role = c("aut", "cre")
+      )
+  )
+)
+usethis::use_mit_license(copyright_holder = "F. Last")
+```
+
+## Now to the package itself
+
+### Define a function
+
+Let's define a function for our R package:
+
+
+
+```{r}
+#' main
+#' 
+#' @export
+main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambda_theta = 1e-3, nrep_flowmix = 1, 
+                max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, sparseMatrix = T){
+  
+  # binning
+  if (binned){
+    Y_bin = Y
+    bin_mass = biomass
+  } else {
+    bin = binning(Y, biomass, B)
+    Y_bin = bin$Y_bin
+    bin_mass = bin$bin_mass
+  }
+  print('passed binning')
+
+  # initial GMR
+  initial = initialization(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar)
+  print('passed init')
+  
+  # iteration
+  iter = iteration(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta, max_iter, maxdev, r_bar, sparseMatrix)
+  
+  return(list(Y_bin = Y_bin,
+              X = X,
+              bin_mass = bin_mass,
+              initial = initial,
+              iter = iter))
+}
+```
+
+
+```{r}
+#' binning
+#' 
+#' @export
+binning = function(Y, biomass, B = 40){
+  TT = length(Y)
+  if (B == 0){
+    Y_bin = list()
+    bin_mass = list()
+    for (t in 1:TT){
+      tmp = tapply(biomass[[t]], factor(Y[[t]]), sum)
+      Y_bin[[t]] = matrix(as.numeric(names(tmp)), ncol = 1)
+      bin_mass[[t]] = as.numeric(tmp)
+      }
+  } else {
+      Y_range = range(Y)
+      bin = seq(from = Y_range[1], to = Y_range[2], length = B + 1)
+      binnedY = lapply(Y, findInterval, bin, rightmost.closed = T)
+      binnedY = lapply(binnedY, factor, levels = 1:B)
+      mid = rep(0, B)
+      for (i in 1:B){
+        mid[i] = (bin[i+1] + bin[i])/2
+      }
+      Y_bin = list()
+      bin_mass = list()
+      for (t in 1:TT){
+        bin_mass[[t]] = tapply(biomass[[t]], binnedY[[t]], sum)
+        # removing bins with zero counts
+        tmp = !is.na(bin_mass[[t]])
+        Y_bin[[t]] = matrix(mid[tmp], ncol = 1)
+        bin_mass[[t]] = c(bin_mass[[t]][tmp])
+      }
+      names(Y_bin) = names(Y)
+  }
+  return(list(Y_bin = Y_bin,
+           bin_mass = bin_mass))
+}
+# could be improved using levels(factor(unlist(Y)))
+```
+
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' initialization
 #' 
 #' @export
@@ -61,7 +182,12 @@ initialization = function(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nre
        Q = Q,
        Q_every = Q_every))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' calculating \pi_{tk}(\alpha) = P(Z_i^{(t)} = k| X^(t))
 #' 
 #' @export
@@ -74,7 +200,10 @@ pi_k = function(X,
   pi_k = tmp / rowSums(tmp) # TT by K matrix
   return(pi_k) 
 }
+```
 
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' Mstep_shift
 #' 
 #' @export
@@ -98,7 +227,13 @@ Mstep_shift = function(Y_bin,
   }
   return(theta0)
 }
+```
 
+
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' calc_resi
 #' 
 #' @export
@@ -116,7 +251,13 @@ calc_resi = function(Y_bin,
   }
   return(resi) # length TT list, with `resi[[t]]` being N_t by K matrix
 }
+```
 
+
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' Mstep_g_logcondens
 #' 
 #' @export
@@ -150,7 +291,12 @@ Mstep_g_logcondens = function(resi,
   }
   return(g)
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' modified_logcondens
 #' 
 #' @export
@@ -237,7 +383,13 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
             max(phi)], sig = sig)
     return(res)
 }
+```
 
+
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' calculating the surrogate loglikelihood Q
 #' 
 #' @export
@@ -270,7 +422,12 @@ calc_surr_logcondens = function(X,
   Q = total/N - lambda_alpha * sum(abs(alpha[,2:(p+1)])) - lambda_theta * sum(abs(unlist(theta)))
   return(Q)
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' iteration
 #' 
 #' @export
@@ -372,7 +529,13 @@ iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, it
               Q = Q,
               Q_every = Q_every))
 }
+```
 
+
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' E_step_logcondens
 #' 
 #' @export
@@ -406,7 +569,11 @@ E_step_logcondens = function(X,
               idx = idx
               ))
 }
+```
 
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' Mstep_alpha
 #' 
 #' @export
@@ -436,7 +603,10 @@ Mstep_alpha = function(X,
   alpha = t(as.matrix(do.call(cbind, coefs)))
   return(alpha)  # (p+1) by K matrix
 }
+```
 
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' Mstep_theta_logcondens
 #' 
 #' @export
@@ -461,7 +631,12 @@ Mstep_theta_logcondens = function(Y_bin,
   }
   return(list('theta0' = theta0_new , 'theta' = theta_new ))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' Updating theta for each k 
 #' 
 #' @export
@@ -579,7 +754,12 @@ LP_logcondens = function(Y_bin,
   gc()
   return(list(theta0_k = theta0_k, theta_k = theta_k)) #theta
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' L1_diff
 #' 
 #' @export
@@ -588,7 +768,12 @@ L1_diff = function(true, est){
   diff2 = sum(abs(true[,1] - est[,2]) + abs(true[,2] - est[,1]))
   return(min(diff1, diff2))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' isIncreasing
 #' 
 #' @export
@@ -601,7 +786,11 @@ isIncreasing = function(v){
   }
   return(T)
 }
+```
 
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' weightedHist
 #' 
 #' @export
@@ -620,7 +809,12 @@ weightedHist = function(g_k, B = 30){
   return(list(mid = mid,
               w = w))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' weighted_quantile
 #' 
 #' @export
@@ -636,7 +830,11 @@ weighted_quantile = function(x, w, thr = 0.05){
   }
   return(mat[i,1])
 }
+```
 
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' eval_LCD
 #' 
 #' @export
@@ -681,7 +879,11 @@ eval_LCD = function(LCDmix,
               w_trimmed = w_trimmed,
               trimmed_logl = trimmed_logl))
 }
+```
+  
 
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' make_iimat
 #' 
 #' @export
@@ -695,7 +897,10 @@ make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
                 lambda_theta = theta_lambdas[iimat[,3]])
   return(as.matrix(iimat))
 }
+```
 
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' CV_LCD_parallel
 #' 
 #' @export
@@ -768,7 +973,11 @@ CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1
   return(list(logs = logs,
               iimat = iimat))
 }
+```
 
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' CV_summary
 #' 
 #' @export
@@ -815,7 +1024,12 @@ CV_summary = function(iimat, save_folder = './result'){
               opt_lambdas = opt_lambdas,
               max_NA_prop = max_NA_prop))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' refit
 #' 
 #' @export
@@ -870,7 +1084,12 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
               refit_QQ = refit_QQ,
               refit_res = refit_res[[which.max(refit_QQ)]]))
 }
+```
 
+
+
+
+```{r, send_to = "R/LCDmix-package.R"}
 #' generate_skewed_data
 #' 
 #' @export
@@ -1018,3 +1237,18 @@ generate_skewed_data <- function(seed=NULL,
               beta = beta,
               sigma = sigma))
 }
+```
+
+
+
+## Documenting the package and building
+
+We finish by running commands that will document, build, and install the package.  It may also be a good idea to check the package from within this file.
+
+```{r}
+litr::document() # <-- use instead of devtools::document()
+# devtools::build()
+# devtools::install()
+# devtools::check(document = FALSE)
+```
+
