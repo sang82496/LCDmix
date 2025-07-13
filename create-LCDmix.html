@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-07-08">
+<meta name="date" content="2025-07-13">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-07-08</h4>
+<h4 class="date">2025-07-13</h4>
 
 </div>
 
@@ -348,221 +348,653 @@ usethis::use_mit_license(copyright_holder = "F. Last")</code></pre>
 </div>
 <div id="now-to-the-package-itself" class="section level2">
 <h2>Now to the package itself</h2>
+<pre class="r"><code>#usethis::use_rcpp_armadillo(name = "code")
+usethis::use_package("flowmix")</code></pre>
+<pre><code>## Registered S3 methods overwritten by 'RcppEigen':
+##   method               from         
+##   predict.fastLm       RcppArmadillo
+##   print.fastLm         RcppArmadillo
+##   summary.fastLm       RcppArmadillo
+##   print.summary.fastLm RcppArmadillo</code></pre>
+<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLmPure' by
+## 'RcppEigen::fastLmPure' when loading 'flowmix'</code></pre>
+<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLm' by
+## 'RcppEigen::fastLm' when loading 'flowmix'</code></pre>
+<pre><code>## ✔ Adding flowmix to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `flowmix::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("logcondens")</code></pre>
+<pre><code>## ✔ Adding logcondens to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `logcondens::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("glmnet")</code></pre>
+<pre><code>## ✔ Adding glmnet to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `glmnet::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("Matrix")</code></pre>
+<pre><code>## ✔ Adding Matrix to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `Matrix::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("lpSolve")</code></pre>
+<pre><code>## ✔ Adding lpSolve to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `lpSolve::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("ggplot2")</code></pre>
+<pre><code>## ✔ Adding ggplot2 to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `ggplot2::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("parallel")</code></pre>
+<pre><code>## ✔ Adding parallel to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `parallel::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("assertthat")</code></pre>
+<pre><code>## ✔ Adding assertthat to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `assertthat::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("stats")</code></pre>
+<pre><code>## ✔ Adding stats to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `stats::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("sn")</code></pre>
+<pre><code>## ✔ Adding sn to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `sn::fun()`.</code></pre>
+<pre class="r"><code>#remotes::install_github("jacobbien/litr-project@*release", subdir = "litr")
+
+litr::render("create-LCDmix.Rmd")</code></pre>
 <div id="define-a-function" class="section level3">
 <h3>Define a function</h3>
 <p>Let’s define a function for our R package:</p>
-<pre class="r"><code>#' main
-#' 
+<pre class="r"><code>#' Fit a log-concave mixture-of-experts model with optional binning
+#'
+#' @description
+#' Runs the full pipeline for fitting a log-concave mixture-of-experts model:
+#' 1. (Optional) Bin responses by biomass  
+#' 2. Initialize via Gaussian mixture regression (GMR) with \code{flowmix}  
+#' 3. Perform EM‐style iterations on mixture parameters  
+#'
+#' @param Y A list of length \code{TT}, where \code{Y[[t]]} is an \eqn{n_t}-row vector or single‐column matrix of responses at time \eqn{t}.
+#' @param X A numeric matrix of dimension \eqn{TT \times p}, where each row \code{X[t, ]} is the covariate vector at time \eqn{t}.
+#' @param biomass A list of length \code{TT}, where \code{biomass[[t]]} is a numeric vector of biomass weights per observation or bin at time \eqn{t}.
+#' @param binned Logical; if \code{TRUE}, \code{Y} and \code{biomass} are assumed already binned. Default: \code{FALSE}.
+#' @param n_bins Integer number of equal‐width bins if \code{binned = FALSE}. Default: \code{40}.
+#' @param K Integer number of mixture components.
+#' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
+#' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
+#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
+#' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
+#' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
+#' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally for speed. Default: \code{TRUE}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
+#'   \item{X}{Covariate matrix (unchanged).}
+#'   \item{bin_mass}{List of biomass‐per‐bin weights.}
+#'   \item{initial}{List returned by \code{<a href="create-LCDmix.html#initialize_model">initialize_model</a>()}, containing starting parameters.}
+#'   \item{iter}{List returned by \code{<a href="create-LCDmix.html#iteration">iteration</a>()}, containing fitted parameters over EM iterations.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate TT = 50 time points, p = 3 covariates
+#' set.seed(123)
+#' Y_list   &lt;- lapply(1:50, function(t) matrix(rnorm(sample(20:50,1)), ncol = 1))
+#' biomass  &lt;- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
+#' X_mat    &lt;- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
+#' # Fit a 2‐component mixture
+#' result   &lt;- <a href="create-LCDmix.html#main">main</a>(
+#'   Y       = Y_list,
+#'   X       = X_mat,
+#'   biomass = biomass,
+#'   K       = 2
+#' )
+#' plot(result$iter$logLik)
+#' }
 #' @export
-main = function(Y, X, biomass, binned = F, B = 40, K, lambda_alpha = 1e-3, lambda_theta = 1e-3, nrep_flowmix = 1, 
-                max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, sparseMatrix = T){
-  
-  # binning
-  if (binned){
-    Y_bin = Y
-    bin_mass = biomass
+<span id="main">main</span> &lt;- function(
+  Y,
+  X,
+  biomass,
+  binned         = FALSE,
+  n_bins         = 40,
+  K,
+  lambda_alpha   = 1e-3,
+  lambda_theta   = 1e-3,
+  n_restarts     = 1,
+  max_iter       = 30,
+  iter_eta       = 1e-3,
+  maxdev         = NULL,
+  resp_threshold = 1e-3,
+  sparseMatrix   = TRUE
+) {
+  #— Step 1: Binning (if needed) —#
+  if (binned) {
+    Y_bin    &lt;- Y
+    bin_mass &lt;- biomass
   } else {
-    bin = binning(Y, biomass, B)
-    Y_bin = bin$Y_bin
-    bin_mass = bin$bin_mass
+    bin_res  &lt;- <a href="create-LCDmix.html#binning">binning</a>(Y, biomass, n_bins)
+    Y_bin    &lt;- bin_res$Y_bin
+    bin_mass &lt;- bin_res$bin_mass
   }
-  print('passed binning')
-
-  # initial GMR
-  initial = initialization(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar)
-  print('passed init')
+  message("✔ Binning complete")
   
-  # iteration
-  iter = iteration(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta, max_iter, maxdev, r_bar, sparseMatrix)
+  #— Step 2: Initialization via GMR —#
+  init_res &lt;- <a href="create-LCDmix.html#initialize_model">initialize_model</a>(
+    Y_bin,
+    X,
+    bin_mass,
+    K,
+    lambda_alpha,
+    lambda_theta,
+    n_restarts,
+    maxdev,
+    resp_threshold
+  )
+  message("✔ Initialization complete")
   
-  return(list(Y_bin = Y_bin,
-              X = X,
-              bin_mass = bin_mass,
-              initial = initial,
-              iter = iter))
+  #— Step 3: EM‐style iterations —#
+  iter_res &lt;- <a href="create-LCDmix.html#iteration">iteration</a>(
+    Y_bin,
+    X,
+    bin_mass,
+    init_res,
+    lambda_alpha,
+    lambda_theta,
+    iter_eta,
+    max_iter,
+    maxdev,
+    resp_threshold,
+    sparseMatrix
+  )
+  message("✔ Iterations complete")
+  
+  #— Return all key results —#
+  return(list(
+    Y_bin    = Y_bin,
+    X        = X,
+    bin_mass = bin_mass,
+    initial  = init_res,
+    iter     = iter_res
+  ))
 }</code></pre>
-<pre class="r"><code>#' binning
-#' 
+<pre class="r"><code>#' Bin responses by biomass weights into fixed or data-driven bins
+#'
+#' @description
+#' Given a list of response vectors/matrices \code{Y} and corresponding biomass weights,
+#' this function either treats them as already binned (when \code{n_bins = 0}) or
+#' partitions the range of pooled responses into \code{n_bins} equal-width bins,
+#' computing for each time point \(t\):
+#' - \code{Y_bin[[t]]}: the bin centers with nonzero total weight  
+#' - \code{bin_mass[[t]]}: the sum of biomass weights in each occupied bin  
+#'
+#' @param Y A list of length \code{TT}, where \code{Y[[t]]} is a numeric vector or single-column matrix of responses at time \(t\).
+#' @param biomass A list of the same length \code{TT}, where \code{biomass[[t]]} is a numeric vector of weights for each observation in \code{Y[[t]]}.
+#' @param n_bins Integer number of equal-width bins to create across the pooled range of \code{Y}.  
+#'   If \code{n_bins = 0}, no binning is performed and each unique response value is treated as its own “bin.”  
+#'   Default: \code{40}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{Y_bin}{List of length \code{TT}; each element is a single-column matrix of bin centers (numeric) with positive total weight.}
+#'   \item{bin_mass}{List of length \code{TT}; each element is a numeric vector of total biomass weights per bin, aligned with \code{Y_bin[[t]]}.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' Y_list     &lt;- list(rnorm(100), rnorm(150))
+#' biomass_list &lt;- lapply(Y_list, function(y) runif(length(y), 0.5, 2))
+#' # Data-driven bins
+#' binned &lt;- <a href="create-LCDmix.html#binning">binning</a>(Y_list, biomass_list, n_bins = 20)
+#' str(binned)
+#' # No binning: treat each unique Y as its own bin
+#' binned2 &lt;- <a href="create-LCDmix.html#binning">binning</a>(Y_list, biomass_list, n_bins = 0)
+#' }
 #' @export
-binning = function(Y, biomass, B = 40){
-  TT = length(Y)
-  if (B == 0){
-    Y_bin = list()
-    bin_mass = list()
-    for (t in 1:TT){
-      tmp = tapply(biomass[[t]], factor(Y[[t]]), sum)
-      Y_bin[[t]] = matrix(as.numeric(names(tmp)), ncol = 1)
-      bin_mass[[t]] = as.numeric(tmp)
-      }
+<span id="binning">binning</span> &lt;- function(
+  Y,
+  biomass,
+  n_bins = 40
+) {
+  TT &lt;- length(Y)
+  
+  # If no binning: each unique Y value becomes its own bin
+  if (n_bins == 0) {
+    Y_bin    &lt;- vector("list", TT)
+    bin_mass &lt;- vector("list", TT)
+    
+    for (t in seq_len(TT)) {
+      # Sum weights by unique response
+      w_by_y &lt;- tapply(biomass[[t]], factor(Y[[t]]), sum)
+      centers   &lt;- as.numeric(names(w_by_y))
+      masses    &lt;- as.numeric(w_by_y)
+      
+      Y_bin[[t]]    &lt;- matrix(centers, ncol = 1)
+      bin_mass[[t]] &lt;- masses
+    }
+    
   } else {
-      Y_range = range(Y)
-      bin = seq(from = Y_range[1], to = Y_range[2], length = B + 1)
-      binnedY = lapply(Y, findInterval, bin, rightmost.closed = T)
-      binnedY = lapply(binnedY, factor, levels = 1:B)
-      mid = rep(0, B)
-      for (i in 1:B){
-        mid[i] = (bin[i+1] + bin[i])/2
-      }
-      Y_bin = list()
-      bin_mass = list()
-      for (t in 1:TT){
-        bin_mass[[t]] = tapply(biomass[[t]], binnedY[[t]], sum)
-        # removing bins with zero counts
-        tmp = !is.na(bin_mass[[t]])
-        Y_bin[[t]] = matrix(mid[tmp], ncol = 1)
-        bin_mass[[t]] = c(bin_mass[[t]][tmp])
-      }
-      names(Y_bin) = names(Y)
+    # Determine global response range and equal-width cutpoints
+    pooled_range &lt;- range(unlist(Y))
+    cuts         &lt;- seq(pooled_range[1], pooled_range[2], length = n_bins + 1)
+    
+    # Assign each Y to a bin index (1..n_bins)
+    binned_idx &lt;- lapply(
+      Y,
+      findInterval,
+      vec = cuts,
+      rightmost.closed = TRUE
+    )
+    binned_idx &lt;- lapply(binned_idx, factor, levels = seq_len(n_bins))
+    
+    # Precompute bin centers
+    bin_centers &lt;- (cuts[-1] + cuts[-length(cuts)]) / 2
+    
+    Y_bin    &lt;- vector("list", TT)
+    bin_mass &lt;- vector("list", TT)
+    
+    for (t in seq_len(TT)) {
+      # Sum weights within each bin
+      masses_t &lt;- tapply(biomass[[t]], binned_idx[[t]], sum)
+      
+      # Keep only bins with non-NA (nonzero) mass
+      occupied &lt;- !is.na(masses_t)
+      
+      Y_bin[[t]]    &lt;- matrix(bin_centers[occupied], ncol = 1)
+      bin_mass[[t]] &lt;- as.numeric(masses_t[occupied])
+    }
+    
+    # Preserve any names on the input list
+    names(Y_bin)    &lt;- names(Y)
+    names(bin_mass) &lt;- names(Y)
   }
-  return(list(Y_bin = Y_bin,
-           bin_mass = bin_mass))
-}
-# could be improved using levels(factor(unlist(Y)))</code></pre>
-<pre class="r"><code>#' initialization
-#' 
+  
+  # Return binned responses and corresponding biomass sums
+  list(
+    Y_bin    = Y_bin,
+    bin_mass = bin_mass
+  )
+}</code></pre>
+<pre class="r"><code>#' Initialize mixture-of-experts model parameters via Gaussian mixture regression
+#'
+#' @description
+#' Performs the initialization for the mixture-of-experts model pipeline:
+#' 1. Fit a Gaussian mixture regression (GMR) via \code{flowmix::flowmix}.  
+#' 2. Extract initial mixture parameters (\code{alpha_init}, \code{theta0_init}, \code{theta_init}).  
+#' 3. Compute initial residuals, responsibilities, and posterior weights.  
+#' 4. Perform one M-step update for intercepts.  
+#' 5. Estimate initial log-concave component densities.  
+#' 6. Compute the initial surrogate log-likelihood.
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
+#' @param X A numeric matrix of dimension \eqn{TT \times p}; covariate values for each time point.
+#' @param bin_mass A list of length \code{TT}; each element is a numeric vector of length \eqn{M_t} giving sum of biomass per bin.
+#' @param K Integer; number of mixture components.
+#' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
+#' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
+#' @param n_restarts Integer; number of random restarts in \code{flowmix::flowmix}.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.
+#' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{flow}{Result object returned by \code{flowmix::flowmix}.}
+#'   \item{idx_init}{List of length \code{TT} of \eqn{M_t \times K} logical matrices indicating high-confidence bin assignments.}
+#'   \item{resp_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior probabilities (responsibilities).}
+#'   \item{weight_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights (responsibilities × \code{bin_mass}).}
+#'   \item{theta0_init}{List of length \code{K} of initial intercepts.}
+#'   \item{theta_init}{List of length \code{K} of initial slope vectors.}
+#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of initial mixture parameters from GMR.}
+#'   \item{resi_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of residuals.}
+#'   \item{g_init}{List of length \code{K} of log-concave density objects from \code{modified_logcondens()}.}
+#'   \item{Q}{Numeric; value of the surrogate log-likelihood at initialization.}
+#'   \item{Q_every}{Numeric; same as \code{Q} (for consistency with iterative output).}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' TT      &lt;- 4; K &lt;- 2; p &lt;- 3; n_bins &lt;- 5
+#' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
+#' bin_mass&lt;- lapply(Y_bin, function(y) runif(nrow(y)))
+#' X       &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' init    &lt;- <a href="create-LCDmix.html#initialize_model">initialize_model</a>(
+#'   Y_bin, X, bin_mass, K,
+#'   lambda_alpha   = 1e-3,
+#'   lambda_theta   = 1e-3,
+#'   n_restarts     = 1,
+#'   maxdev         = NULL,
+#'   resp_threshold = 1e-3
+#' )
+#' str(init)
+#' }
 #' @export
-initialization = function(Y_bin, X, bin_mass, K, lambda_alpha, lambda_theta, nrep_flowmix, maxdev, r_bar){
+<span id="initialize_model">initialize_model</span> &lt;- function(
+  Y_bin,
+  X,
+  bin_mass,
+  K,
+  lambda_alpha,
+  lambda_theta,
+  n_restarts,
+  maxdev,
+  resp_threshold
+) {
+  # 1) Fit Gaussian mixture regression via flowmix
+  flow_res &lt;- flowmix::flowmix(
+    Y            = Y_bin,
+    X            = X,
+    weights      = bin_mass,
+    numclust     = K,
+    prob_lambda  = lambda_alpha,
+    mean_lambda  = lambda_theta,
+    nrep         = n_restarts,
+    maxdev       = maxdev
+  )
+  message("✔ flowmix initialization complete")
   
-  flow = flowmix::flowmix(Y_bin, X, bin_mass, numclust = K, prob_lambda = lambda_alpha, mean_lambda = lambda_theta, nrep = nrep_flowmix, maxdev = maxdev)
-  print('passed flowmix')
+  # 2) Extract initial parameters
+  alpha_init  &lt;- flow_res$alpha
+  theta0_init &lt;- lapply(flow_res$beta, `[[`, 1)
+  theta_init  &lt;- lapply(flow_res$beta, function(b) b[-1])
   
-  ## initial alpha
-  alpha_init = flow$alpha
+  # 3) Compute initial residuals
+  resi_init &lt;- <a href="create-LCDmix.html#compute_residuals">compute_residuals</a>(Y_bin, X, theta0_init, theta_init)
   
-  ## initial theta
-  theta0_init = list()
-  theta_init = list()
-  for (k in 1:K){
-    theta0_init[[k]] = flow$beta[[k]][1]
-    theta_init[[k]] = flow$beta[[k]][2:(ncol(X)+1)]
+  # 4) Compute initial responsibilities and weights
+  TT           &lt;- length(Y_bin)
+  resp_init    &lt;- vector("list", TT)
+  idx_init     &lt;- vector("list", TT)
+  weight_init  &lt;- vector("list", TT)
+  pi_mat       &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha_init)  # TT x K matrix
+  
+  for (t in seq_len(TT)) {
+    M_t      &lt;- nrow(Y_bin[[t]])
+    likeli_t &lt;- matrix(0, nrow = M_t, ncol = K)
+    for (k in seq_len(K)) {
+      likeli_t[, k] &lt;- dnorm(
+        x    = resi_init[[t]][, k],
+        mean = flow_res$mn[t, 1, k],
+        sd   = sqrt(flow_res$sigma[k])
+      ) * pi_mat[t, k]
+    }
+    resp_t        &lt;- likeli_t / rowSums(likeli_t)
+    resp_init[[t]]   &lt;- resp_t
+    idx_init[[t]]    &lt;- resp_t &gt; resp_threshold
+    weight_init[[t]] &lt;- resp_t * bin_mass[[t]]
   }
-  resi_init = calc_resi(Y_bin, X, theta0_init, theta_init)
+  
+  # 5) One M-step update for intercepts
+  theta0_init &lt;- <a href="create-LCDmix.html#mstep_update_intercepts">mstep_update_intercepts</a>(Y_bin, X, weight_init, idx_init, theta_init)
+  resi_init   &lt;- <a href="create-LCDmix.html#compute_residuals">compute_residuals</a>(Y_bin, X, theta0_init, theta_init)
+  
+  # 6) Initial log-concave density estimates
+  g_init &lt;- <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>(resi_init, weight_init, idx_init)
+  
+  # 7) Compute initial surrogate log-likelihood
+  Q_init &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+    X, g_init, resi_init, theta_init,
+    alpha_init, idx_init, weight_init,
+    lambda_alpha, lambda_theta
+  )
+  
+  # Return initialization results
+  return(list(
+    flow        = flow_res,
+    idx_init    = idx_init,
+    resp_init   = resp_init,
+    weight_init = weight_init,
+    theta0_init = theta0_init,
+    theta_init  = theta_init,
+    alpha_init  = alpha_init,
+    resi_init   = resi_init,
+    g_init      = g_init,
+    Q           = Q_init,
+    Q_every     = Q_init
+  ))
+}</code></pre>
+<pre class="r"><code>#' Compute posterior mixing probabilities π_{t,k} = P(Z^{(t)} = k | X^{(t)})
+#'
+#' @description
+#' Given a sequence of covariate vectors over \code{TT} time points and a parameter
+#' matrix \code{alpha} of size \eqn{K \times (p+1)}, this function computes the
+#' \eqn{TT \times K} matrix of posterior probabilities
+#' \eqn{\pi_{t,k} = P(Z^{(t)} = k \mid X^{(t)})} via a row-wise softmax of the linear predictors.
+#'
+#' @param X A numeric matrix with \code{TT} rows (time points) and \code{p} covariate columns.
+#' @param alpha A numeric matrix of dimension \eqn{K \times (p+1)}, where each row
+#'   corresponds to one mixture component \code{k}. Column 1 is the intercept,
+#'   and columns 2 through \eqn{p+1} are the slopes for that component.
+#'
+#' @return A numeric \eqn{TT \times K} matrix \code{pi_mat}, where
+#'   \code{pi_mat[t, k]} is the posterior probability of component \code{k}
+#'   at time point \code{t}. Each row of \code{pi_mat} sums to 1.
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate 3 time points, 2 covariates, 2 mixture components
+#' X     &lt;- matrix(rnorm(3 * 2), nrow = 3, ncol = 2)
+#' alpha &lt;- matrix(
+#'   c(0.1,  1.0, -0.5,   # component 1: intercept = 0.1, slopes = (1, -0.5)
+#'     0.2, -1.0,  0.3),  # component 2: intercept = 0.2, slopes = (-1, 0.3)
+#'   nrow = 2, byrow = TRUE
+#' )
+#' pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)
+#' stopifnot(all.equal(rowSums(pi_mat), rep(1, nrow(pi_mat))))
+#' }
+#'
+#' @export
+<span id="pi_k">pi_k</span> &lt;- function(
+  X,
+  alpha
+) {
+  n_time &lt;- nrow(X)
+  p_cov  &lt;- ncol(X)
+  K_comp &lt;- nrow(alpha)
 
-  ## initial resp
-  likeli = list()
-  resp_init = list()
-  weight_init = list()
-  idx_init = list()
-  P = pi_k(X, alpha_init)
-  
-  for (t in 1:length(Y_bin)){
-    likeli[[t]] = matrix(0, nrow = nrow(Y_bin[[t]]), ncol = K)
-    idx_init[[t]] = matrix(F, nrow = nrow(Y_bin[[t]]), ncol = K)
-    for (k in 1:K){
-      likeli[[t]][,k] = dnorm(resi_init[[t]][,k], flow$mn[t,1,k], sqrt(flow$sigma[k])) * P[t,k]
-    }
-    resp_init[[t]] = likeli[[t]]/rowSums(likeli[[t]])
-    idx_init[[t]] = resp_init[[t]] &gt; r_bar     
-    weight_init[[t]] = resp_init[[t]] * bin_mass[[t]]
-  }
-  
-  ## initial theta shift
-  theta0_init = Mstep_shift(Y_bin, X, weight_init, idx_init, theta_init)
-  resi_init = calc_resi(Y_bin, X, theta0_init, theta_init)
-  
-  ## initial g
-  g_init = Mstep_g_logcondens(resi_init, weight_init, idx_init)
+  # Split alpha into intercepts (length K) and slopes (K x p)
+  intercepts &lt;- alpha[, 1]
+  slopes     &lt;- alpha[, -1, drop = FALSE]
 
-  ## initial Q
-  Q = calc_surr_logcondens(X, g_init, resi_init, theta_init, alpha_init, idx_init, weight_init, lambda_alpha, lambda_theta)
-  Q_every = Q
+  # Build intercept matrix: repeat intercepts for each time point
+  intercept_mat &lt;- matrix(
+    intercepts,
+    nrow = n_time,
+    ncol = K_comp,
+    byrow = TRUE
+  )
+
+  # Linear predictor: TT x K
+  lin_pred &lt;- intercept_mat + X %*% t(slopes)
+
+  # Softmax: exp and normalize row-wise
+  exp_lp &lt;- exp(lin_pred)
+  pi_mat &lt;- exp_lp / rowSums(exp_lp)
+
+  return(pi_mat)
+}</code></pre>
+<pre class="r"><code>#' Update component intercepts in the M-step using binned data
+#'
+#' @description
+#' Computes the updated intercepts \eqn{\theta_{0k}} for each mixture component \eqn{k}
+#' by solving the weighted shift equations on binned responses. Here \code{Y_bin} and
+#' \code{weights} both have at most \code{n_bins} rows per time point (empty bins removed).
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix
+#'   of binned response values for time point \eqn{t}, where \eqn{M_t \le n\_bins}.
+#' @param X A numeric matrix of size \eqn{TT \times p}, where each row \code{X[t, ]} is
+#'   the covariate vector at time \eqn{t}.
+#' @param weights A list of length \code{TT}; each element is a numeric vector of length
+#'   \eqn{M_t} giving the total biomass per bin (i.e.\ the \code{bin_mass} output
+#'   from \code{<a href="create-LCDmix.html#binning">binning</a>()}, with empty bins removed).
+#' @param indices A list of length \code{TT}; each element is an \eqn{M_t \times K}
+#'   logical or integer matrix where \code{indices[[t]][i, k]} is \code{TRUE} if the
+#'   \(i\)th bin at time \emph{t} contributes to component \emph{k}.
+#' @param slopes A list of length \code{K}; each element is a numeric vector of length
+#'   \eqn{p} giving the current slope parameters \eqn{\boldsymbol{\theta}_k}.
+#'
+#' @return A list of length \code{K}, where element \code{k} is the updated intercept
+#'   \eqn{\theta_{0k}} for component \eqn{k}.
+#'
+#' @examples
+#' \dontrun{
+#' TT      &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
+#' # Simulate binned responses and bin_mass
+#' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
+#' bin_mass&lt;- lapply(Y_bin, function(m) runif(nrow(m)))
+#' # Dummy X and indices
+#' X       &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' indices &lt;- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
+#'                       length(m) * K, replace = TRUE),
+#'                       ncol = K))
+#' slopes  &lt;- replicate(K, runif(p), simplify = FALSE)
+#' # Compute updated intercepts
+#' intercepts &lt;- <a href="create-LCDmix.html#mstep_update_intercepts">mstep_update_intercepts</a>(Y_bin, X, bin_mass, indices, slopes)
+#' }
+#' @export
+<span id="mstep_update_intercepts">mstep_update_intercepts</span> &lt;- function(
+  Y_bin,
+  X,
+  weights,
+  indices,
+  slopes
+) {
+  K_comp &lt;- length(slopes)
+  TT     &lt;- length(Y_bin)
+  intercepts &lt;- vector("list", K_comp)
+
+  for (k in seq_len(K_comp)) {
+    num &lt;- 0
+    den &lt;- 0
+    for (t in seq_len(TT)) {
+      # select which bins at time t belong to component k
+      idx_tk &lt;- indices[[t]][, k]
+      # corresponding biomass weights for those bins
+      w_tk   &lt;- weights[[t]][idx_tk]
+      # sum of binned responses in those bins
+      resp_sum &lt;- as.numeric(w_tk %*% Y_bin[[t]][idx_tk, , drop = FALSE])
+      # adjustment from current slopes
+      slope_adj &lt;- sum(w_tk) * sum(X[t, ] * slopes[[k]])
+      num &lt;- num + (resp_sum - slope_adj)
+      den &lt;- den + sum(w_tk)
+    }
+    intercepts[[k]] &lt;- num / den
+  }
+
+  return(intercepts)
+}</code></pre>
+<pre class="r"><code>#' Compute residuals for binned responses given mixture parameters
+#'
+#' @description
+#' For each time point \(t\) and mixture component \(k\), compute the residuals
+#' \[
+#'   r_{t,i,k} \;=\; Y_{\mathrm{bin},t,i}
+#'     \;-\;\bigl(\,\text{intercepts}[[k]] \;+\; X[t, ] \,\cdot\, \text{slopes}[[k]]\bigr).
+#' \]
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1}
+#'   matrix of binned response values at time point \code{t}.
+#' @param X A numeric matrix of size \eqn{TT \times p}; row \code{X[t, ]} is the
+#'   covariate vector for time point \code{t}.
+#' @param intercepts A list of length \code{K}; \code{intercepts[[k]]} is the
+#'   intercept parameter \eqn{\theta_{0k}} for component \eqn{k}.
+#' @param slopes A list of length \code{K}; \code{slopes[[k]]} is a numeric vector
+#'   of length \eqn{p} containing the slope parameters \(\boldsymbol{\theta}_k\).
+#'
+#' @return A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix
+#'   of residuals, where row \(i\), column \(k\) is the residual for bin \(i\)
+#'   at time \(t\) and component \(k\).
+#'
+#' @examples
+#' \dontrun{
+#' TT         &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
+#' Y_bin      &lt;- lapply(1:TT, function(i) matrix(rnorm(n_bins), ncol = 1))
+#' X          &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' intercepts &lt;- list(0.5, -1.2)
+#' slopes     &lt;- list(c(1.0, 0.5), c(-0.5, 2.0))
+#' res_list   &lt;- <a href="create-LCDmix.html#compute_residuals">compute_residuals</a>(Y_bin, X, intercepts, slopes)
+#' str(res_list)
+#' }
+#' @export
+<span id="compute_residuals">compute_residuals</span> &lt;- function(
+  Y_bin,
+  X,
+  intercepts,
+  slopes
+) {
+  TT &lt;- length(Y_bin)
+  K  &lt;- length(intercepts)
+  residuals &lt;- vector("list", TT)
+
+  for (t in seq_len(TT)) {
+    M_t &lt;- nrow(Y_bin[[t]])
+    # initialize M_t x K matrix for residuals at time t
+    res_t &lt;- matrix(0, nrow = M_t, ncol = K)
+
+    for (k in seq_len(K)) {
+      # predicted value for component k at time t
+      pred_tk &lt;- intercepts[[k]] + sum(X[t, ] * slopes[[k]])
+      # residuals: observed minus predicted
+      res_t[, k] &lt;- as.numeric(Y_bin[[t]][, 1]) - pred_tk
+    }
+
+    residuals[[t]] &lt;- res_t
+  }
+
+  return(residuals)
+}</code></pre>
+<pre class="r"><code>#' Estimate component densities via log-concave density estimation (M-step)
+#'
+#' @description
+#' For each mixture component \(k\), gathers the residuals across all time points
+#' for bins assigned to component \(k\), weighs them by their posterior weights,
+#' and fits a log-concave density using \code{modified_logcondens()}.
+#'
+#' @param residuals A list of length \code{TT}, where each element is an \eqn{M_t \times K}
+#'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
+#' @param weights A list of length \code{TT}, where each element is an \eqn{M_t \times K}
+#'   matrix of posterior weights (e.g., responsibilities) corresponding to \code{residuals}.
+#' @param indices A list of length \code{TT}, where each element is an \eqn{M_t \times K}
+#'   logical or integer matrix.  \code{indices[[t]][i,k]} indicates whether the \(i\)th bin
+#'   at time \(t\) contributes to component \(k\).
+#'
+#' @return A list of length \code{K}, where element \code{k} is the output of
+#'   \code{modified_logcondens()}—the estimated log-concave density for component \(k\).
+#'
+#' @examples
+#' \dontrun{
+#' TT &lt;- 3; K &lt;- 2
+#' # Simulate residuals and weights (5 bins × 2 components)
+#' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
+#' weights   &lt;- lapply(residuals, function(m) abs(m))  # just for demo
+#' # Include all bins for both components
+#' indices &lt;- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
+#' densities &lt;- <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>(residuals, weights, indices)
+#' }
+#' @export
+<span id="mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</span> &lt;- function(
+  residuals,
+  weights,
+  indices
+) {
+  TT &lt;- length(weights)
+  K  &lt;- ncol(indices[[1]])
+  densities &lt;- vector("list", K)
   
-  return(list(flow = flow,
-       idx_init = idx_init,
-       resp_init = resp_init,
-       weight_init = weight_init,
-       theta0_init = theta0_init,
-       theta_init = theta_init,
-       alpha_init = alpha_init,
-       resi_init = resi_init,
-       g_init = g_init,
-       Q = Q,
-       Q_every = Q_every))
-}</code></pre>
-<pre class="r"><code>#' calculating \pi_{tk}(\alpha) = P(Z_i^{(t)} = k| X^(t))
-#' 
-#' @export
-pi_k = function(X, 
-                alpha){
-  p = dim(X)[2]
-  TT = dim(X)[1]
-  K = dim(alpha)[1]
-  tmp = exp(t(matrix(alpha[,1], ncol = TT, nrow = K)) + X %*% t(alpha[,2:(p+1)]))
-  pi_k = tmp / rowSums(tmp) # TT by K matrix
-  return(pi_k) 
-}</code></pre>
-<pre class="r"><code>#' Mstep_shift
-#' 
-#' @export
-Mstep_shift = function(Y_bin,
-                       X,
-                       weight,
-                       idx,
-                       theta){
-  theta0 = list()
-  for (k in 1:length(theta)){
-    # except for the intercept term
-    up = 0
-    down = 0
-    for (t in 1:length(Y_bin)){
-      idx_tk = idx[[t]][,k]
-      weight_tk = weight[[t]][idx_tk,k]
-      up = up + weight_tk %*% Y_bin[[t]][idx_tk] - sum(weight_tk) * sum(X[t,] * theta[[k]])
-      down = down + sum(weight_tk)
+  for (k in seq_len(K)) {
+    # Collect all residuals and weights for component k
+    res_k &lt;- unlist(lapply(seq_len(TT),
+                           function(t) residuals[[t]][indices[[t]][, k], k]))
+    w_k   &lt;- unlist(lapply(seq_len(TT),
+                           function(t) weights[[t]][indices[[t]][, k], k]))
+    
+    # Unique residual values &amp; aggregated weights
+    uniq_res &lt;- unique(res_k)
+    if (length(uniq_res) &lt; 5) {
+      message("Only ", length(uniq_res), " unique points for component ", k)
     }
-    theta0[[k]] = up/down
+    uniq_w   &lt;- sapply(uniq_res, function(val) sum(w_k[res_k == val]))
+    
+    # Fit log-concave density
+    densities[[k]] &lt;- modified_logcondens(
+      x     = uniq_res,
+      w     = uniq_w / sum(uniq_w),
+      print = FALSE
+    )
   }
-  return(theta0)
-}</code></pre>
-<pre class="r"><code>#' calc_resi
-#' 
-#' @export
-calc_resi = function(Y_bin,
-                     X,
-                     theta0,
-                     theta){
-  resi = list()
-  K = length(theta0)
-  for (t in 1:length(Y_bin)){
-    resi[[t]] = matrix(0, nrow = length(Y_bin[[t]]), ncol = K)
-    for (k in 1:K){
-      resi[[t]][,k] = Y_bin[[t]] - c(theta0[[k]] + sum(X[t,] * theta[[k]]))
-    }
-  }
-  return(resi) # length TT list, with `resi[[t]]` being N_t by K matrix
-}</code></pre>
-<pre class="r"><code>#' Mstep_g_logcondens
-#' 
-#' @export
-Mstep_g_logcondens = function(resi, 
-                              weight,
-                              idx){
-  TT = length(weight)
-  K = dim(idx[[1]])[2]
   
-  g = list()
-  for (k in 1:K){
-    resi_k = c()
-    w_k = c()
-    for (t in 1:TT){
-      idx_tk = idx[[t]][,k]
-      weight_tk = weight[[t]][idx_tk,k]
-      resi_k = c(resi_k, resi[[t]][idx_tk,k])
-      w_k = c(w_k, weight_tk)
-    }
-    uniq_resi_k = unique(resi_k)
-    M = length(uniq_resi_k)
-    if (M &lt; 5) {
-      print(paste("There are only", M, "points in Cluster", k))
-    }
-    uniq_wk = rep(0, M)
-    for (j in 1:M){
-      uniq_wk[j] = sum(w_k[uniq_resi_k[j] == resi_k])
-    }
-    #g[[k]] = logcondens::activeSetLogCon(uniq_resi_k, w = uniq_wk / sum(uniq_wk), print = FALSE)
-    g[[k]] = modified_logcondens(uniq_resi_k, w = uniq_wk / sum(uniq_wk), print = FALSE)
-  }
-  return(g)
+  return(densities)
 }</code></pre>
 <pre class="r"><code>#' modified_logcondens
 #' 
@@ -650,644 +1082,1689 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
             max(phi)], sig = sig)
     return(res)
 }</code></pre>
-<pre class="r"><code>#' calculating the surrogate loglikelihood Q
-#' 
+<pre class="r"><code>#' Compute the surrogate log-likelihood Q for the EM algorithm
+#'
+#' @description
+#' Calculates the expected complete-data log-likelihood (the “Q” function) given
+#' current parameter estimates, combining:
+#' - Log-concave density contributions of residuals  
+#' - Mixture weight (α) contributions  
+#' - L1 penalties on α (excluding intercepts) and on regression slopes  
+#'
+#' Formally,
+#' \deqn{Q = \frac{1}{N}\sum_{t=1}^{TT}\sum_{k=1}^{K}\sum_{i\in\mathcal{I}_{tk}}
+#'   w_{t,i,k}\bigl[\log f_k(r_{t,i,k}) + \log\pi_{t,k}\bigr]
+#'   - \lambda_\alpha\|\alpha_{-0}\|_1 - \lambda_\theta\|\theta\|_1,}
+#' where:
+#'   - \(r_{t,i,k}\) are residuals,  
+#'   - \(f_k\) is the log-concave density for component \(k\),  
+#'   - \(\pi_{t,k}=P(Z^{(t)}=k\mid X^{(t)})\),  
+#'   - \(w_{t,i,k}\) are responsibilities,  
+#'   - \(N=\sum_{t,i,k}w_{t,i,k}\).  
+#'
+#' @param X A \eqn{TT \times p} numeric covariate matrix (rows = time points).
+#' @param densities A list of length \eqn{K}, each object returned by \code{modified_logcondens()}.
+#' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.
+#' @param slopes A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.
+#' @param alpha A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).
+#' @param indices A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
+#' @param responsibilities A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
+#' @param lambda_alpha Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.
+#' @param lambda_theta Nonnegative numeric L1 penalty on slope parameters \code{slopes}.
+#'
+#' @return A single numeric: the surrogate log-likelihood \eqn{Q} (normalized) minus the L1 penalties.
+#'
+#' @examples
+#' \dontrun{
+#' TT &lt;- 3; p &lt;- 2; K &lt;- 2
+#' X  &lt;- matrix(rnorm(TT * p), nrow = TT)
+#' densities &lt;- replicate(K,
+#'   modified_logcondens(rnorm(50), w = rep(1/50,50)),
+#'   simplify = FALSE
+#' )
+#' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
+#' indices   &lt;- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
+#' responsibilities &lt;- lapply(indices,
+#'   function(idx) matrix(runif(length(idx)), nrow = nrow(idx))
+#' )
+#' slopes &lt;- replicate(K, rnorm(p), simplify = FALSE)
+#' alpha  &lt;- matrix(rnorm(K*(p+1)), nrow = K)
+#'
+#' Q_val &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+#'   X, densities, residuals, slopes, alpha,
+#'   indices, responsibilities,
+#'   lambda_alpha = 1e-3, lambda_theta = 1e-3
+#' )
+#' }
 #' @export
-calc_surr_logcondens = function(X,
-                                g, 
-                                resi, 
-                                theta,
-                                alpha, 
-                                idx,
-                                weight,
-                                lambda_alpha,
-                                lambda_theta){
-  K = length(g)
-  N = sum(unlist(weight))
-  P = pi_k(X, alpha) # TT by K matrix
-  p = dim(X)[2]
-  TT = dim(X)[1]
-  total = 0
-  for (k in 1:K){
-    for (t in 1:TT){
-      idx_tk = idx[[t]][,k]
-      resi_tk = resi[[t]][idx_tk,k]
-      weight_tk = weight[[t]][idx_tk,k]
-      if (length(weight_tk) &gt; 0) {
-        suppressWarnings({tmp = weight_tk * logcondens::evaluateLogConDens(resi_tk, g[[k]])[,2]})
-        total = total + sum(tmp[!is.infinite(tmp)]) + sum(weight_tk[!is.infinite(tmp)]) * log(P[t,k])
-      }
+<span id="compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</span> &lt;- function(
+  X,
+  densities,
+  residuals,
+  slopes,
+  alpha,
+  indices,
+  responsibilities,
+  lambda_alpha,
+  lambda_theta
+) {
+  # Number of time points
+  TT     &lt;- nrow(X)
+  K_comp &lt;- length(densities)
+
+  # Total “effective sample size”
+  N_total &lt;- sum(unlist(responsibilities))
+
+  # Mixture probabilities: TT x K matrix
+  pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)
+
+  total_ll &lt;- 0
+
+  for (k in seq_len(K_comp)) {
+    for (t in seq_len(TT)) {
+      # Select bins for component k at time t
+      idx_tk    &lt;- indices[[t]][, k]
+      w_tk      &lt;- responsibilities[[t]][idx_tk, k]
+      resi_tk   &lt;- residuals[[t]][idx_tk, k]
+
+      if (length(w_tk) == 0) next
+
+      # Evaluate log-density for each residual under component k
+      log_dens &lt;- suppressWarnings(
+        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 2]
+      )
+      finite_mask &lt;- is.finite(log_dens)
+
+      # Accumulate weighted log-density and mixture log-prob terms
+      total_ll &lt;- total_ll +
+        sum(w_tk[finite_mask] * log_dens[finite_mask]) +
+        sum(w_tk[finite_mask]) * log(pi_mat[t, k])
     }
   }
-  Q = total/N - lambda_alpha * sum(abs(alpha[,2:(p+1)])) - lambda_theta * sum(abs(unlist(theta)))
-  return(Q)
+
+  # Normalize and subtract L1 penalties
+  Q_val &lt;- total_ll / N_total -
+    lambda_alpha * sum(abs(alpha[, -1])) -
+    lambda_theta * sum(abs(unlist(slopes)))
+
+  return(Q_val)
 }</code></pre>
-<pre class="r"><code>#' iteration
-#' 
+<pre class="r"><code>#' Run EM‐style iterations for log‐concave mixture‐of‐experts model
+#'
+#' @description
+#' Performs up to \code{max_iter} iterations of the EM algorithm:
+#' 1. E‐step via \code{<a href="create-LCDmix.html#e_step_log_concave">e_step_log_concave</a>()}  
+#' 2. M‐steps:
+#'    - Update mixture weights with \code{<a href="create-LCDmix.html#mstep_update_alpha">mstep_update_alpha</a>()}  
+#'    - Update regression slopes/intercepts via \code{<a href="create-LCDmix.html#mstep_update_theta_log_concave">mstep_update_theta_log_concave</a>()} and \code{<a href="create-LCDmix.html#mstep_update_intercepts">mstep_update_intercepts</a>()}  
+#'    - Update log‐concave component densities with \code{<a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>()}  
+#' Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
+#'
+#' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
+#' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
+#' @param bin_mass List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.
+#' @param init_res List returned by \code{<a href="create-LCDmix.html#initialize_model">initialize_model</a>()}, containing:\cr
+#'   \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
+#'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
+#' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
+#' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
+#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
+#' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
+#' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
+#' @param sparseMatrix Logical; if \code{TRUE}, build constraint matrices sparsely. Default: \code{TRUE}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{idx_new}{Final list of \eqn{TT} logical matrices of “active” bins per component.}
+#'   \item{resp_new}{Final list of \eqn{TT} responsibility matrices.}
+#'   \item{weight_new}{Final list of \eqn{TT} posterior‐weight matrices.}
+#'   \item{resi_new}{Final list of \eqn{TT} residual matrices.}
+#'   \item{alpha_new}{Final \eqn{K \times (p+1)} mixture‐weight matrix.}
+#'   \item{theta0_new}{List of length \eqn{K} of final intercepts.}
+#'   \item{theta_new}{List of length \eqn{K} of final slope vectors.}
+#'   \item{g_new}{List of length \eqn{K} of final log‐concave densities.}
+#'   \item{lambda_alpha}{Echo of input penalty on α.}
+#'   \item{lambda_theta}{Echo of input penalty on θ.}
+#'   \item{Q}{Vector of surrogate log‐likelihood values at each iteration.}
+#'   \item{Q_every}{Same as \code{Q}, for compatibility with initialization.}
+#' }
+#'
 #' @export
-iteration = function(Y_bin, X, bin_mass, initial, lambda_alpha, lambda_theta, iter_eta = 1e-6, max_iter = 30, maxdev, r_bar, sparseMatrix = T){
+<span id="iteration">iteration</span> &lt;- function(
+  Y_bin,
+  X,
+  bin_mass,
+  init_res,
+  lambda_alpha,
+  lambda_theta,
+  iter_eta       = 1e-6,
+  max_iter       = 30,
+  maxdev         = NULL,
+  resp_threshold = 1e-3,
+  sparseMatrix   = TRUE
+) {
+  TT &lt;- nrow(X)
+  p  &lt;- ncol(X)
+  K  &lt;- length(init_res$g_init)
   
-  K = length(initial$g_init)
-  p = dim(X)[2]
-  TT = dim(X)[1]
+  # Unpack initial values
+  idx_old     &lt;- init_res$idx_init
+  resp_old    &lt;- init_res$resp_init
+  weight_old  &lt;- init_res$weight_init
+  resi_old    &lt;- init_res$resi_init
+  alpha_old   &lt;- init_res$alpha_init
+  theta0_old  &lt;- init_res$theta0_init
+  theta_old   &lt;- init_res$theta_init
+  g_old       &lt;- init_res$g_init
+  Q           &lt;- init_res$Q
+  Q_every     &lt;- init_res$Q_every
   
-  idx_old = initial$idx_init
-  resp_old = initial$resp_init
-  weight_old = initial$weight_init
-  resi_old = initial$resi_init
-  alpha_old = initial$alpha_init
-  theta0_old = initial$theta0_init
-  theta_old = initial$theta_init
-  g_old = initial$g_init
-  Q = initial$Q
-  Q_every = initial$Q_every
-  
-  # iteration
-  for (i in seq(max_iter)) {
+  for (i in seq_len(max_iter)) {
+    #— E‐step —#
+    Estep   &lt;- <a href="create-LCDmix.html#e_step_log_concave">e_step_log_concave</a>(
+      X               = X,
+      bin_mass        = bin_mass,
+      residuals       = resi_old,
+      alpha           = alpha_old,
+      densities       = g_old,
+      resp_threshold  = resp_threshold
+    )
+    idx_new    &lt;- Estep$idx
+    resp_new   &lt;- Estep$resp
+    weight_new &lt;- Estep$weight
+    message("✔ E‐step complete")
     
-    ## E-step: update responsibilities
-    Estep = E_step_logcondens(X, bin_mass, resi_old, alpha_old, g_old, r_bar)
-    idx_new = Estep$idx
-    resp_new = Estep$resp
-    weight_new = Estep$weight
-#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_old, theta_old, alpha_old, idx_new, weight_new, lambda_alpha, lambda_theta))
-    print('passed Estep')
+    #— M‐step α —#
+    alpha_new &lt;- <a href="create-LCDmix.html#mstep_update_alpha">mstep_update_alpha</a>(
+      X                    = X,
+      posterior_weights    = weight_new,
+      responsibility_mask  = idx_new,
+      lambda_alpha         = lambda_alpha
+    )
+    message("✔ Updated α")
     
-    ## M-step: update estimates of (alpha,theta,g)
-  
-    ### Mstep_alpha
-    alpha_new = Mstep_alpha(X, weight_new, idx_new, lambda_alpha)
-#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_old, theta_old, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
-    print('passed alpha')
+    #— M‐step θ via LP + shift —#
+    theta_lp &lt;- <a href="create-LCDmix.html#mstep_update_theta_log_concave">mstep_update_theta_log_concave</a>(
+      Y_bin               = Y_bin,
+      X                   = X,
+      posterior_weights   = weight_new,
+      residuals           = resi_old,
+      densities           = g_old,
+      responsibility_mask = idx_old,
+      intercepts          = theta0_old,
+      slopes              = theta_old,
+      lambda_theta        = lambda_theta,
+      maxdev              = maxdev,
+      sparseMatrix        = sparseMatrix
+    )
+    theta0_new &lt;- theta_lp$theta0
+    theta_new  &lt;- theta_lp$theta
+    message("✔ Updated θ via LP")
     
-    ### Mstep_theta
-    M_theta = Mstep_theta_logcondens(Y_bin, X, weight_new, resi_old, g_old, idx_old, theta0_old, theta_old, lambda_theta, maxdev, sparseMatrix)
-    theta0_new = M_theta$theta0
-    theta_new = M_theta$theta
-    print('passed theta')
+    # Shift intercepts analytically
+    theta0_new &lt;- <a href="create-LCDmix.html#mstep_update_intercepts">mstep_update_intercepts</a>(
+      Y_bin              = Y_bin,
+      X                  = X,
+      weights            = weight_new,
+      indices            = idx_new,
+      slopes             = theta_new
+    )
+    resi_new &lt;- <a href="create-LCDmix.html#compute_residuals">compute_residuals</a>(
+      Y_bin   = Y_bin,
+      X       = X,
+      intercepts = theta0_new,
+      slopes     = theta_new
+    )
     
-    ### Mstep_shift
-    theta0_new = Mstep_shift(Y_bin, X, weight_new, idx_new, theta_new)
-    resi_new = calc_resi(Y_bin, X, theta0_new, theta_new)
-#    Q_every = append(Q_every, calc_surr_logcondens(X, g_old, resi_new, theta_new, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
+    #— M‐step g —#
+    g_new &lt;- <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>(
+      residuals           = resi_new,
+      weights             = weight_new,
+      indices             = idx_new
+    )
+    message("✔ Updated densities")
     
-#    save(resi_new, weight_new, idx_new, file = file.path('.', paste0(i, '.Rdata')))
-#    print(paste0(i, 'th input saved'))
+    # Surrogate log‐likelihood
+    Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+      X                    = X,
+      densities            = g_new,
+      residuals            = resi_new,
+      slopes               = theta_new,
+      alpha                = alpha_new,
+      indices              = idx_new,
+      responsibilities     = weight_new,
+      lambda_alpha         = lambda_alpha,
+      lambda_theta         = lambda_theta
+    )
+    Q_every &lt;- c(Q_every, Q_new)
+    Q       &lt;- c(Q, Q_new)
+    message("✔ Q[i] = ", Q_new)
     
-    ### Mstep_g
-    g_new = Mstep_g_logcondens(resi_new, weight_new, idx_new)
-    Q_every = append(Q_every, calc_surr_logcondens(X, g_new, resi_new, theta_new, alpha_new, idx_new, weight_new, lambda_alpha, lambda_theta))
-    print('passed g')
-    
-    ### loglikelihood
-    Q = append(Q, Q_every[length(Q_every)])
-    
-    ## termination criteria
-    print(i)
-    inc = (Q[i+1]-Q[i])/abs(Q[i])
+    # Check convergence or decrease
+    inc &lt;- (Q[i + 1] - Q[i]) / abs(Q[i])
     if (inc &lt; 0) {
-     idx_new = idx_old
-     resp_new = resp_old
-     resi_new = resi_old
-     alpha_new = alpha_old
-     theta0_new = theta0_old
-     theta_new = theta_old
-     weight_new = weight_old
-     g_new = g_old
-     print("The loglikelihood decreased in the last iteration. Will return the previous parameters")
-     break;
-    } else if (inc &lt;= iter_eta  | i==max_iter){
-      break;
+      message("⚠ Q decreased; reverting to previous iteration")
+      idx_new    &lt;- idx_old
+      resp_new   &lt;- resp_old
+      weight_new &lt;- weight_old
+      resi_new   &lt;- resi_old
+      alpha_new  &lt;- alpha_old
+      theta0_new &lt;- theta0_old
+      theta_new  &lt;- theta_old
+      g_new      &lt;- g_old
+      break
+    }
+    if (inc &lt;= iter_eta || i == max_iter) {
+      message("Converged at iteration ", i, " (inc = ", inc, ")")
+      break
+    }
+    
+    # Prepare for next iteration
+    idx_old    &lt;- idx_new
+    resp_old   &lt;- resp_new
+    weight_old &lt;- weight_new
+    resi_old   &lt;- resi_new
+    alpha_old  &lt;- alpha_new
+    theta0_old &lt;- theta0_new
+    theta_old  &lt;- theta_new
+    g_old      &lt;- g_new
+  }
+  
+  return(list(
+    idx_new        = idx_new,
+    resp_new       = resp_new,
+    weight_new     = weight_new,
+    resi_new       = resi_new,
+    alpha_new      = alpha_new,
+    theta0_new     = theta0_new,
+    theta_new      = theta_new,
+    g_new          = g_new,
+    lambda_alpha   = lambda_alpha,
+    lambda_theta   = lambda_theta,
+    Q              = Q,
+    Q_every        = Q_every
+  ))
+}</code></pre>
+<pre class="r"><code>#' Perform the E-step using log-concave component densities
+#'
+#' @description
+#' Given current model parameters and log-concave density estimates, computes:
+#'   - Soft responsibilities \(\mathrm{resp}_{t,i,k}\)  
+#'   - Posterior weights (responsibilities × biomass per bin)  
+#'   - Logical indices of “effectively nonzero” responsibilities  
+#' for each time point \(t\) and component \(k\), thresholding responsibilities
+#' below \code{resp_threshold} to zero for numerical stability and speed.
+#'
+#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param bin_mass A list of length \code{TT}, where each element is a numeric
+#'   vector of length \eqn{M_t} giving the biomass weight per bin at time \(t\).
+#' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K}
+#'   matrix of residuals for bins at time \(t\).
+#' @param alpha A numeric \eqn{K \times (p+1)} matrix of mixture parameters
+#'   (column 1 = intercepts, columns 2:\(p+1\) = slopes).
+#' @param densities A list of length \code{K}, each an object returned by
+#'   \code{modified_logcondens()} representing the log‐concave density for one component.
+#' @param resp_threshold Numeric in \([0,1]\); responsibilities below this value
+#'   are set to zero. Default: \code{1e-3}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{resp}{List of length \code{TT} of \eqn{M_t \times K} matrices of responsibilities.}
+#'   \item{weight}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights.}
+#'   \item{idx}{List of length \code{TT} of \eqn{M_t \times K} logical matrices, where
+#'       \code{idx[[t]][i,k]} = \code{TRUE} if \code{resp[[t]][i,k]} &gt; 0.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' TT &lt;- 4; K &lt;- 3; p &lt;- 2
+#' # Simulate residuals (5 bins × K) and biomass
+#' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5*K), ncol = K))
+#' bin_mass  &lt;- lapply(residuals, function(m) runif(nrow(m)))
+#' # Dummy densities
+#' densities &lt;- replicate(K,
+#'   modified_logcondens(rnorm(100), w = rep(1/100, 100)),
+#'   simplify = FALSE
+#' )
+#' # Random mixture parameters
+#' alpha &lt;- matrix(rnorm(K*(p+1)), nrow = K)
+#' # One E‐step
+#' e_res &lt;- <a href="create-LCDmix.html#e_step_log_concave">e_step_log_concave</a>(
+#'   X              = matrix(rnorm(TT*p), nrow = TT),
+#'   bin_mass       = bin_mass,
+#'   residuals      = residuals,
+#'   alpha          = alpha,
+#'   densities      = densities,
+#'   resp_threshold = 1e-3
+#' )
+#' str(e_res)
+#' }
+#' @export
+<span id="e_step_log_concave">e_step_log_concave</span> &lt;- function(
+  X,
+  bin_mass,
+  residuals,
+  alpha,
+  densities,
+  resp_threshold = 1e-3
+) {
+  TT      &lt;- nrow(X)
+  K_comp  &lt;- length(densities)
+  # Precompute mixing probabilities
+  pi_mat  &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)
+  
+  resp_list   &lt;- vector("list", TT)
+  weight_list &lt;- vector("list", TT)
+  idx_list    &lt;- vector("list", TT)
+  
+  for (t in seq_len(TT)) {
+    M_t     &lt;- nrow(residuals[[t]])
+    lik_mat &lt;- matrix(0, nrow = M_t, ncol = K_comp)
+    
+    # Compute (log‐density × mixing probability) for each component
+    for (k in seq_len(K_comp)) {
+      log_dens &lt;- suppressWarnings(
+        logcondens::evaluateLogConDens(
+          residuals[[t]][, k],
+          densities[[k]]
+        )[, 3]
+      )
+      lik_mat[, k] &lt;- log_dens * pi_mat[t, k]
+    }
+    
+    # Normalize to get soft responsibilities
+    resp_t &lt;- lik_mat / rowSums(lik_mat)
+    # Threshold small probabilities
+    resp_t[resp_t &lt; resp_threshold] &lt;- 0
+    
+    # Indices of effectively nonzero responsibilities
+    idx_t &lt;- resp_t &gt; 0
+    # Posterior weights = responsibilities × biomass per bin
+    weight_t &lt;- resp_t * bin_mass[[t]]
+    
+    resp_list[[t]]   &lt;- resp_t
+    weight_list[[t]] &lt;- weight_t
+    idx_list[[t]]    &lt;- idx_t
+  }
+  
+  return(list(
+    resp   = resp_list,
+    weight = weight_list,
+    idx    = idx_list
+  ))
+}</code></pre>
+<pre class="r"><code>#' Update mixture‐weight parameters via penalized multinomial regression
+#'
+#' @description
+#' Fits a weighted multinomial logistic regression of component‐assignment weights
+#' on covariates with an L1 penalty to update the mixture‐weight parameters \code{alpha}.
+#'
+#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param posterior_weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#'   matrix of posterior weights (e.g.\ responsibilities × biomass) for each bin and component.
+#' @param responsibility_mask A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#'   logical matrix indicating which bins have effectively nonzero posterior weight.
+#' @param lambda_alpha Positive numeric L1 penalty on the non‐intercept mixture‐weight coefficients.
+#'
+#' @return A numeric \eqn{K \times (p+1)} matrix \code{alpha}, where each row corresponds to
+#'   one mixture component, the first column is the intercept, and the remaining \eqn{p}
+#'   columns are the slope coefficients.
+#'
+#' @examples
+#' \dontrun{
+#' TT &lt;- 5; p &lt;- 3; K &lt;- 2
+#' X &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' # Simulate posterior weights and threshold mask
+#' post_w &lt;- lapply(1:TT, function(i) matrix(runif(4 * K), ncol = K))
+#' mask  &lt;- lapply(post_w, function(w) w &gt; 0.1)
+#' alpha &lt;- <a href="create-LCDmix.html#mstep_update_alpha">mstep_update_alpha</a>(X, post_w, mask, lambda_alpha = 1e-3)
+#' }
+#' @export
+<span id="mstep_update_alpha">mstep_update_alpha</span> &lt;- function(
+  X,
+  posterior_weights,
+  responsibility_mask,
+  lambda_alpha
+) {
+  TT &lt;- nrow(X)
+  K  &lt;- ncol(responsibility_mask[[1]])
+  
+  # Sequence of candidate lambda values (from large to target)
+  lambda_max &lt;- lambda_alpha * 100
+  lambda_seq &lt;- exp(seq(log(lambda_max), log(lambda_alpha), length.out = 30))
+  
+  # Sum posterior weights per time point and component
+  weight_sum &lt;- matrix(0, nrow = TT, ncol = K)
+  for (t in seq_len(TT)) {
+    for (k in seq_len(K)) {
+      mask_tk         &lt;- responsibility_mask[[t]][, k]
+      weight_sum[t, k] &lt;- sum(posterior_weights[[t]][mask_tk, k])
+    }
+  }
+  
+  # Fit penalized multinomial regression
+  fit &lt;- glmnet::glmnet(
+    x         = X,
+    y         = weight_sum,
+    lambda    = lambda_seq,
+    family    = "multinomial",
+    intercept = TRUE
+  )
+  
+  # Extract coefficients at the requested lambda
+  coefs_list &lt;- glmnet::coef.glmnet(fit, s = lambda_alpha)
+  alpha_mat  &lt;- t(as.matrix(do.call(cbind, coefs_list)))
+  
+  # Return K x (p+1) matrix: rows = components, cols = intercept + slopes
+  return(alpha_mat)
+}</code></pre>
+<pre class="r"><code>#' M‐step update of all component regression parameters under log‐concavity
+#'
+#' @description
+#' For each mixture component \(k\), performs the M‐step update of intercept \(\theta_{0k}\)
+#' and slope vector \(\theta_k\) by invoking the LP solver with log‐concave constraints
+#' (\code{<a href="create-LCDmix.html#mstep_update_theta_lp">mstep_update_theta_lp</a>()}), returning updated lists of intercepts and slopes.
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses at time \(t\).
+#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param posterior_weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
+#' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.
+#' @param densities A list of length \code{K}, each an object returned by \code{modified_logcondens()} for one component.
+#' @param responsibility_mask A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
+#' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
+#' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
+#' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
+#' @param sparseMatrix Logical; if \code{TRUE}, build constraints as sparse matrices. Default: \code{TRUE}.
+#'
+#' @return A list with elements:
+#' \describe{
+#'   \item{theta0}{List of length \code{K} of updated intercepts \(\theta_{0k}\).}
+#'   \item{theta}{List of length \code{K} of updated slope vectors \(\theta_k\).}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' TT      &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
+#' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol=1))
+#' X       &lt;- matrix(rnorm(TT*p), nrow=TT, ncol=p)
+#' weights &lt;- lapply(Y_bin, function(m) matrix(runif(length(m)*K), ncol=K))
+#' resi    &lt;- lapply(Y_bin, function(m) matrix(rnorm(length(m)*K), ncol=K))
+#' mask    &lt;- lapply(Y_bin, function(m) matrix(TRUE, nrow(m), ncol=K))
+#' densities &lt;- replicate(K,
+#'   modified_logcondens(rnorm(50), w = rep(1/50,50)),
+#'   simplify = FALSE
+#' )
+#' intercepts &lt;- replicate(K, 0, simplify = FALSE)
+#' slopes     &lt;- replicate(K, rep(0, p), simplify = FALSE)
+#' result &lt;- <a href="create-LCDmix.html#mstep_update_theta_log_concave">mstep_update_theta_log_concave</a>(
+#'   Y_bin, X, weights, resi,
+#'   densities, mask,
+#'   intercepts, slopes,
+#'   lambda_theta = 1e-3
+#' )
+#' str(result)
+#' }
+#' @export
+<span id="mstep_update_theta_log_concave">mstep_update_theta_log_concave</span> &lt;- function(
+  Y_bin,
+  X,
+  posterior_weights,
+  residuals,
+  densities,
+  responsibility_mask,
+  intercepts,
+  slopes,
+  lambda_theta,
+  maxdev      = NULL,
+  sparseMatrix = TRUE
+) {
+  K &lt;- length(densities)
+  theta0_new &lt;- vector("list", K)
+  theta_new  &lt;- vector("list", K)
+  
+  for (k in seq_len(K)) {
+    tmp &lt;- <a href="create-LCDmix.html#mstep_update_theta_lp">mstep_update_theta_lp</a>(
+      Y_bin               = Y_bin,
+      X                   = X,
+      posterior_weights   = posterior_weights,
+      residuals           = residuals,
+      density_k           = densities[[k]],
+      responsibility_mask = responsibility_mask,
+      intercept_k         = intercepts[[k]],
+      slopes_k            = slopes[[k]],
+      lambda_theta        = lambda_theta,
+      component           = k,
+      maxdev              = maxdev,
+      sparseMatrix        = sparseMatrix
+    )
+    theta0_new[[k]] &lt;- tmp$theta0_k
+    theta_new[[k]]  &lt;- tmp$theta_k
+  }
+  
+  # Explicit return
+  return(list(
+    theta0 = theta0_new,
+    theta  = theta_new
+  ))
+}</code></pre>
+<pre class="r"><code>#' M‐step update of intercept and slopes via linear programming under log-concavity
+#'
+#' @description
+#' Updates the intercept \eqn{\theta_{0k}} and slope vector \eqn{\theta_k} for mixture
+#' component \eqn{k} by solving a linear program that enforces the log‐concave density
+#' constraints given by \code{density_k}, maximizes the weighted log‐likelihood, and
+#' applies an L1 penalty on the slopes.
+#'
+#' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.
+#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param posterior_weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
+#' @param residuals List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.
+#' @param density_k An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
+#' @param responsibility_mask List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
+#' @param intercept_k Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.
+#' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
+#' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
+#' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
+#' @param maxdev Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.
+#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices for constraint construction. Default: \code{TRUE}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{theta0_k}{Numeric; updated intercept for component \eqn{k}.}
+#'   \item{theta_k}{Numeric vector of length \eqn{p}; updated slopes for component \eqn{k}.}
+#' }
+#'
+#' @export
+<span id="mstep_update_theta_lp">mstep_update_theta_lp</span> &lt;- function(
+  Y_bin,
+  X,
+  posterior_weights,
+  residuals,
+  density_k,
+  responsibility_mask,
+  intercept_k,
+  slopes_k,
+  lambda_theta,
+  component,
+  maxdev    = NULL,
+  sparseMatrix = TRUE
+) {
+  TT &lt;- length(Y_bin)
+  p  &lt;- ncol(X)
+
+  # Collect residuals, weights, responses, and covariates for component
+  res_k &lt;- numeric(0)
+  w_k   &lt;- numeric(0)
+  Y_k   &lt;- numeric(0)
+  X_k   &lt;- matrix(nrow = 0, ncol = p)
+  skip_ts &lt;- integer(0)
+  
+  for (t in seq_len(TT)) {
+    idx_tk &lt;- responsibility_mask[[t]][, component]
+    if (any(idx_tk)) {
+      res_k &lt;- c(res_k, residuals[[t]][idx_tk, component])
+      w_k   &lt;- c(w_k, posterior_weights[[t]][idx_tk, component])
+      Y_k   &lt;- c(Y_k, Y_bin[[t]][idx_tk, 1])
+      X_k   &lt;- rbind(
+        X_k,
+        matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
+      )
     } else {
-      idx_old = idx_new
-      resi_old = resi_new
-      alpha_old = alpha_new
-      theta0_old = theta0_new
-      theta_old = theta_new
-      weight_old = weight_new
-      g_old = g_new
+      skip_ts &lt;- c(skip_ts, t)
     }
   }
-  print(i)
   
-  return(list(idx_new = idx_new,
-              resp_new = resp_new,
-              weight_new = weight_new,
-              resi_new = resi_new,
-              alpha_new = alpha_new,
-              theta0_new = theta0_new,
-              theta_new = theta_new,
-              g_new = g_new,
-              lambda_alpha = lambda_alpha, 
-              lambda_theta = lambda_theta,
-              Q = Q,
-              Q_every = Q_every))
-}</code></pre>
-<pre class="r"><code>#' E_step_logcondens
-#' 
-#' @export
-E_step_logcondens = function(X,
-                             bin_mass,
-                             resi,
-                             alpha,
-                             g,
-                             r_bar){
-  K = length(g)
-  TT = dim(X)[1]
-  p = dim(X)[2]
+  n &lt;- length(Y_k)
   
-  # initial clusters
-  likeli = list()
-  resp = list()
-  weight = list()
-  idx = list()
-  for (t in 1:TT){
-    likeli[[t]] = matrix(0, nrow = nrow(resi[[t]]), ncol = K)
-    idx[[t]] = matrix(F, nrow = nrow(resi[[t]]), ncol = K)
-    for (k in 1:K){
-      suppressWarnings({likeli[[t]][,k] = logcondens::evaluateLogConDens(resi[[t]][,k], g[[k]])[,3] * pi_k(X, alpha)[t,k]})
-    }
-    resp[[t]] = likeli[[t]]/rowSums(likeli[[t]])
-    idx[[t]] = resp[[t]] &gt; r_bar     
-    weight[[t]] = resp[[t]] * bin_mass[[t]]
-  }
-  return(list(resp = resp,
-              weight = weight,
-              idx = idx
-              ))
-}</code></pre>
-<pre class="r"><code>#' Mstep_alpha
-#' 
-#' @export
-Mstep_alpha = function(X,
-                       weight,
-                       idx,
-                       lambda_alpha){
+  # Extract knots and slopes of piecewise linear density
+  x_m     &lt;- density_k$x[density_k$IsKnot]
+  phi_m   &lt;- density_k$phi[density_k$IsKnot]
+  J       &lt;- length(x_m) - 1
+  b       &lt;- diff(phi_m) / diff(x_m)
+  beta0   &lt;- b * x_m[-length(x_m)] - phi_m[-length(phi_m)]
   
-  TT = dim(X)[1]
-  K = dim(idx[[1]])[2]
-  lambda_max = lambda_alpha * 100
-  lambdas = exp(seq(from = log(lambda_max), to = log(lambda_alpha), length = 30))
+  # Build constraint matrix and RHS
+  const_mat &lt;- NULL
+  const_vec &lt;- numeric(0)
   
-  weight.sum = matrix(0, nrow = TT, ncol = K)
-  for (t in 1:TT){
-    for (k in 1:K){
-      idx_tk = idx[[t]][,k]
-      weight.sum[t,k] = sum(weight[[t]][idx_tk,k])
-    }
-  }
-  fit = glmnet::glmnet(x = X,
-                        y = weight.sum,
-                        lambda = lambdas,
-                        family = "multinomial",
-                        intercept = TRUE)
-  coefs = glmnet::coef.glmnet(fit, s = lambda_alpha)
-  alpha = t(as.matrix(do.call(cbind, coefs)))
-  return(alpha)  # (p+1) by K matrix
-}</code></pre>
-<pre class="r"><code>#' Mstep_theta_logcondens
-#' 
-#' @export
-Mstep_theta_logcondens = function(Y_bin,
-                                  X,
-                                  weight,
-                                  resi,
-                                  g,
-                                  idx_old,
-                                  theta0,
-                                  theta,
-                                  lambda_theta,
-                                  maxdev,
-                                  sparseMatrix){
-  K = length(g)
-  theta0_new = list()
-  theta_new = list()
-  for (k in 1:K){
-    tmp = LP_logcondens(Y_bin, X, weight, resi, g[[k]], idx_old, theta0[[k]], theta[[k]], lambda_theta, k, maxdev, sparseMatrix)
-    theta0_new[[k]] = tmp$theta0_k
-    theta_new[[k]] = tmp$theta_k
-  }
-  return(list('theta0' = theta0_new , 'theta' = theta_new ))
-}</code></pre>
-<pre class="r"><code>#' Updating theta for each k 
-#' 
-#' @export
-LP_logcondens = function(Y_bin,
-                         X,
-                         weight,
-                         resi,
-                         g_k,
-                         idx,
-                         theta0_k,
-                         theta_k,
-                         lambda_theta,
-                         k,
-                         maxdev,
-                         sparseMatrix){
-  TT = length(Y_bin)
-  N = sum(unlist(weight))
-  p = dim(X)[2]
-  resi_k = c()
-  w_k = c()
-  idx_k = c()
-  Y_idx = c()
-  X_idx = c()
-  n_to_skip = c()
-  for (t in 1:TT){
-    idx_tk = idx[[t]][,k]
-    nt = sum(idx_tk)
-    if (nt != 0) {
-      idx_k = c(idx_k, idx_tk)
-      resi_k = c(resi_k, resi[[t]][idx_tk,k])
-      w_k = c(w_k, weight[[t]][idx_tk,k])
-      Y_idx = c(Y_idx, Y_bin[[t]][idx_tk,])
-      X_t = matrix(rep(X[t,], nt), byrow = T, ncol = p)
-      X_idx = rbind(X_idx, X_t)
-    } else {
-      n_to_skip = c(n_to_skip, t)
-    } 
-  }
-  n = length(Y_idx) # the number of points in C_n
-  
-  x_m = g_k$x[as.logical(g_k$IsKnot)]
-  phi_m = g_k$phi[as.logical(g_k$IsKnot)]
-  J = length(x_m) - 1 # the number of affine functions
-  beta = rep(0, J)
-  b = rep(0, J)
-  for (j in 1:J){
-    b[j] = (phi_m[j+1] - phi_m[j])/(x_m[j+1] - x_m[j])
-    beta[j] = b[j] * x_m[j] - phi_m[j]
-  }
-   
-  L = min(resi_k)
-  U = max(resi_k) 
-  const_mat = c()
-  const_vec = c()
-  
-  # epigraph part
-  for (j in 1:J){
-    tmp = cbind(Matrix::Diagonal(n), b[j], b[j]*X_idx)
-    const_mat = rbind(const_mat, cbind(tmp, -tmp))
-    const_vec = c(const_vec, b[j]*Y_idx-beta[j])
+  # Epigraph constraints for log‐concavity
+  for (j in seq_len(J)) {
+    tmp   &lt;- cbind(Diagonal(n), b[j], b[j] * X_k)
+    block &lt;- cbind(tmp, -tmp)
+    const_mat &lt;- rbind(const_mat, block)
+    const_vec &lt;- c(const_vec, b[j] * Y_k - beta0[j])
   }
   
-  # feasibility part
-  if (length(n_to_skip) == 0) {
-    TT_new = TT
-    X_new = X
+  # Feasibility constraints: ensure predictions lie within range of residuals
+  if (length(skip_ts) == 0) {
+    TT_new &lt;- TT
+    X_new  &lt;- X
   } else {
-    TT_new = TT - length(n_to_skip)
-    X_new = X[-n_to_skip,]
+    TT_new &lt;- TT - length(skip_ts)
+    X_new  &lt;- X[-skip_ts, , drop = FALSE]
   }
-  tmp = cbind(matrix(0, nrow = TT_new, ncol = n), matrix(1, nrow = TT_new, ncol = 1), X_new)
-  const_mat = rbind(const_mat, cbind(tmp, -tmp), cbind(-tmp, tmp))
+  tmp1 &lt;- cbind(matrix(0, nrow = TT_new, ncol = n), 1, X_new)
+  block1 &lt;- cbind(tmp1, -tmp1)
+  block2 &lt;- cbind(-tmp1, tmp1)
+  const_mat &lt;- rbind(const_mat, block1, block2)
   
-  tmp = rep(0, 2*TT_new)
-  count = 1
-  for (t in 1:TT){
-    idx_tk = idx[[t]][,k]
-    if (sum(idx_tk) &gt; 0){
-      tmp[count] = min(Y_bin[[t]][idx_tk])- L
-      tmp[TT_new + count] = U - max(Y_bin[[t]][idx_tk])
-      count = count + 1
+  # RHS for feasibility: bounding by min/max of Y_k
+  L &lt;- min(res_k); U &lt;- max(res_k)
+  tmp_vec &lt;- numeric(2 * TT_new)
+  cnt &lt;- 1
+  for (t in seq_len(TT)) {
+    idx_tk &lt;- responsibility_mask[[t]][, component]
+    if (any(idx_tk)) {
+      tmp_vec[cnt]           &lt;- min(Y_bin[[t]][idx_tk]) - L
+      tmp_vec[TT_new + cnt]  &lt;- U - max(Y_bin[[t]][idx_tk])
+      cnt &lt;- cnt + 1
     }
   }
-  const_vec = c(const_vec, tmp)
+  const_vec &lt;- c(const_vec, tmp_vec)
   
-  print(dim(const_mat))
-  print(format(object.size(const_mat), "Mb"))
-  
-  obj_coef = c(w_k, 0, rep(-N*lambda_theta, p), -w_k, 0, rep(-N*lambda_theta, p))
-  const_dir = rep("&lt;=", J*n + 2*TT_new)
-  
-  
+  # Optional max‐deviation constraints
   if (!is.null(maxdev)) {
-    tmp = cbind(matrix(0, nrow = TT_new, ncol = n+1), X_new)
-    const_mat = rbind(const_mat, cbind(tmp, -tmp), cbind(-tmp, tmp))
-    const_vec = c(const_vec, rep(maxdev, 2*TT_new))
-    const_dir = c(const_dir, rep("&lt;=", 2*TT_new))
+    tmp2   &lt;- cbind(matrix(0, nrow = TT_new, ncol = n + 1), X_new)
+    b1     &lt;- cbind(tmp2, -tmp2)
+    b2     &lt;- cbind(-tmp2, tmp2)
+    const_mat &lt;- rbind(const_mat, b1, b2)
+    const_vec &lt;- c(const_vec, rep(maxdev, 2 * TT_new))
   }
   
-  if (!sparseMatrix){
-    const_mat = as.matrix(const_mat)
+  # Convert to dense matrix if requested
+  if (!sparseMatrix) {
+    const_mat &lt;- as.matrix(const_mat)
   }
   
+  #–– Debugging: print size and memory usage of constraint matrix ––#
   print(dim(const_mat))
   print(format(object.size(const_mat), "Gb"))
   
-  # solving LP
-  lp_res = lpSolve::lp(obj = obj_coef, const.mat = const_mat, const.dir = const_dir, const.rhs = const_vec,  direction = "max")
+  # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
+  N_total &lt;- sum(unlist(posterior_weights))
+  obj_coef &lt;- c(
+    w_k,
+    0,
+    rep(-N_total * lambda_theta, p),
+    -w_k,
+    0,
+    rep(-N_total * lambda_theta, p)
+  )
+  
+  const_dir &lt;- rep("&lt;=", nrow(const_mat))
+  
+  # Solve the linear program
+  lp_res &lt;- lpSolve::lp(
+    direction    = "max",
+    objective.in = obj_coef,
+    const.mat    = const_mat,
+    const.dir    = const_dir,
+    const.rhs    = const_vec
+  )
   if (lp_res$status != 0) {
-    print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
+    stop("LP did not find an optimal solution (status = ", lp_res$status, ")")
   }
-  theta0_k = lp_res$solution[n+1] - lp_res$solution[2*n+p+2]
-  theta_k = lp_res$solution[(n+2):(n+p+1)] - lp_res$solution[(2*n+p+3):(2*(n+p+1))]
-  rm(const_mat)
-  gc()
-  return(list(theta0_k = theta0_k, theta_k = theta_k)) #theta
-}</code></pre>
-<pre class="r"><code>#' L1_diff
-#' 
-#' @export
-L1_diff = function(true, est){
-  diff1 = sum(abs(true - est))
-  diff2 = sum(abs(true[,1] - est[,2]) + abs(true[,2] - est[,1]))
-  return(min(diff1, diff2))
-}</code></pre>
-<pre class="r"><code>#' isIncreasing
-#' 
-#' @export
-isIncreasing = function(v){
-  n = length(v)
-  for (i in 2:n){
-    if (v[i] &lt; v[i-1]) {
-      return(F)
-    } 
-  }
-  return(T)
-}</code></pre>
-<pre class="r"><code>#' weightedHist
-#' 
-#' @export
-weightedHist = function(g_k, B = 30){
-  minY = min(g_k$xn)
-  maxY = max(g_k$xn)
-  bin = seq(from=minY, to=maxY, length= B + 1)
-  binnedY = findInterval(g_k$xn, bin, rightmost.closed = T)
-  binnedY = factor(binnedY, levels = 1:B)
-  w = tapply(g_k$w, binnedY , sum)
-  w[is.na(w)] = 0
-  w = w * B /(sum(w) *(maxY-minY))
   
-  mid = rep(0, B)
-  for (i in 1:B){mid[i] = (bin[i+1] + bin[i])/2}
-  return(list(mid = mid,
-              w = w))
-}</code></pre>
-<pre class="r"><code>#' weighted_quantile
-#' 
-#' @export
-weighted_quantile = function(x, w, thr = 0.05){
-  mat = cbind(x, w)
-  mat = mat[order(x),]
-  thr = thr * sum(w)
-  tot = 0
-  i = 1
-  while (i &lt; length(w) &amp; tot &lt; thr){
-    tot = tot + w[i]
-    i = i + 1
-  }
-  return(mat[i,1])
-}</code></pre>
-<pre class="r"><code>#' eval_LCD
-#' 
-#' @export
-eval_LCD = function(LCDmix,
-                    Y_new,
-                    X_new,
-                    biomass_new, 
-                    trim_thr = 0.05){
-  g = LCDmix$g_new
-  theta = LCDmix$theta_new
-  theta0 = LCDmix$theta0_new
-  alpha = LCDmix$alpha_new
-  resp = LCDmix$resp_new
-  lambda_alpha = LCDmix$lambda_alpha
-  lambda_theta = LCDmix$lambda_theta
+  sol &lt;- lp_res$solution
+  theta0_new &lt;- sol[n + 1] - sol[2 * n + p + 2]
+  theta_new  &lt;- sol[(n + 2):(n + p + 1)] -
+                sol[(2 * n + p + 3):(2 * (n + p + 1))]
   
-  K = length(g)
-  N = sum(unlist(biomass_new))
-  P = pi_k(X_new, alpha) # TT by K matrix
-  p = dim(X_new)[2]
-  TT = dim(X_new)[1]
-  w_tt = unlist(biomass_new)
-  loglike = c()
-  for (t in 1:TT){
-    loglike_tk = rep(0, length(Y_new[[t]]))
-    for (k in 1:K){
-      resi_tk = Y_new[[t]] - c(theta0[[k]] + sum(X_new[t,] * theta[[k]]))
-      suppressWarnings({tmp = logcondens::evaluateLogConDens(resi_tk, g[[k]])[,3] * P[t,k]})
-      loglike_tk = loglike_tk + tmp
-      }
-    loglike = c(loglike, log(loglike_tk))
+  return(list(
+    theta0_k = theta0_new,
+    theta_k  = theta_new
+  ))
+}</code></pre>
+<pre class="r"><code>#' Compute L1 distance between true and estimated parameter matrices with label‐switching correction
+#'
+#' @description
+#' For two‐component mixture models, calculates the L1 norm of the difference
+#' between a true parameter matrix and an estimated one, taking into account
+#' the possibility that the component labels may be swapped. Returns the smaller
+#' of the direct L1 difference and the L1 difference under a swap of the two columns.
+#'
+#' @param true_params Numeric matrix of dimension \eqn{p \times 2}, where each column
+#'   corresponds to the true parameters of one component.
+#' @param est_params Numeric matrix of the same dimension \eqn{p \times 2}, where each
+#'   column corresponds to the estimated parameters of one component.
+#'
+#' @return A single numeric: the minimal L1 distance between \code{true_params} and
+#'   \code{est_params} under the two possible labelings.
+#'
+#' @examples
+#' \dontrun{
+#' # True slopes for two components (p = 3)
+#' true_mat &lt;- matrix(c(1,2,3,  -1,-2,-3), ncol = 2)
+#' # Estimated with potential label swap
+#' est_mat1 &lt;- true_mat + 0.1  # small noise, same ordering
+#' est_mat2 &lt;- true_mat[, 2:1] + 0.2  # swapped + noise
+#' d1 &lt;- <a href="create-LCDmix.html#compute_l1_distance">compute_l1_distance</a>(true_mat, est_mat1)
+#' d2 &lt;- <a href="create-LCDmix.html#compute_l1_distance">compute_l1_distance</a>(true_mat, est_mat2)
+#' stopifnot(d1 &lt; d2)
+#' }
+#' @export
+<span id="compute_l1_distance">compute_l1_distance</span> &lt;- function(
+  true_params,
+  est_params
+) {
+  # Direct L1 difference
+  diff_direct &lt;- sum(abs(true_params - est_params))
+  # L1 difference under swapping the two component columns
+  diff_swapped &lt;- sum(abs(true_params - est_params[, c(2, 1)]))
+  # Return the minimal distance
+  return(min(diff_direct, diff_swapped))
+}</code></pre>
+<pre class="r"><code>#' Test whether a numeric vector is non‐decreasing
+#'
+#' @description
+#' Checks if each element of the input vector is greater than or equal to the
+#' previous element, i.e., verifies that the sequence is non‐decreasing.
+#'
+#' @param v A numeric vector.
+#'
+#' @return Logical scalar: \code{TRUE} if \code{v} is non‐decreasing (or of length ≤ 1), 
+#'   otherwise \code{FALSE}.
+#'
+#' @examples
+#' \dontrun{
+#' <a href="create-LCDmix.html#is_increasing">is_increasing</a>(c(1, 2, 2, 5))  # TRUE
+#' <a href="create-LCDmix.html#is_increasing">is_increasing</a>(c(3, 1, 4))     # FALSE
+#' <a href="create-LCDmix.html#is_increasing">is_increasing</a>(42)             # TRUE
+#' }
+#' @export
+<span id="is_increasing">is_increasing</span> &lt;- function(v) {
+  n &lt;- length(v)
+  if (n &lt;= 1) {
+    return(TRUE)
+  }
+  for (i in seq(2, n)) {
+    if (v[i] &lt; v[i - 1]) {
+      return(FALSE)
     }
-  prop = mean(is.infinite(loglike))
-  q = weighted_quantile(loglike, w_tt, trim_thr)
-  trimmed = loglike[loglike &gt; q]
-  w_trimmed = w_tt[loglike &gt; q]
-  trimmed_logl = sum(trimmed * w_trimmed) / sum(w_trimmed) - lambda_alpha * sum(abs(alpha[,2:(p+1)])) - lambda_theta * sum(abs(unlist(theta)))
-  return(list(loglike = loglike,
-              w_tt = w_tt,
-              prop = prop,
-              trimmed = trimmed,
-              w_trimmed = w_trimmed,
-              trimmed_logl = trimmed_logl))
+  }
+  return(TRUE)
 }</code></pre>
-<pre class="r"><code>#' make_iimat
-#' 
+<pre class="r"><code>#' Compute a weighted histogram from a log‐concave density object
+#'
+#' @description
+#' Given an object returned by \code{modified_logcondens()}, which contains the
+#' sample points \code{xn} and their associated weights \code{w}, this function
+#' constructs a normalized histogram (as a density estimate) over \code{n_bins}
+#' equal‐width bins spanning the range of \code{xn}.
+#'
+#' @param logcondens_obj A list (output of \code{modified_logcondens()}) containing:
+#'   \describe{
+#'     \item{\code{xn}}{Numeric vector of sample points.}
+#'     \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
+#'   }
+#' @param n_bins Integer; number of equal‐width bins to use. Default: \code{30}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{midpoints}}{Numeric vector of length \code{n_bins}; the center of each bin.}
+#'   \item{\code{densities}}{Numeric vector of length \code{n_bins}; the estimated density
+#'     (normalized histogram) at each midpoint, such that the total area integrates to 1.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose g_k is one component from <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>()
+#' w_hist &lt;- <a href="create-LCDmix.html#weighted_hist">weighted_hist</a>(
+#'   logcondens_obj = g_k,
+#'   n_bins         = 50
+#' )
+#' plot(w_hist$midpoints, w_hist$densities, type = "h",
+#'      xlab = "Residual value", ylab = "Density")
+#' }
 #' @export
-make_iimat = function(cv_gridsize, nfold, nrep, alpha_lambdas, theta_lambdas){
-  iimat = expand.grid(1:nfold,1:nrep,1:cv_gridsize,1:cv_gridsize)
-  iimat = cbind(ialpha = iimat[,4], 
-                itheta = iimat[,3], 
-                irep = iimat[,2], 
-                ifold = iimat[,1],
-                lambda_alpha = alpha_lambdas[iimat[,4]], 
-                lambda_theta = theta_lambdas[iimat[,3]])
-  return(as.matrix(iimat))
-}</code></pre>
-<pre class="r"><code>#' CV_LCD_parallel
-#' 
-#' @export
-CV_LCD_parallel = function(Y_bin, X, bin_mass, K, lambda_alpha_range = c(1e-8, 1e-1), lambda_theta_range = c(1e-8, 1e-1), cv_gridsize = 5, nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, nfold = 5, blocksize = 5, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
+<span id="weighted_hist">weighted_hist</span> &lt;- function(
+  logcondens_obj,
+  n_bins = 30
+) {
+  # Extract sample points and weights
+  x_vals &lt;- logcondens_obj$xn
+  w_vals &lt;- logcondens_obj$w
 
-  alpha_lambdas = sort(flowmix::logspace(min = lambda_alpha_range[1], max = lambda_alpha_range[2], length = cv_gridsize), decreasing = F)
-  theta_lambdas = sort(flowmix::logspace(min = lambda_theta_range[1], max = lambda_theta_range[2], length = cv_gridsize), decreasing = F)
+  # Determine range and bin cutpoints
+  min_x   &lt;- min(x_vals)
+  max_x   &lt;- max(x_vals)
+  breaks  &lt;- seq(from = min_x, to = max_x, length.out = n_bins + 1)
+
+  # Assign each sample to a bin (1 through n_bins)
+  bin_idx &lt;- findInterval(x_vals, breaks, rightmost.closed = TRUE)
+  bin_idx &lt;- factor(bin_idx, levels = seq_len(n_bins))
+
+  # Sum weights within each bin
+  w_sum &lt;- tapply(w_vals, bin_idx, sum)
+  w_sum[is.na(w_sum)] &lt;- 0
+
+  # Normalize to form a density estimate: ensure area under histogram = 1
+  densities &lt;- w_sum * n_bins / (sum(w_sum) * (max_x - min_x))
+
+  # Compute bin midpoints
+  midpoints &lt;- (breaks[-1] + breaks[-length(breaks)]) / 2
+
+  return(list(
+    midpoints = midpoints,
+    densities = as.numeric(densities)
+  ))
+}</code></pre>
+<pre class="r"><code>#' Compute the weighted quantile of a numeric sample
+#'
+#' @description
+#' Returns the \code{prob}-th weighted quantile of the values \code{x} with
+#' corresponding nonnegative weights \code{w}. The observations are sorted by
+#' \code{x}, and the smallest \code{x} such that the cumulative weight
+#' reaches \code{prob * sum(w)} is returned.
+#'
+#' @param x Numeric vector of data values.
+#' @param w Numeric vector of nonnegative weights of the same length as \code{x}.
+#' @param prob Numeric scalar in \[0,1\]; the desired quantile level (e.g.\ 0.05 for
+#'   the 5th percentile). Default: \code{0.05}.
+#'
+#' @return Numeric scalar: the weighted \code{prob}-quantile of \code{x}.
+#'
+#' @examples
+#' \dontrun{
+#' x   &lt;- c(10, 20, 30, 40, 50)
+#' w   &lt;- c(1, 1, 1, 1, 6)     # more weight on the largest value
+#' q05 &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.05)  # should be 10
+#' q95 &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.95)  # should be 50
+#' }
+#' @export
+<span id="weighted_quantile">weighted_quantile</span> &lt;- function(
+  x,
+  w,
+  prob = 0.05
+) {
+  #— Validate inputs —#
+  if (!is.numeric(x) || !is.numeric(w)) {
+    stop("`x` and `w` must both be numeric vectors")
+  }
+  if (length(x) != length(w)) {
+    stop("`x` and `w` must have the same length")
+  }
+  if (any(w &lt; 0)) {
+    stop("`w` must be nonnegative")
+  }
+  if (!is.numeric(prob) || length(prob) != 1 || prob &lt; 0 || prob &gt; 1) {
+    stop("`prob` must be a single numeric value between 0 and 1")
+  }
+
+  #— Sort by x —#
+  o     &lt;- order(x)
+  x_ord &lt;- x[o]
+  w_ord &lt;- w[o]
+
+  #— Compute cumulative weights and threshold —#
+  cum_w     &lt;- cumsum(w_ord)
+  total_w   &lt;- sum(w_ord)
+  threshold &lt;- prob * total_w
+
+  #— Find first index where cumulative weight ≥ threshold —#
+  idx &lt;- which(cum_w &gt;= threshold)[1]
+
+  #— Return corresponding quantile value —#
+  return(x_ord[idx])
+}</code></pre>
+<pre class="r"><code>#' Evaluate fitted LCD mixture model on new data
+#'
+#' @description
+#' Computes individual log‐likelihoods and a trimmed weighted average log‐likelihood
+#' for a fitted log‐concave mixture‐of‐experts model on new observations.
+#'
+#' @param model A list returned by \code{<a href="create-LCDmix.html#main">main</a>()} or \code{<a href="create-LCDmix.html#iteration">iteration</a>()}, containing:
+#'   \describe{
+#'     \item{\code{g_new}}{List of length \eqn{K} of log‐concave density objects.}
+#'     \item{\code{theta_new}}{List of length \eqn{K} of slope vectors \(\theta_k\).}
+#'     \item{\code{theta0_new}}{List of length \eqn{K} of intercepts \(\theta_{0k}\).}
+#'     \item{\code{alpha_new}}{Numeric \eqn{K \times (p+1)} matrix of mixture parameters.}
+#'     \item{\code{lambda_alpha}}{Numeric; L1 penalty used on mixture‐weight coefficients.}
+#'     \item{\code{lambda_theta}}{Numeric; L1 penalty used on slope coefficients.}
+#'   }
+#' @param Y A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).
+#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param biomass A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).
+#' @param trim_prob Numeric in \[0,0.5\]; proportion of lowest‐likelihood observations to trim when computing the average. Default: \code{0.05}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{loglike}}{Numeric vector of individual log‐likelihoods \(\log\bigl(\sum_{k} \pi_{t,k} f_k(r_{t,i,k})\bigr)\).}
+#'   \item{\code{weights}}{Numeric vector of biomass weights corresponding to each loglike entry.}
+#'   \item{\code{prop_infinite}}{Proportion of \code{loglike} values that are \code{Inf}.}
+#'   \item{\code{trimmed_loglike}}{Numeric vector of log‐likelihoods above the trimming threshold.}
+#'   \item{\code{trimmed_weights}}{Numeric vector of weights corresponding to \code{trimmed_loglike}.}
+#'   \item{\code{trimmed_avg_loglike}}{Numeric scalar; weighted average of \code{trimmed_loglike} minus L1 penalties.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Assume `fit` is returned by <a href="create-LCDmix.html#main">main</a>()
+#' eval_res &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
+#'   model      = fit,
+#'   Y          = Y_test,
+#'   X          = X_test,
+#'   biomass    = biomass_test,
+#'   trim_prob  = 0.05
+#' )
+#' str(eval_res)
+#' }
+#' @export
+<span id="evaluate_lcd_model">evaluate_lcd_model</span> &lt;- function(
+  model,
+  Y,
+  X,
+  biomass,
+  trim_prob = 0.05
+) {
+  # Unpack fitted parameters
+  densities     &lt;- model$g_new
+  slopes_list   &lt;- model$theta_new
+  intercepts    &lt;- model$theta0_new
+  alpha_mat     &lt;- model$alpha_new
+  lambda_alpha  &lt;- model$lambda_alpha
+  lambda_theta  &lt;- model$lambda_theta
+  
+  TT     &lt;- nrow(X)
+  K_comp &lt;- length(densities)
+  
+  # Flatten biomass weights for trimming
+  weights_all &lt;- unlist(biomass)
+  
+  # Compute mixture probabilities π_{t,k}
+  pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha_mat)
+  
+  # Initialize vector for individual log‐likelihoods
+  loglike_vals &lt;- numeric(0)
+  
+  # Loop over time points and observations
+  for (t in seq_len(TT)) {
+    y_t   &lt;- as.numeric(Y[[t]])
+    n_t   &lt;- length(y_t)
+    # Compute component‐wise densities f_k(r_{t,i,k})
+    comp_dens &lt;- matrix(0, nrow = n_t, ncol = K_comp)
+    for (k in seq_len(K_comp)) {
+      # Residuals under component k
+      pred_tk      &lt;- intercepts[[k]] + sum(X[t, ] * slopes_list[[k]])
+      resi_tk_vec  &lt;- y_t - pred_tk
+      # Evaluate log‐concave density; column 3 = density
+      dens_vals    &lt;- suppressWarnings(
+        logcondens::evaluateLogConDens(resi_tk_vec, densities[[k]])[, 3]
+      )
+      comp_dens[, k] &lt;- dens_vals * pi_mat[t, k]
+    }
+    # Mixture density and log
+    mix_dens  &lt;- rowSums(comp_dens)
+    loglike_t &lt;- log(mix_dens)
+    loglike_vals &lt;- c(loglike_vals, loglike_t)
+  }
+  
+  # Proportion of infinite log‐likelihoods
+  prop_inf &lt;- mean(is.infinite(loglike_vals))
+  
+  # Determine trimming threshold on loglike
+  threshold &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglike_vals, weights_all, prob = trim_prob)
+  keep_idx  &lt;- loglike_vals &gt; threshold
+  
+  trimmed_ll     &lt;- loglike_vals[keep_idx]
+  trimmed_w      &lt;- weights_all[keep_idx]
+  avg_trim_ll    &lt;- sum(trimmed_ll * trimmed_w) / sum(trimmed_w) -
+                    lambda_alpha * sum(abs(alpha_mat[, -1])) -
+                    lambda_theta * sum(abs(unlist(slopes_list)))
+  
+  return(list(
+    loglike             = loglike_vals,
+    weights             = weights_all,
+    prop_infinite       = prop_inf,
+    trimmed_loglike     = trimmed_ll,
+    trimmed_weights     = trimmed_w,
+    trimmed_avg_loglike = avg_trim_ll
+  ))
+}</code></pre>
+<pre class="r"><code>#' Generate cross‐validation index matrix for penalty grid search
+#'
+#' @description
+#' Constructs a matrix of all combinations of cross‐validation fold, repetition,
+#' and penalty indices for tuning \code{lambda_alpha} and \code{lambda_theta}.
+#'
+#' @param cv_gridsize Integer; number of candidate values for each penalty (\code{lambda_alpha} and \code{lambda_theta}).
+#' @param nfold Integer; number of folds in cross‐validation.
+#' @param nrep Integer; number of repeated CV runs.
+#' @param alpha_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_alpha}.
+#' @param theta_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_theta}.
+#'
+#' @return
+#' A numeric matrix with one row per combination (total rows = \code{cv_gridsize^2 * nfold * nrep})
+#' and six columns:
+#' \describe{
+#'   \item{\code{alpha_idx}}{Index in \code{alpha_lambdas} (1..\code{cv_gridsize}).}
+#'   \item{\code{theta_idx}}{Index in \code{theta_lambdas} (1..\code{cv_gridsize}).}
+#'   \item{\code{rep_idx}}{Repetition index (1..\code{nrep}).}
+#'   \item{\code{fold_idx}}{Fold index (1..\code{nfold}).}
+#'   \item{\code{lambda_alpha}}{Value of \code{alpha_lambdas[alpha_idx]}.}
+#'   \item{\code{lambda_theta}}{Value of \code{theta_lambdas[theta_idx]}.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 5 candidate lambdas for each penalty, 4 folds, 3 repetitions
+#' alpha_vals &lt;- seq(0.01, 0.1, length.out = 5)
+#' theta_vals &lt;- seq(0.001, 0.01, length.out = 5)
+#' idx_mat &lt;- <a href="create-LCDmix.html#make_cv_index_matrix">make_cv_index_matrix</a>(
+#'   cv_gridsize   = 5,
+#'   nfold         = 4,
+#'   nrep          = 3,
+#'   alpha_lambdas = alpha_vals,
+#'   theta_lambdas = theta_vals
+#' )
+#' head(idx_mat)
+#' }
+#' @export
+<span id="make_cv_index_matrix">make_cv_index_matrix</span> &lt;- function(
+  cv_gridsize,
+  nfold,
+  nrep,
+  alpha_lambdas,
+  theta_lambdas
+) {
+  # Create all combinations of fold, repetition, theta‐index, and alpha‐index
+  grid &lt;- expand.grid(
+    fold_idx   = seq_len(nfold),
+    rep_idx    = seq_len(nrep),
+    theta_idx  = seq_len(cv_gridsize),
+    alpha_idx  = seq_len(cv_gridsize)
+  )
+  
+  # Assemble the index matrix with corresponding lambda values
+  iimat &lt;- cbind(
+    alpha_idx    = grid$alpha_idx,
+    theta_idx    = grid$theta_idx,
+    rep_idx      = grid$rep_idx,
+    fold_idx     = grid$fold_idx,
+    lambda_alpha = alpha_lambdas[grid$alpha_idx],
+    lambda_theta = theta_lambdas[grid$theta_idx]
+  )
+  return(iimat)
+}</code></pre>
+<pre class="r"><code>#' Cross‐validate the LCD mixture‐of‐experts model in parallel
+#'
+#' @description
+#' Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
+#' and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
+#' folds (with optional blocking), runs multiple repetitions per fold, and evaluates
+#' models on held‐out data.  Computations are dispatched in parallel.
+#'
+#' @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
+#'   matrix of binned responses per time point.
+#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
+#'   biomass weights per bin at time \eqn{t}.
+#' @param K Integer number of mixture components.
+#' @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
+#'   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
+#'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#' @param cv_grid_size Integer number of candidate lambdas per penalty. Default: 5.
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
+#' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
+#' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
+#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
+#' @param n_folds Integer number of cross‐validation folds. Default: 5.
+#' @param block_size Integer block size for folding. Default: 5.
+#' @param cv_reps Integer number of repeated CV runs. Default: 5.
+#' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
+#' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
+#' @param sparse_matrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
+#' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{logs}{Character vector of log messages (one per CV run, plus a summary).}
+#'   \item{index_matrix}{Numeric matrix with one row per combination (fold × rep × penalties),
+#'         showing indices and actual \code{lambda_alpha}, \code{lambda_theta} values.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 2‐component model, small grid, 3 folds, 2 reps
+#' results &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
+#'   Y_bin               = Y_binned,
+#'   X                   = X_mat,
+#'   bin_mass            = bin_mass_list,
+#'   K                   = 2,
+#'   lambda_alpha_range  = c(1e-4, 1e-2),
+#'   lambda_theta_range  = c(1e-4, 1e-2),
+#'   cv_grid_size        = 4,
+#'   n_folds             = 3,
+#'   cv_reps             = 2,
+#'   n_cores             = "max"
+#' )
+#' }
+#' @export
+<span id="cv_lcd_parallel">cv_lcd_parallel</span> &lt;- function(
+  Y_bin,
+  X,
+  bin_mass,
+  K,
+  lambda_alpha_range = c(1e-8, 1e-1),
+  lambda_theta_range = c(1e-8, 1e-1),
+  cv_grid_size       = 5,
+  n_restarts         = 1,
+  max_iter           = 30,
+  iter_eta           = 1e-3,
+  maxdev             = NULL,
+  resp_threshold     = 1e-3,
+  n_folds            = 5,
+  block_size         = 5,
+  cv_reps            = 5,
+  trim_prob          = 0.05,
+  save_dir           = "./result",
+  sparse_matrix      = TRUE,
+  n_cores            = "max"
+) {
+  #— Create penalty grids —#
+  alpha_lambdas &lt;- flowmix::logspace(
+    min    = lambda_alpha_range[1],
+    max    = lambda_alpha_range[2],
+    length = cv_grid_size
+  ) |&gt; sort()
+  theta_lambdas &lt;- flowmix::logspace(
+    min    = lambda_theta_range[1],
+    max    = lambda_theta_range[2],
+    length = cv_grid_size
+  ) |&gt; sort()
   print(alpha_lambdas)
   print(theta_lambdas)
   
-  folds = flowmix::make_cv_folds(ylist = Y_bin, nfold = nfold, blocksize = blocksize)
+  #— Create CV folds —#
+  folds &lt;- flowmix::make_cv_folds(
+    ylist     = Y_bin,
+    nfold     = n_folds,
+    blocksize = block_size
+  )
   
-  iimat = make_iimat(cv_gridsize, nfold, cv_rep, alpha_lambdas, theta_lambdas)
-  print(iimat)
+  #— Build index matrix of all (fold × rep × penalties) combos —#
+  index_matrix &lt;- <a href="create-LCDmix.html#make_cv_index_matrix">make_cv_index_matrix</a>(
+    cv_gridsize   = cv_grid_size,
+    nfold          = n_folds,
+    nrep           = cv_reps,
+    alpha_lambdas  = alpha_lambdas,
+    theta_lambdas  = theta_lambdas
+  )
+  print(index_matrix)
   
-  if (ncores == 'max') {
-    cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  #— Launch parallel cluster —#
+  if (identical(n_cores, "max")) {
+    workers &lt;- parallel::detectCores(logical = FALSE) - 1
   } else {
-    cl = parallel::makeCluster(ncores)
+    workers &lt;- n_cores
   }
-  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "trim_thr", "iimat", "folds", "save_folder", "sparseMatrix"), envir = environment())
-  logs = parallel::parLapply(cl, 1:nrow(iimat), function(ii){
-    ialpha = iimat[ii, 1]
-    itheta = iimat[ii, 2]
-    irep = iimat[ii, 3]
-    ifold = iimat[ii, 4]
-    lambda_alpha = iimat[ii, 5]
-    lambda_theta = iimat[ii, 6]
-    
-    log_msg = paste("lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold started\n")
-
-    Y_tr = Y_bin[-folds[[ifold]]]
-    bin_mass_tr = bin_mass[-folds[[ifold]]]
-    X_tr= X[-folds[[ifold]], ]
-    set.seed(irep)
-    out_log = capture.output({res_ii = tryCatch({
-      main(Y_tr, X_tr, bin_mass_tr, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar, sparseMatrix)},
-      error = function(e) {
-        message(paste0("Error for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold."))
-        return(NA)})})
-    log_msg = paste0(log_msg, paste0(out_log, collapse = ""))
-    
-    if (is.list(res_ii)){
-      Y_test = Y_bin[folds[[ifold]]]
-      bin_mass_test = bin_mass[folds[[ifold]]]
-      X_test= X[folds[[ifold]], ]
-      eval_ii = eval_LCD(res_ii$iter, Y_test, X_test, bin_mass_test, trim_thr = trim_thr)
-      prop_CV = eval_ii$prop
-      trimmed_CV = eval_ii$trimmed_logl
-      log_msg = paste0(log_msg, "Saved results for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold.\n")
-    } else {
-      prop_CV = NA
-      trimmed_CV = NA
-      log_msg = paste0(log_msg, "Error for lambda_alpha = ", lambda_alpha, " lambda_theta = ", lambda_theta, " with ", irep, "th rep on ", ifold, "th fold!\n")
+  cl &lt;- parallel::makeCluster(workers)
+  parallel::clusterExport(
+    cl,
+    varlist = c(
+      "main",
+      "binning",
+      "initialize_model",
+      "iteration",
+      "compute_residuals",
+      "pi_k",
+      "mstep_update_alpha",
+      "mstep_update_theta_log_concave",
+      "mstep_update_intercepts",
+      "mstep_estimate_log_concave_densities",
+      "compute_surrogate_loglikelihood",
+      "modified_logcondens",
+      "e_step_log_concave",
+      "weighted_quantile",
+      "evaluate_lcd_model",
+      "Y_bin", "X", "bin_mass", "K",
+      "n_restarts", "max_iter", "iter_eta", "maxdev",
+      "resp_threshold", "trim_prob", "save_dir",
+      "sparse_matrix", "folds", "index_matrix"
+    ),
+    envir = environment()
+  )
+  
+  #— Run CV in parallel —#
+  logs &lt;- parallel::parLapply(
+    cl,
+    seq_len(nrow(index_matrix)),
+    function(ii) {
+      # Extract combination parameters
+      alpha_idx   &lt;- index_matrix[ii, "alpha_idx"]
+      theta_idx   &lt;- index_matrix[ii, "theta_idx"]
+      rep_idx     &lt;- index_matrix[ii, "rep_idx"]
+      fold_idx    &lt;- index_matrix[ii, "fold_idx"]
+      lambda_alpha&lt;- index_matrix[ii, "lambda_alpha"]
+      lambda_theta&lt;- index_matrix[ii, "lambda_theta"]
+      
+      log_msg &lt;- paste0(
+        "alpha=", lambda_alpha,
+        ", theta=", lambda_theta,
+        ", rep=", rep_idx,
+        ", fold=", fold_idx, "\n"
+      )
+      
+      # Split train/test
+      test_i     &lt;- folds[[fold_idx]]
+      Y_tr       &lt;- Y_bin[-test_i]
+      bin_mass_tr&lt;- bin_mass[-test_i]
+      X_tr       &lt;- X[-test_i, , drop = FALSE]
+      
+      # Fit model
+      set.seed(rep_idx)
+      fit_try &lt;- tryCatch(
+        <a href="create-LCDmix.html#main">main</a>(
+          Y               = Y_tr,
+          X               = X_tr,
+          biomass         = bin_mass_tr,
+          binned          = TRUE,
+          n_bins          = 0,
+          K               = K,
+          lambda_alpha    = lambda_alpha,
+          lambda_theta    = lambda_theta,
+          n_restarts      = n_restarts,
+          max_iter        = max_iter,
+          iter_eta        = iter_eta,
+          maxdev          = maxdev,
+          resp_threshold  = resp_threshold,
+          sparse_matrix   = sparse_matrix
+        ),
+        error = function(e) e
+      )
+      
+      if (inherits(fit_try, "error")) {
+        log_msg &lt;- paste0(log_msg, "Error: ", fit_try$message, "\n")
+        prop_CV    &lt;- NA
+        trimmed_CV &lt;- NA
+      } else {
+        # Evaluate on held‐out fold
+        eval_res &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
+          model     = fit_try$iter,
+          Y         = Y_bin[test_i],
+          X         = X[test_i, , drop = FALSE],
+          biomass   = bin_mass[test_i],
+          trim_prob = trim_prob
+        )
+        prop_CV    &lt;- eval_res$prop_infinite
+        trimmed_CV &lt;- eval_res$trimmed_avg_loglike
+        log_msg &lt;- paste0(log_msg, "Success\n")
+      }
+      
+      # Save results
+      save_path &lt;- file.path(
+        save_dir,
+        sprintf("%d-%d-%d-%d.Rdata",
+                alpha_idx, theta_idx, rep_idx, fold_idx)
+      )
+      save(prop_CV, trimmed_CV, file = save_path)
+      return(log_msg)
     }
-    save_path &lt;- file.path(save_folder, paste0('/', ialpha, '-', itheta, '-', irep, '-', ifold, '.Rdata'))
-    save(prop_CV, trimmed_CV, file = save_path)
-    return(log_msg)
-        })
+  )
+  
   parallel::stopCluster(cl)
-    num_NA = sapply(logs, function(x){
-    if (substring(x, nchar(x)-1, nchar(x)-1) == '!') {
-      return(1)
-    } else {return(0)}
-  })
-  logs = append(logs, 
-                   paste0("There are ", sum(num_NA), " NA results out of ", 
-                          length(num_NA), " results (", round(100 *mean(num_NA), 2), "%)." ))
   
-  return(list(logs = logs,
-              iimat = iimat))
+  #— Summarize failures —#
+  num_na &lt;- sum(grepl("Error:", logs))
+  logs   &lt;- c(
+    logs,
+    sprintf("Failures: %d/%d (%.1f%%)",
+            num_na, length(logs), 100 * num_na / length(logs))
+  )
+  
+  return(list(
+    logs          = logs,
+    index_matrix  = index_matrix
+  ))
 }</code></pre>
-<pre class="r"><code>#' CV_summary
-#' 
+<pre class="r"><code>#' Summarize cross‐validation results for the LCD mixture model
+#'
+#' @description
+#' Loads per‐run CV results saved as \code{.Rdata} files and assembles them into a
+#' full CV matrix.  Computes a reduced summary of the best cross‐validation score
+#' for each combination of \code{lambda_alpha} and \code{lambda_theta}, and selects
+#' the optimal penalties.
+#'
+#' @param index_matrix Numeric matrix with columns:
+#'   \describe{
+#'     \item{\code{alpha_idx}}{Index of \code{lambda_alpha} in the grid.}
+#'     \item{\code{theta_idx}}{Index of \code{lambda_theta} in the grid.}
+#'     \item{\code{rep_idx}}{Cross‐validation repetition index.}
+#'     \item{\code{fold_idx}}{Cross‐validation fold index.}
+#'     \item{\code{lambda_alpha}}{Value of the \code{lambda_alpha} penalty.}
+#'     \item{\code{lambda_theta}}{Value of the \code{lambda_theta} penalty.}
+#'   }
+#' @param save_dir Character; directory where per‐run \code{.Rdata} files are stored.
+#'   Files should be named “\code{alpha_idx-theta_idx-rep_idx-fold_idx.Rdata}” and
+#'   contain objects \code{prop_CV} and \code{trimmed_CV}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{CVmat}}{Numeric matrix of dimension \code{n_runs × 8}, containing
+#'     the original \code{index_matrix} plus two new columns:
+#'     \code{prop_CV} and \code{trimmed_CV}.}
+#'   \item{\code{reduced_mat}}{Numeric \code{n_alpha*n_theta × 3} matrix, with columns
+#'     \code{lambda_alpha}, \code{lambda_theta}, and the best (max) mean
+#'     \code{trimmed_CV} across repetitions for each penalty pair.}
+#'   \item{\code{opt_lambdas}} Numeric vector of length 2: the optimal
+#'     \code{lambda_alpha} and \code{lambda_theta} (row of \code{reduced_mat} with
+#'     largest CV score).}
+#'   \item{\code{max_NA_prop}} Numeric; the maximum proportion of infinite (NA)
+#'     CV log‐likelihoods across all runs.}
+#'
+#' @examples
+#' \dontrun{
+#' # After running `<a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>()` which saved .Rdata files in "./result":
+#' idx_mat &lt;- <a href="create-LCDmix.html#make_cv_index_matrix">make_cv_index_matrix</a>(5, 5, 3, alpha_lambdas, theta_lambdas)
+#' summary &lt;- <a href="create-LCDmix.html#cv_summary">cv_summary</a>(idx_mat, save_dir = "./result")
+#' str(summary)
+#' }
 #' @export
-CV_summary = function(iimat, save_folder = './result'){
-  n = nrow(iimat)
-  CVmat = cbind(iimat, rep(NA, n), rep(NA, n))
+<span id="cv_summary">cv_summary</span> &lt;- function(
+  index_matrix,
+  save_dir = "./result"
+) {
+  n_runs &lt;- nrow(index_matrix)
+  # Initialize CV matrix with placeholders
+  CVmat &lt;- cbind(
+    index_matrix,
+    prop_CV     = rep(NA_real_, n_runs),
+    trimmed_CV  = rep(NA_real_, n_runs)
+  )
   
-  for (ii in 1:nrow(iimat)){
-    ialpha = iimat[ii, 1]
-    itheta = iimat[ii, 2]
-    irep = iimat[ii, 3]
-    ifold = iimat[ii, 4]
-    lambda_alpha = iimat[ii, 5]
-    lambda_theta = iimat[ii, 6]
-    
-    file_name = paste0(save_folder,  paste0('/', ialpha, '-', itheta, '-', irep, '-', ifold, '.Rdata'))
-    load(file_name)
-    CVmat[ii, 7] = prop_CV
-    CVmat[ii, 8] = trimmed_CV
+  # Load each run's results
+  for (i in seq_len(n_runs)) {
+    alpha_idx  &lt;- index_matrix[i, "alpha_idx"]
+    theta_idx  &lt;- index_matrix[i, "theta_idx"]
+    rep_idx    &lt;- index_matrix[i, "rep_idx"]
+    fold_idx   &lt;- index_matrix[i, "fold_idx"]
+    file_name  &lt;- file.path(
+      save_dir,
+      sprintf("%d-%d-%d-%d.Rdata",
+              alpha_idx, theta_idx, rep_idx, fold_idx)
+    )
+    load(file_name, envir = environment())
+    CVmat[i, "prop_CV"]    &lt;- prop_CV
+    CVmat[i, "trimmed_CV"] &lt;- trimmed_CV
   }
-  colnames(CVmat)[7:8] = c('prop_CV', 'trimmed_CV')
-  max_NA_prop = max(CVmat[,7], na.rm = T)
   
-  reduced_mat = c()
-  cv_rep = length(table(iimat[,'irep']))
-  nfold = length(table(iimat[,'ifold']))
-  nchunk = length(table(iimat[, 'ialpha']))**2
+  # Compute max proportion of infinite/NA log‐likelihoods
+  max_NA_prop &lt;- max(CVmat[, "prop_CV"], na.rm = TRUE)
   
-  size = cv_rep * nfold
-  cnt_NA = 0
-  for (i in 1:nchunk){
-    tmp = CVmat[((i-1)*size+1):(i*size), ]
-    if (length(table(tmp[,5])) &gt; 1 | length(table(tmp[,6])) &gt; 1){
-      print('error')
-    }
-    tmp_CV = max(tapply(tmp[,'trimmed_CV'], factor(tmp[,'irep']), mean, na.rm = T))
-    reduced_mat = rbind(reduced_mat, cbind(tmp[1,5], tmp[1,6], tmp_CV))
+  # Determine grid dimensions
+  n_rep   &lt;- length(unique(index_matrix[, "rep_idx"]))
+  n_fold  &lt;- length(unique(index_matrix[, "fold_idx"]))
+  n_alpha &lt;- length(unique(index_matrix[, "alpha_idx"]))
+  n_theta &lt;- length(unique(index_matrix[, "theta_idx"]))
+  n_chunk &lt;- n_alpha * n_theta
+  block_sz &lt;- n_rep * n_fold
+  
+  # Build reduced summary: one row per (alpha, theta) pair
+  reduced_mat &lt;- matrix(
+    NA_real_,
+    nrow = n_chunk,
+    ncol = 3,
+    dimnames = list(NULL, c("lambda_alpha", "lambda_theta", "cv_score"))
+  )
+  
+  for (j in seq_len(n_chunk)) {
+    rows_j &lt;- ((j - 1) * block_sz + 1):(j * block_sz)
+    submat &lt;- CVmat[rows_j, , drop = FALSE]
+    # Compute mean trimmed_CV per repetition, then take the maximum across reps
+    mean_by_rep &lt;- tapply(
+      submat[, "trimmed_CV"],
+      submat[, "rep_idx"],
+      mean,
+      na.rm = TRUE
+    )
+    best_score &lt;- max(mean_by_rep, na.rm = TRUE)
+    reduced_mat[j, ] &lt;- c(
+      submat[1, "lambda_alpha"],
+      submat[1, "lambda_theta"],
+      best_score
+    )
   }
-  rownames(reduced_mat) = c()
-  colnames(reduced_mat)[1:2] = c("lambda_alpha", "lambda_theta")
-  opt_lambdas = reduced_mat[which.max(reduced_mat[,3]), 1:2]
-  return(list(CVmat = CVmat,
-              reduced_mat = reduced_mat,
-              opt_lambdas = opt_lambdas,
-              max_NA_prop = max_NA_prop))
+  
+  # Select optimal penalties (max CV score)
+  opt_row     &lt;- which.max(reduced_mat[, "cv_score"])
+  opt_lambdas &lt;- reduced_mat[opt_row, c("lambda_alpha", "lambda_theta")]
+  
+  return(list(
+    CVmat        = CVmat,
+    reduced_mat  = reduced_mat,
+    opt_lambdas  = opt_lambdas,
+    max_NA_prop  = max_NA_prop
+  ))
 }</code></pre>
-<pre class="r"><code>#' refit
-#' 
+<pre class="r"><code>#' Refit the LCD mixture model at optimal penalties with multiple repeats
+#'
+#' @description
+#' Runs the full \code{<a href="create-LCDmix.html#main">main</a>()} pipeline on the entire binned dataset multiple times
+#' at the optimal L1 penalties to assess variability and select the best repeat.
+#' Computations are dispatched in parallel.
+#'
+#' @param Y_bin A list of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
+#'   matrix of binned responses per time point.
+#' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
+#' @param bin_mass A list of length \eqn{TT}, where each element is a numeric vector
+#'   of biomass weights per bin at time \(t\).
+#' @param K Integer number of mixture components.
+#' @param opt_lambdas Numeric vector of length 2: optimal \(\lambda_{\alpha}\) and
+#'   \(\lambda_{\theta}\).
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
+#' @param max_iter Integer maximum number of EM iterations. Default: 30.
+#' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
+#' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
+#' @param cv_reps Integer number of repeated fits. Default: 5.
+#' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
+#' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
+#' @param sparse_matrix Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.
+#' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{logs}{Character vector of log messages (one per repeat, plus summary).}
+#'   \item{refit_scores}{Numeric vector of final surrogate log‐likelihoods (\code{Q}) for each repeat.}
+#'   \item{best_fit}{The \code{iteration} result list from the repeat with the highest final \code{Q}.}
+#' }
+#'
 #' @export
-refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmix = 1, max_iter = 30, iter_eta = 1e-3, maxdev = NULL, r_bar = 1e-3, cv_rep = 5, trim_thr = 0.05, save_folder = './result', sparseMatrix = T, ncores = 'max'){
+<span id="refit_lcd">refit_lcd</span> &lt;- function(
+  Y_bin,
+  X,
+  bin_mass,
+  K,
+  opt_lambdas,
+  n_restarts     = 1,
+  max_iter       = 30,
+  iter_eta       = 1e-3,
+  maxdev         = NULL,
+  resp_threshold = 1e-3,
+  cv_reps        = 5,
+  trim_prob      = 0.05,
+  save_dir       = "./result",
+  sparse_matrix  = TRUE,
+  n_cores        = "max"
+) {
+  # Unpack optimal penalties
+  lambda_alpha &lt;- opt_lambdas[1]
+  lambda_theta &lt;- opt_lambdas[2]
   
-  lambda_alpha = opt_lambdas[1]
-  lambda_theta = opt_lambdas[2]
-
-  if (ncores == 'max') {
-    cl = parallel::makeCluster(parallel::detectCores(logical = FALSE) - 1)
+  # Determine number of workers
+  workers &lt;- if (identical(n_cores, "max")) {
+    parallel::detectCores(logical = FALSE) - 1
   } else {
-    cl = parallel::makeCluster(ncores)
+    n_cores
   }
-  parallel::clusterExport(cl, c("main", "binning", "initialization", "iteration", "calc_resi", "pi_k", "Mstep_alpha", "Mstep_theta_logcondens", "LP_logcondens", "Mstep_shift", "Mstep_g_logcondens", "calc_surr_logcondens", "modified_logcondens", "E_step_logcondens", "weighted_quantile", "eval_LCD", "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "nrep_flowmix", "max_iter", "iter_eta", "maxdev", "r_bar", "cv_rep", "trim_thr", "save_folder", "sparseMatrix"), envir = environment())
-  logs = parallel::parLapply(cl, 1:cv_rep, function(ii){
-    log_msg = paste(ii, "th refit started\n")
-    set.seed(ii)
-    out_log = capture.output({res_ii = tryCatch({
-      main(Y_bin, X, bin_mass, binned = T, B = 0, K, lambda_alpha, lambda_theta, nrep_flowmix, max_iter, iter_eta, maxdev, r_bar, sparseMatrix)},
-      error = function(e) {
-        message(paste0("Error for ", ii, "th rep."))
-        return(NA)})})
-    log_msg = paste0(log_msg, paste0(out_log, collapse = ""))
-
-    if (is.list(res_ii)){
-      #eval_ii = eval_LCD(res_ii$iter, Y_bin, X, bin_mass, trim_thr = trim_thr)
-      refit_Q = res_ii$iter$Q[length(res_ii$iter$Q)]
-      log_msg = paste0(log_msg, "Saved results for ", ii, "th rep.\n")
-    } else {
-      refit_Q = NA
-      res_ii = NA
-      log_msg = paste0(log_msg, "Error for ", ii, "th rep on!\n")
+  cl &lt;- parallel::makeCluster(workers)
+  
+  # Export necessary objects and functions
+  parallel::clusterExport(
+    cl,
+    varlist = c(
+      "main", "Y_bin", "X", "bin_mass", "K",
+      "lambda_alpha", "lambda_theta",
+      "n_restarts", "max_iter", "iter_eta",
+      "maxdev", "resp_threshold", "sparse_matrix"
+    ),
+    envir = environment()
+  )
+  
+  # Perform repeated fits in parallel
+  logs &lt;- parallel::parLapply(
+    cl,
+    seq_len(cv_reps),
+    function(rep_idx) {
+      message("▶ Refit repeat ", rep_idx, "\n")
+      set.seed(rep_idx)
+      fit_try &lt;- tryCatch(
+        <a href="create-LCDmix.html#main">main</a>(
+          Y       = Y_bin,
+          X       = X,
+          biomass = bin_mass,
+          binned          = TRUE,
+          n_bins          = 0,
+          K               = K,
+          lambda_alpha    = lambda_alpha,
+          lambda_theta    = lambda_theta,
+          n_restarts      = n_restarts,
+          max_iter        = max_iter,
+          iter_eta        = iter_eta,
+          maxdev          = maxdev,
+          resp_threshold  = resp_threshold,
+          sparse_matrix   = sparse_matrix
+        ),
+        error = function(e) e
+      )
+      
+      if (inherits(fit_try, "error")) {
+        message("✖ Error on repeat ", rep_idx, ": ", fit_try$message, "\n")
+        return(list(log = paste0("Error on repeat ", rep_idx), Q = NA, iter = NULL))
+      }
+      
+      # Final surrogate log‐likelihood
+      final_Q &lt;- fit_try$iter$Q[length(fit_try$iter$Q)]
+      save_path &lt;- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
+      save(final_Q, fit_try, file = save_path)
+      message("✔ Completed repeat ", rep_idx, "; Q = ", final_Q, "\n")
+      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try$iter))
     }
-    save_path &lt;- file.path(save_folder, paste0('/refit', ii,'.Rdata'))
-    save(refit_Q, res_ii, file = save_path)
-    return(log_msg)
-        })
+  )
   parallel::stopCluster(cl)
-    
-  refit_QQ = rep(0, cv_rep)
-  refit_res = list()
-  for (ii in 1:cv_rep){
-    file_name = paste0(save_folder, paste0('/refit', ii,'.Rdata'))
-    load(file_name)
-    refit_QQ[ii] = refit_Q
-    refit_res[[ii]] = res_ii
-  }
-  logs = append(logs, 
-                   paste0("There are ", sum(is.na(refit_Q)), "NA results" ))
   
-  return(list(logs = logs,
-              refit_QQ = refit_QQ,
-              refit_res = refit_res[[which.max(refit_QQ)]]))
+  # Aggregate logs and scores
+  refit_scores &lt;- sapply(logs, function(x) x$Q)
+  log_msgs     &lt;- sapply(logs, function(x) x$log)
+  
+  # Identify best repeat
+  best_idx &lt;- which.max(refit_scores)
+  best_fit &lt;- logs[[best_idx]]$iter
+  
+  # Summary
+  summary_msg &lt;- paste0(
+    "Completed ", cv_reps, " repeats; ",
+    sum(is.na(refit_scores)), " failures; ",
+    "best Q = ", refit_scores[best_idx], " on repeat ", best_idx
+  )
+  log_msgs &lt;- c(log_msgs, summary_msg)
+  
+  return(list(
+    logs         = log_msgs,
+    refit_scores = refit_scores,
+    best_fit     = best_fit
+  ))
 }</code></pre>
-<pre class="r"><code>#' generate_skewed_data
-#' 
+<pre class="r"><code>#' Generate synthetic time‐series data from a 2‐component skewed mixture model
+#'
+#' @description
+#' Simulates a univariate response observed over \code{n_time} time points from a
+#' two‐component mixture‐of‐experts model with skew‐normal noise.  At each time
+#' point, a changing‐probability mixture of two regression lines generates
+#' responses; the mixture weights vary with a binary “change‐point” covariate
+#' and an optional smooth baseline trend.  The resulting continuous observations
+#' are then binned into histograms for use with the LCDmix pipeline.
+#'
+#' @param seed Optional integer; random seed for reproducibility. Default: \code{NULL}.
+#' @param n_per_time Integer; base number of observations per time point in the
+#'   second half of the series.  The first half uses \code{0.8 * n_per_time}.
+#'   Must be a multiple of 5. Default: \code{200}.
+#' @param beta_par Numeric; slope coefficient on the baseline covariate for component 1
+#'   (component 2 has intercept offset given by \code{intercept_gap}). Default: \code{0.5}.
+#' @param n_covariates Integer ≥ 3; total number of covariates (including baseline and change‐point). Default: \code{3}.
+#' @param grid_size Integer; number of grid cells per axis for binning the data. Default: \code{30}.
+#' @param skew_alpha Numeric; shape parameter \(\alpha\) for the skew‐normal noise. Default: \code{10}.
+#' @param intercept_gap Numeric; difference in intercepts between component 2 and 1. Default: \code{3}.
+#' @param n_time Integer; total number of time points (must be even). Default: \code{100}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{ylist}}{List of length \code{n_time}, each an \eqn{M_t \times 1}
+#'     matrix of binned counts per time point.}
+#'   \item{\code{X}}{\eqn{n_time \times n_covariates} covariate matrix:  
+#'     column 1 = scaled smooth baseline trend,  
+#'     column 2 = binary change‐point indicator (0 for first half, 1 for second),  
+#'     columns 3:\(n_{\text{covariates}}\) = i.i.d.\ noise covariates.}
+#'   \item{\code{countslist}}{List of length \code{n_time} of numeric vectors of raw
+#'     histogram counts (before normalization).}
+#'   \item{\code{mnmat}}{\eqn{n_time \times 2} matrix of true component means at each time.}
+#'   \item{\code{prob}}{\eqn{n_time \times 2} matrix of true mixture probabilities.}
+#'   \item{\code{mn}}{\eqn{n_time \times 1 \times 2} array of true means (for plotting consistency).}
+#'   \item{\code{numclust}}{Integer number of mixture components (always 2).}
+#'   \item{\code{alpha}}{\eqn{(n_{\text{covariates}}+1)\times 2} matrix of true mixture‐weight coefficients.}
+#'   \item{\code{beta}}{\eqn{(n_{\text{covariates}}+1)\times 2} matrix of true regression coefficients.}
+#'   \item{\code{sigma}}{\eqn{2\times1\times1} array of true noise variances for each component.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate a small dataset
+#' dat &lt;- <a href="create-LCDmix.html#generate_skewed_data">generate_skewed_data</a>(
+#'   seed          = 42,
+#'   n_per_time    = 50,
+#'   beta_par      = 1.0,
+#'   n_covariates  = 4,
+#'   grid_size     = 20,
+#'   skew_alpha    = 5,
+#'   intercept_gap = 2,
+#'   n_time        = 20
+#' )
+#' str(dat)
+#' }
 #' @export
-<span id="generate_skewed_data">generate_skewed_data</span> &lt;- function(seed=NULL, 
-                                nt = 200,
-                                beta_par = 0.5,
-                                p = 3, ## Number of total covariates
-                                dat.gridsize = 30,
-                                skew_alpha = 10,
-                                gap = 3,
-                                TT = 100){
-
-  ## Setup and basic checks
-  assertthat::assert_that(nt %% 5 ==0)
-  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
-  numclust = 2
-  stopifnot(p &gt;= 3)
+<span id="generate_skewed_data">generate_skewed_data</span> &lt;- function(
+  seed           = NULL,
+  n_per_time     = 200,
+  beta_par       = 0.5,
+  n_covariates   = 3,
+  grid_size      = 30,
+  skew_alpha     = 10,
+  intercept_gap  = 3,
+  n_time         = 100
+) {
+  #— Argument checks —#
+  assertthat::assert_that(n_per_time %% 5 == 0, msg = "`n_per_time` must be a multiple of 5")
+  assertthat::assert_that(n_covariates &gt;= 3, msg = "`n_covariates` must be at least 3")
+  assertthat::assert_that(n_time %% 2 == 0, msg = "`n_time` must be even")
   
-  ## Generate covariate
-  par &lt;- c(
+  # Set seed if requested
+  if (!is.null(seed)) set.seed(seed)
+  
+  # Number of clusters
+  numclust &lt;- 2
+  
+  # Determine sample sizes per time point
+  n_first_half  &lt;- rep(0.8 * n_per_time, n_time / 2)
+  n_second_half &lt;- rep(n_per_time,     n_time / 2)
+  n_list        &lt;- c(n_first_half, n_second_half)
+  
+  #— Simulate covariates —#
+  # Baseline trend: smooth version of a fixed sequence
+  par_raw &lt;- c(
   1807.884, 168.2681, 0.0006315789, -0.0139, -0.01336364, -0.014, -0.013125, -0.014,
   -0.0128, 0.218, 0.3867778, 23.893, 3320.086, 3278.974, 3584.604, 3769.884,
   3124.176, 3210.607, 2222.561, 2619.597, 1457.061, 87.64753, 0.03627778, -0.009875,
@@ -1328,129 +2805,144 @@ refit = function(Y_bin, X, bin_mass, K, opt_lambdas = c(1e-3, 1e-3), nrep_flowmi
   21.11, -0.01592308, -0.0135, -0.01288889, -0.01535714, -0.01515789, -0.01415, -0.01206667,
   -0.01313333, -0.01109091, 1818.87, 1880.722
   )
-  par = stats::ksmooth(x = 1:length(par), y = par, bandwidth = 5, x.points = 1:length(par))$y
+  par_smoothed &lt;- stats::ksmooth(
+    x        = seq_along(par_raw),
+    y        = par_raw,
+    bandwidth = 5,
+    x.points  = seq_along(par_raw)
+  )$y
+  baseline &lt;- scale(par_smoothed[1:n_time])
   
-  if(!is.null(seed)) set.seed(seed)
-  Xrest = do.call(cbind, lapply(1:(p-2), function(ii) stats::rnorm(TT)) )
-  X = cbind(scale(par[1:TT]),
-            c(rep(0, TT/2), rep(1, TT/2)),
-            Xrest)## p-2 columns
-  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+  # Change‐point indicator (0/1)
+  cp &lt;- c(rep(0, n_time / 2), rep(1, n_time / 2))
   
-  ## Beta coefficients
-  beta = matrix(0, ncol = numclust, nrow = p+1)
-  beta[0+1,1] = 0
-  beta[1+1,1] = beta_par
-  beta[0+1,2] = gap
-  beta[1+1,2] = -beta_par
-  colnames(beta) = paste0("clust", 1:numclust)
-  rownames(beta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
-
-  ## alpha coefficients
-  alpha = matrix(0, ncol = numclust, nrow = p+1)
-  alpha[0+1, 2] = -10
-  alpha[2+1, 2] = 10 + log(1/4)
-
-  colnames(alpha) = paste0("clust", 1:numclust)
-  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
-
-  mnmat = cbind(1, X) %*% beta
-  prob = exp(cbind(1,X) %*% alpha)
-  prob = prob/rowSums(prob)
+  # Additional noise covariates
+  noise_covs &lt;- replicate(
+    n_covariates - 2,
+    stats::rnorm(n_time),
+    simplify = FALSE
+  )
+  X &lt;- cbind(
+    baseline,
+    cp,
+    do.call(cbind, noise_covs)
+  )
+  colnames(X) &lt;- c("baseline", "cp", paste0("noise", seq_len(n_covariates - 2)))
   
-  ## Samples |nt| memberships out of (1:numclust) according to the probs in prob.
-  ## Data is a probabilistic mixture from these two means, over time.
-  ylist = lapply(1:TT,
-                 function(tt){
-                   draws = sample(1:numclust,
-                                  size = ntlist[tt], replace = TRUE,
-                                  ## prob = c(prob[[tt]], 1-prob[[tt]]))
-                                  prob = c(prob[tt,1], prob[tt,2]))
-                   mns = mnmat[tt,]
-                   means = mns[draws]
-
-                   ## Add noise to obtain data points.
-                   omega = sqrt(1/(1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
-                   mn_shift = omega * skew_alpha * (1 / sqrt(1+skew_alpha^2)) * sqrt(2/pi)
-                   noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
-                   datapoints = means + noise
-                   cbind(datapoints)
-                 })
-    ## stop("Binning doesn't work yet! make_grid and bin_many_cytograms aren't written for 1d data yet.")
-
-    ## 1. Make grid
-    dat.grid = flowmix::make_grid(ylist, gridsize = dat.gridsize)
-
-    ## 2. Bin with just counts
-    mc.cores = 4
-    obj = flowmix::bin_many_cytograms(ylist, dat.grid, mc.cores = mc.cores, verbose = TRUE)
-    ybin_list = obj$ybin_list
-    counts_list = obj$counts_list
-    sparsecounts_list = obj$sparsecounts_list ## new
-
-    ## 4. (NOT USED) Also obtain all the binned midpoints, in a (d^3 x 3) matrix.
-    ## ybin_all = make_ybin(counts = NULL, midpoints = make_midpoints(dat.grid))
-    ybin_all = obj$ybin_all ## new
-
-    ## Assign binned data to static names |ylist| and |countslist|.
-    ylist = ybin_list
-    countslist = counts_list
+  #— True model parameters —#
+  # Regression coefficients for each component (intercept + covariates)
+  beta &lt;- matrix(0, nrow = n_covariates + 1, ncol = numclust)
+  # Component 1
+  beta[1, 1] &lt;- 0
+  beta[2, 1] &lt;- beta_par
+  # Component 2
+  beta[1, 2] &lt;- intercept_gap
+  beta[2, 2] &lt;- -beta_par
+  # Remaining slopes left at zero
+  rownames(beta) &lt;- c("intercept", colnames(X))
+  colnames(beta) &lt;- paste0("clust", 1:numclust)
   
-  ## Other things about the true generating model
-  sigma = array(NA, dim=c(2,1,1))
-  sigma[1,1,1] = sigma[2,1,1] = 1
-  mn = array(NA,dim=c(100,1,2))
-  mn[,1,] = mnmat
-  numclust=2
-
-  return(list(ylist = ylist, 
-              X = X,
-              countslist = countslist,
-              ## The true generating model:
-              mnmat = mnmat,
-              prob = prob,
-              mn = mn,
-              numclust = numclust,
-              alpha = alpha,
-              beta = beta,
-              sigma = sigma))
+  # Mixture‐weight (alpha) coefficients
+  alpha &lt;- matrix(0, nrow = n_covariates + 1, ncol = numclust)
+  # Shift mixture in second component
+  alpha[1, 2] &lt;- -10
+  alpha[3, 2] &lt;-  10 + log(1/4)
+  rownames(alpha) &lt;- c("intercept", colnames(X))
+  colnames(alpha) &lt;- paste0("clust", 1:numclust)
+  
+  # Compute true means and mixture probabilities over time
+  design_mat &lt;- cbind(1, X)
+  mnmat      &lt;- design_mat %*% beta
+  pi_mat     &lt;- exp(design_mat %*% alpha)
+  pi_mat     &lt;- pi_mat / rowSums(pi_mat)
+  
+  #— Simulate raw data and add skew‐normal noise —#
+  ylist &lt;- vector("list", n_time)
+  for (t in seq_len(n_time)) {
+    # Sample cluster memberships
+    clust_ids &lt;- sample(
+      seq_len(numclust),
+      size      = n_list[t],
+      replace   = TRUE,
+      prob      = pi_mat[t, ]
+    )
+    # True component means
+    means_t &lt;- mnmat[t, clust_ids]
+    # Skew‐normal noise centered at zero
+    omega   &lt;- sqrt(1 / (1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
+    shift   &lt;- omega * skew_alpha / sqrt(1 + skew_alpha^2) * sqrt(2/pi)
+    noise_t &lt;- sn::rsn(
+      n      = n_list[t],
+      xi     = 0,
+      omega  = omega,
+      alpha  = skew_alpha
+    ) - shift
+    # Observations
+    ylist[[t]] &lt;- matrix(means_t + noise_t, ncol = 1)
+  }
+  
+  #— Bin into histograms for LCDmix —#
+  dat_grid &lt;- flowmix::make_grid(ylist, gridsize = grid_size)
+  binned   &lt;- flowmix::bin_many_cytograms(
+    ylist       = ylist,
+    grid        = dat_grid,
+    mc.cores    = 4,
+    verbose     = TRUE
+  )
+  ylist         &lt;- binned$ybin_list
+  countslist    &lt;- binned$counts_list
+  
+  #— Pack return object —#
+  mn_array &lt;- array(
+    dim = c(n_time, 1, numclust),
+    data = as.vector(mnmat)
+  )
+  sigma_array &lt;- array(1, dim = c(numclust, 1, 1))
+  
+  return(list(
+    ylist       = ylist,
+    X           = X,
+    countslist  = countslist,
+    mnmat       = mnmat,
+    prob        = pi_mat,
+    mn          = mn_array,
+    numclust    = numclust,
+    alpha       = alpha,
+    beta        = beta,
+    sigma       = sigma_array
+  ))
 }</code></pre>
 </div>
 </div>
 <div id="documenting-the-package-and-building" class="section level2">
 <h2>Documenting the package and building</h2>
-<p>We finish by running commands that will document, build, and install
-the package. It may also be a good idea to check the package from within
-this file.</p>
 <pre class="r"><code>litr::document() # &lt;-- use instead of devtools::document()</code></pre>
 <pre><code>## ℹ Updating LCDmix documentation
 ## ℹ Loading LCDmix
 ## Writing 'NAMESPACE'
-## Writing 'initialization.Rd'
-## Writing 'pi_k.Rd'
-## Writing 'Mstep_shift.Rd'
-## Writing 'calc_resi.Rd'
-## Writing 'Mstep_g_logcondens.Rd'
-## Writing 'modified_logcondens.Rd'
-## Writing 'calc_surr_logcondens.Rd'
+## Writing 'binning.Rd'
+## Writing 'compute_l1_distance.Rd'
+## Writing 'compute_residuals.Rd'
+## Writing 'compute_surrogate_loglikelihood.Rd'
+## Writing 'cv_lcd_parallel.Rd'
+## Writing 'cv_summary.Rd'
+## Writing 'e_step_log_concave.Rd'
+## Writing 'evaluate_lcd_model.Rd'
+## Writing 'generate_skewed_data.Rd'
+## Writing 'initialize_model.Rd'
+## Writing 'is_increasing.Rd'
 ## Writing 'iteration.Rd'
-## Writing 'E_step_logcondens.Rd'
-## Writing 'Mstep_alpha.Rd'
-## Writing 'Mstep_theta_logcondens.Rd'
-## Writing 'LP_logcondens.Rd'
-## Writing 'L1_diff.Rd'
-## Writing 'isIncreasing.Rd'
-## Writing 'weightedHist.Rd'
-## Writing 'weighted_quantile.Rd'
-## Writing 'eval_LCD.Rd'
-## Writing 'make_iimat.Rd'
-## Writing 'CV_LCD_parallel.Rd'
-## Writing 'CV_summary.Rd'
-## Writing 'refit.Rd'
-## Writing 'generate_skewed_data.Rd'</code></pre>
-<pre class="r"><code># devtools::build()
-# devtools::install()
-# devtools::check(document = FALSE)</code></pre>
+## Writing 'main.Rd'
+## Writing 'make_cv_index_matrix.Rd'
+## Writing 'mstep_estimate_log_concave_densities.Rd'
+## Writing 'mstep_update_alpha.Rd'
+## Writing 'mstep_update_intercepts.Rd'
+## Writing 'mstep_update_theta_log_concave.Rd'
+## Writing 'mstep_update_theta_lp.Rd'
+## Writing 'pi_k.Rd'
+## Writing 'refit_lcd.Rd'
+## Writing 'weighted_hist.Rd'
+## Writing 'weighted_quantile.Rd'</code></pre>
 </div>
 
 

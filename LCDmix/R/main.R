@@ -1,0 +1,117 @@
+# Generated from create-LCDmix.Rmd: do not edit by hand
+
+#' Fit a log-concave mixture-of-experts model with optional binning
+#'
+#' @description
+#' Runs the full pipeline for fitting a log-concave mixture-of-experts model:
+#' 1. (Optional) Bin responses by biomass  
+#' 2. Initialize via Gaussian mixture regression (GMR) with \code{flowmix}  
+#' 3. Perform EM‐style iterations on mixture parameters  
+#'
+#' @param Y A list of length \code{TT}, where \code{Y[[t]]} is an \eqn{n_t}-row vector or single‐column matrix of responses at time \eqn{t}.
+#' @param X A numeric matrix of dimension \eqn{TT \times p}, where each row \code{X[t, ]} is the covariate vector at time \eqn{t}.
+#' @param biomass A list of length \code{TT}, where \code{biomass[[t]]} is a numeric vector of biomass weights per observation or bin at time \eqn{t}.
+#' @param binned Logical; if \code{TRUE}, \code{Y} and \code{biomass} are assumed already binned. Default: \code{FALSE}.
+#' @param n_bins Integer number of equal‐width bins if \code{binned = FALSE}. Default: \code{40}.
+#' @param K Integer number of mixture components.
+#' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
+#' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
+#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
+#' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
+#' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
+#' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally for speed. Default: \code{TRUE}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
+#'   \item{X}{Covariate matrix (unchanged).}
+#'   \item{bin_mass}{List of biomass‐per‐bin weights.}
+#'   \item{initial}{List returned by \code{initialize_model()}, containing starting parameters.}
+#'   \item{iter}{List returned by \code{iteration()}, containing fitted parameters over EM iterations.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Simulate TT = 50 time points, p = 3 covariates
+#' set.seed(123)
+#' Y_list   <- lapply(1:50, function(t) matrix(rnorm(sample(20:50,1)), ncol = 1))
+#' biomass  <- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
+#' X_mat    <- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
+#' # Fit a 2‐component mixture
+#' result   <- main(
+#'   Y       = Y_list,
+#'   X       = X_mat,
+#'   biomass = biomass,
+#'   K       = 2
+#' )
+#' plot(result$iter$logLik)
+#' }
+#' @export
+main <- function(
+  Y,
+  X,
+  biomass,
+  binned         = FALSE,
+  n_bins         = 40,
+  K,
+  lambda_alpha   = 1e-3,
+  lambda_theta   = 1e-3,
+  n_restarts     = 1,
+  max_iter       = 30,
+  iter_eta       = 1e-3,
+  maxdev         = NULL,
+  resp_threshold = 1e-3,
+  sparseMatrix   = TRUE
+) {
+  #— Step 1: Binning (if needed) —#
+  if (binned) {
+    Y_bin    <- Y
+    bin_mass <- biomass
+  } else {
+    bin_res  <- binning(Y, biomass, n_bins)
+    Y_bin    <- bin_res$Y_bin
+    bin_mass <- bin_res$bin_mass
+  }
+  message("✔ Binning complete")
+  
+  #— Step 2: Initialization via GMR —#
+  init_res <- initialize_model(
+    Y_bin,
+    X,
+    bin_mass,
+    K,
+    lambda_alpha,
+    lambda_theta,
+    n_restarts,
+    maxdev,
+    resp_threshold
+  )
+  message("✔ Initialization complete")
+  
+  #— Step 3: EM‐style iterations —#
+  iter_res <- iteration(
+    Y_bin,
+    X,
+    bin_mass,
+    init_res,
+    lambda_alpha,
+    lambda_theta,
+    iter_eta,
+    max_iter,
+    maxdev,
+    resp_threshold,
+    sparseMatrix
+  )
+  message("✔ Iterations complete")
+  
+  #— Return all key results —#
+  return(list(
+    Y_bin    = Y_bin,
+    X        = X,
+    bin_mass = bin_mass,
+    initial  = init_res,
+    iter     = iter_res
+  ))
+}
