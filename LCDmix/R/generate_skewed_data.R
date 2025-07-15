@@ -206,7 +206,7 @@ generate_skewed_data <- function(
   dat_grid <- flowmix::make_grid(ylist, gridsize = grid_size)
   binned   <- flowmix::bin_many_cytograms(
     ylist       = ylist,
-    grid        = dat_grid,
+    manual.grid    = dat_grid,
     mc.cores    = 4,
     verbose     = TRUE
   )

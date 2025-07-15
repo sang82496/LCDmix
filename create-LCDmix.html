@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-07-13">
+<meta name="date" content="2025-07-15">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-07-13</h4>
+<h4 class="date">2025-07-15</h4>
 
 </div>
 
@@ -996,8 +996,57 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   
   return(densities)
 }</code></pre>
-<pre class="r"><code>#' modified_logcondens
-#' 
+<pre class="r"><code>#' Modified log‐concave density estimation with optional preprocessing
+#'
+#' @description
+#' Fits a univariate log‐concave density to data \code{x} using the
+#' \pkg{logcondens} routines.  If \code{w} is \code{NA}, a preprocessing step
+#' chooses an appropriate weight vector and grid; otherwise \code{x} and \code{w}
+#' are assumed sorted and used directly.  The estimator is refined by adding
+#' knots until convergence.
+#'
+#' @param x Numeric vector of data points at which to estimate a log‐concave density.
+#' @param xgrid Optional numeric vector of grid points for preprocessing.  If
+#'   provided, \code{w} must be \code{NA}.  Default: \code{NULL}.
+#' @param print Logical; if \code{TRUE}, iteration progress and likelihood values
+#'   are printed.  Default: \code{FALSE}.
+#' @param w Numeric vector of nonnegative weights for each \code{x}, or \code{NA}
+#'   to compute weights automatically.  Default: \code{NA}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{xn}}{Sorted original \code{x} values.}
+#'   \item{\code{x}}{Processed \code{x} after any preprocessing.}
+#'   \item{\code{w}}{Weights corresponding to \code{x}.}
+#'   \item{\code{phi}}{Numeric vector of estimated log‐density values at \code{x}.}
+#'   \item{\code{IsKnot}}{Integer or logical vector indicating which points are knots.}
+#'   \item{\code{L}}{Final log‐likelihood value.}
+#'   \item{\code{Fhat}}{Estimated CDF values at \code{x}.}
+#'   \item{\code{H}}{Numeric vector of directional derivatives (used in knot selection).}
+#'   \item{\code{n}}{Number of original data points (\code{length(xn)}).}
+#'   \item{\code{m}}{Same as \code{n}.}
+#'   \item{\code{knots}}{Vector of \code{x} values selected as knots.}
+#'   \item{\code{mode}}{Value of \code{x} at which \code{phi} is maximized.}
+#'   \item{\code{sig}}{Estimated standard deviation used for preprocessing.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Example: estimate log‐concave density of a mixture sample
+#' set.seed(42)
+#' x1 &lt;- rnorm(100, mean = -2)
+#' x2 &lt;- rnorm(150, mean =  3)
+#' x  &lt;- c(x1, x2)
+#'
+#' # Default call (weights computed automatically)
+#' res1 &lt;- modified_logcondens(x)
+#' plot(res1$xn, res1$phi, type = "l", xlab = "x", ylab = "log‐density")
+#'
+#' # Provide custom weights (e.g., uniform)
+#' w &lt;- rep(1, length(x))
+#' res2 &lt;- modified_logcondens(x, w = w)
+#' lines(res2$xn, res2$phi, col = "blue")
+#' }
 #' @export
 modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
     prec &lt;- 1e-10
@@ -2885,7 +2934,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
   dat_grid &lt;- flowmix::make_grid(ylist, gridsize = grid_size)
   binned   &lt;- flowmix::bin_many_cytograms(
     ylist       = ylist,
-    grid        = dat_grid,
+    manual.grid    = dat_grid,
     mc.cores    = 4,
     verbose     = TRUE
   )

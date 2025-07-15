@@ -712,8 +712,57 @@ mstep_estimate_log_concave_densities <- function(
 
 
 ```{r}
-#' modified_logcondens
-#' 
+#' Modified log‐concave density estimation with optional preprocessing
+#'
+#' @description
+#' Fits a univariate log‐concave density to data \code{x} using the
+#' \pkg{logcondens} routines.  If \code{w} is \code{NA}, a preprocessing step
+#' chooses an appropriate weight vector and grid; otherwise \code{x} and \code{w}
+#' are assumed sorted and used directly.  The estimator is refined by adding
+#' knots until convergence.
+#'
+#' @param x Numeric vector of data points at which to estimate a log‐concave density.
+#' @param xgrid Optional numeric vector of grid points for preprocessing.  If
+#'   provided, \code{w} must be \code{NA}.  Default: \code{NULL}.
+#' @param print Logical; if \code{TRUE}, iteration progress and likelihood values
+#'   are printed.  Default: \code{FALSE}.
+#' @param w Numeric vector of nonnegative weights for each \code{x}, or \code{NA}
+#'   to compute weights automatically.  Default: \code{NA}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{xn}}{Sorted original \code{x} values.}
+#'   \item{\code{x}}{Processed \code{x} after any preprocessing.}
+#'   \item{\code{w}}{Weights corresponding to \code{x}.}
+#'   \item{\code{phi}}{Numeric vector of estimated log‐density values at \code{x}.}
+#'   \item{\code{IsKnot}}{Integer or logical vector indicating which points are knots.}
+#'   \item{\code{L}}{Final log‐likelihood value.}
+#'   \item{\code{Fhat}}{Estimated CDF values at \code{x}.}
+#'   \item{\code{H}}{Numeric vector of directional derivatives (used in knot selection).}
+#'   \item{\code{n}}{Number of original data points (\code{length(xn)}).}
+#'   \item{\code{m}}{Same as \code{n}.}
+#'   \item{\code{knots}}{Vector of \code{x} values selected as knots.}
+#'   \item{\code{mode}}{Value of \code{x} at which \code{phi} is maximized.}
+#'   \item{\code{sig}}{Estimated standard deviation used for preprocessing.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Example: estimate log‐concave density of a mixture sample
+#' set.seed(42)
+#' x1 <- rnorm(100, mean = -2)
+#' x2 <- rnorm(150, mean =  3)
+#' x  <- c(x1, x2)
+#'
+#' # Default call (weights computed automatically)
+#' res1 <- modified_logcondens(x)
+#' plot(res1$xn, res1$phi, type = "l", xlab = "x", ylab = "log‐density")
+#'
+#' # Provide custom weights (e.g., uniform)
+#' w <- rep(1, length(x))
+#' res2 <- modified_logcondens(x, w = w)
+#' lines(res2$xn, res2$phi, col = "blue")
+#' }
 #' @export
 modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
     prec <- 1e-10
@@ -2692,7 +2741,7 @@ generate_skewed_data <- function(
   dat_grid <- flowmix::make_grid(ylist, gridsize = grid_size)
   binned   <- flowmix::bin_many_cytograms(
     ylist       = ylist,
-    grid        = dat_grid,
+    manual.grid    = dat_grid,
     mc.cores    = 4,
     verbose     = TRUE
   )
