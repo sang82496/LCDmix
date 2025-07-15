@@ -638,7 +638,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   \item{theta_init}{List of length \code{K} of initial slope vectors.}
 #'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of initial mixture parameters from GMR.}
 #'   \item{resi_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of residuals.}
-#'   \item{g_init}{List of length \code{K} of log-concave density objects from \code{modified_logcondens()}.}
+#'   \item{g_init}{List of length \code{K} of log-concave density objects from \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.}
 #'   \item{Q}{Numeric; value of the surrogate log-likelihood at initialization.}
 #'   \item{Q_every}{Numeric; same as \code{Q} (for consistency with iterative output).}
 #' }
@@ -939,7 +939,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @description
 #' For each mixture component \(k\), gathers the residuals across all time points
 #' for bins assigned to component \(k\), weighs them by their posterior weights,
-#' and fits a log-concave density using \code{modified_logcondens()}.
+#' and fits a log-concave density using \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.
 #'
 #' @param residuals A list of length \code{TT}, where each element is an \eqn{M_t \times K}
 #'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
@@ -950,7 +950,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   at time \(t\) contributes to component \(k\).
 #'
 #' @return A list of length \code{K}, where element \code{k} is the output of
-#'   \code{modified_logcondens()}—the estimated log-concave density for component \(k\).
+#'   \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}—the estimated log-concave density for component \(k\).
 #'
 #' @examples
 #' \dontrun{
@@ -987,7 +987,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     uniq_w   &lt;- sapply(uniq_res, function(val) sum(w_k[res_k == val]))
     
     # Fit log-concave density
-    densities[[k]] &lt;- modified_logcondens(
+    densities[[k]] &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(
       x     = uniq_res,
       w     = uniq_w / sum(uniq_w),
       print = FALSE
@@ -1039,16 +1039,16 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' x  &lt;- c(x1, x2)
 #'
 #' # Default call (weights computed automatically)
-#' res1 &lt;- modified_logcondens(x)
+#' res1 &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(x)
 #' plot(res1$xn, res1$phi, type = "l", xlab = "x", ylab = "log‐density")
 #'
 #' # Provide custom weights (e.g., uniform)
 #' w &lt;- rep(1, length(x))
-#' res2 &lt;- modified_logcondens(x, w = w)
+#' res2 &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(x, w = w)
 #' lines(res2$xn, res2$phi, col = "blue")
 #' }
 #' @export
-modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
+<span id="modified_logcondens">modified_logcondens</span> &lt;- function(x, xgrid = NULL, print = FALSE, w = NA){
     prec &lt;- 1e-10
     xn &lt;- sort(x)
     if ((!identical(xgrid, NULL) &amp; (!identical(w, NA)))) {
@@ -1152,7 +1152,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #'   - \(N=\sum_{t,i,k}w_{t,i,k}\).  
 #'
 #' @param X A \eqn{TT \times p} numeric covariate matrix (rows = time points).
-#' @param densities A list of length \eqn{K}, each object returned by \code{modified_logcondens()}.
+#' @param densities A list of length \eqn{K}, each object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.
 #' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.
 #' @param slopes A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.
 #' @param alpha A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).
@@ -1168,7 +1168,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' TT &lt;- 3; p &lt;- 2; K &lt;- 2
 #' X  &lt;- matrix(rnorm(TT * p), nrow = TT)
 #' densities &lt;- replicate(K,
-#'   modified_logcondens(rnorm(50), w = rep(1/50,50)),
+#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(50), w = rep(1/50,50)),
 #'   simplify = FALSE
 #' )
 #' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
@@ -1453,7 +1453,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' @param alpha A numeric \eqn{K \times (p+1)} matrix of mixture parameters
 #'   (column 1 = intercepts, columns 2:\(p+1\) = slopes).
 #' @param densities A list of length \code{K}, each an object returned by
-#'   \code{modified_logcondens()} representing the log‐concave density for one component.
+#'   \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} representing the log‐concave density for one component.
 #' @param resp_threshold Numeric in \([0,1]\); responsibilities below this value
 #'   are set to zero. Default: \code{1e-3}.
 #'
@@ -1473,7 +1473,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' bin_mass  &lt;- lapply(residuals, function(m) runif(nrow(m)))
 #' # Dummy densities
 #' densities &lt;- replicate(K,
-#'   modified_logcondens(rnorm(100), w = rep(1/100, 100)),
+#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(100), w = rep(1/100, 100)),
 #'   simplify = FALSE
 #' )
 #' # Random mixture parameters
@@ -1619,7 +1619,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
 #' @param posterior_weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
 #' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.
-#' @param densities A list of length \code{K}, each an object returned by \code{modified_logcondens()} for one component.
+#' @param densities A list of length \code{K}, each an object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} for one component.
 #' @param responsibility_mask A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
@@ -1642,7 +1642,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' resi    &lt;- lapply(Y_bin, function(m) matrix(rnorm(length(m)*K), ncol=K))
 #' mask    &lt;- lapply(Y_bin, function(m) matrix(TRUE, nrow(m), ncol=K))
 #' densities &lt;- replicate(K,
-#'   modified_logcondens(rnorm(50), w = rep(1/50,50)),
+#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(50), w = rep(1/50,50)),
 #'   simplify = FALSE
 #' )
 #' intercepts &lt;- replicate(K, 0, simplify = FALSE)
@@ -1710,7 +1710,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 #' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
 #' @param posterior_weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
 #' @param residuals List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.
-#' @param density_k An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
+#' @param density_k An object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
 #' @param responsibility_mask List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
 #' @param intercept_k Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
@@ -1938,12 +1938,12 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 <pre class="r"><code>#' Compute a weighted histogram from a log‐concave density object
 #'
 #' @description
-#' Given an object returned by \code{modified_logcondens()}, which contains the
+#' Given an object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}, which contains the
 #' sample points \code{xn} and their associated weights \code{w}, this function
 #' constructs a normalized histogram (as a density estimate) over \code{n_bins}
 #' equal‐width bins spanning the range of \code{xn}.
 #'
-#' @param logcondens_obj A list (output of \code{modified_logcondens()}) containing:
+#' @param logcondens_obj A list (output of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}) containing:
 #'   \describe{
 #'     \item{\code{xn}}{Numeric vector of sample points.}
 #'     \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
@@ -2983,6 +2983,7 @@ modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
 ## Writing 'iteration.Rd'
 ## Writing 'main.Rd'
 ## Writing 'make_cv_index_matrix.Rd'
+## Writing 'modified_logcondens.Rd'
 ## Writing 'mstep_estimate_log_concave_densities.Rd'
 ## Writing 'mstep_update_alpha.Rd'
 ## Writing 'mstep_update_intercepts.Rd'

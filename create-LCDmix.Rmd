@@ -764,7 +764,7 @@ mstep_estimate_log_concave_densities <- function(
 #' lines(res2$xn, res2$phi, col = "blue")
 #' }
 #' @export
-modified_logcondens = function(x, xgrid = NULL, print = FALSE, w = NA){
+modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
     prec <- 1e-10
     xn <- sort(x)
     if ((!identical(xgrid, NULL) & (!identical(w, NA)))) {
