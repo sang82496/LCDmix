@@ -59,9 +59,9 @@ mstep_update_theta_lp <- function(
       w_k   <- c(w_k, posterior_weights[[t]][idx_tk, component])
       Y_k   <- c(Y_k, Y_bin[[t]][idx_tk, 1])
       X_k   <- rbind(
-        X_k,
-        matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
-      )
+                X_k,
+                matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
+              )
     } else {
       skip_ts <- c(skip_ts, t)
     }
@@ -70,8 +70,8 @@ mstep_update_theta_lp <- function(
   n <- length(Y_k)
   
   # Extract knots and slopes of piecewise linear density
-  x_m     <- density_k$x[density_k$IsKnot]
-  phi_m   <- density_k$phi[density_k$IsKnot]
+  x_m     <- density_k$x[as.logical(density_k$IsKnot)]
+  phi_m   <- density_k$phi[as.logical(density_k$IsKnot)]
   J       <- length(x_m) - 1
   b       <- diff(phi_m) / diff(x_m)
   beta0   <- b * x_m[-length(x_m)] - phi_m[-length(phi_m)]

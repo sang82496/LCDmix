@@ -11,11 +11,11 @@ iteration(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta = 1e-06,
-  max_iter = 30,
-  maxdev = NULL,
-  resp_threshold = 0.001,
-  sparseMatrix = TRUE
+  iter_eta,
+  max_iter,
+  maxdev,
+  resp_threshold,
+  sparseMatrix
 )
 }
 \arguments{

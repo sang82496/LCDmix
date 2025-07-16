@@ -49,11 +49,11 @@ iteration <- function(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta       = 1e-6,
-  max_iter       = 30,
-  maxdev         = NULL,
-  resp_threshold = 1e-3,
-  sparseMatrix   = TRUE
+  iter_eta,
+  max_iter,
+  maxdev,
+  resp_threshold,
+  sparseMatrix
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
