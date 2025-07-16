@@ -2266,7 +2266,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#' @param sparse_matrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
+#' @param sparseMatrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -2311,7 +2311,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
-  sparse_matrix      = TRUE,
+  sparseMatrix      = TRUE,
   n_cores            = "max"
 ) {
   #— Create penalty grids —#
@@ -2373,7 +2373,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       "Y_bin", "X", "bin_mass", "K",
       "n_restarts", "max_iter", "iter_eta", "maxdev",
       "resp_threshold", "trim_prob", "save_dir",
-      "sparse_matrix", "folds", "index_matrix"
+      "sparseMatrix", "folds", "index_matrix"
     ),
     envir = environment()
   )
@@ -2421,7 +2421,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
           iter_eta        = iter_eta,
           maxdev          = maxdev,
           resp_threshold  = resp_threshold,
-          sparse_matrix   = sparse_matrix
+          sparseMatrix   = sparseMatrix
         ),
         error = function(e) e
       )
@@ -2612,7 +2612,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param cv_reps Integer number of repeated fits. Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
-#' @param sparse_matrix Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.
+#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -2637,7 +2637,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   cv_reps        = 5,
   trim_prob      = 0.05,
   save_dir       = "./result",
-  sparse_matrix  = TRUE,
+  sparseMatrix  = TRUE,
   n_cores        = "max"
 ) {
   # Unpack optimal penalties
@@ -2659,7 +2659,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       "main", "Y_bin", "X", "bin_mass", "K",
       "lambda_alpha", "lambda_theta",
       "n_restarts", "max_iter", "iter_eta",
-      "maxdev", "resp_threshold", "sparse_matrix"
+      "maxdev", "resp_threshold", "sparseMatrix"
     ),
     envir = environment()
   )
@@ -2686,7 +2686,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
           iter_eta        = iter_eta,
           maxdev          = maxdev,
           resp_threshold  = resp_threshold,
-          sparse_matrix   = sparse_matrix
+          sparseMatrix   = sparseMatrix
         ),
         error = function(e) e
       )

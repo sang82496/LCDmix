@@ -29,7 +29,7 @@
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#' @param sparse_matrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
+#' @param sparseMatrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -74,7 +74,7 @@ cv_lcd_parallel <- function(
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
-  sparse_matrix      = TRUE,
+  sparseMatrix      = TRUE,
   n_cores            = "max"
 ) {
   #— Create penalty grids —#
@@ -136,7 +136,7 @@ cv_lcd_parallel <- function(
       "Y_bin", "X", "bin_mass", "K",
       "n_restarts", "max_iter", "iter_eta", "maxdev",
       "resp_threshold", "trim_prob", "save_dir",
-      "sparse_matrix", "folds", "index_matrix"
+      "sparseMatrix", "folds", "index_matrix"
     ),
     envir = environment()
   )
@@ -184,7 +184,7 @@ cv_lcd_parallel <- function(
           iter_eta        = iter_eta,
           maxdev          = maxdev,
           resp_threshold  = resp_threshold,
-          sparse_matrix   = sparse_matrix
+          sparseMatrix   = sparseMatrix
         ),
         error = function(e) e
       )
