@@ -18,14 +18,14 @@
 #'   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
 #' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
 #'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#' @param cv_grid_size Integer number of candidate lambdas per penalty. Default: 5.
+#' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
 #' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
 #' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
 #' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param nfold Integer number of cross‐validation folds. Default: 5.
-#' @param block_size Integer block size for folding. Default: 5.
+#' @param blocksize Integer block size for folding. Default: 5.
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
@@ -48,7 +48,7 @@
 #'   K                   = 2,
 #'   lambda_alpha_range  = c(1e-4, 1e-2),
 #'   lambda_theta_range  = c(1e-4, 1e-2),
-#'   cv_grid_size        = 4,
+#'   cv_gridsize        = 4,
 #'   nfold             = 3,
 #'   cv_reps             = 2,
 #'   n_cores             = "max"
@@ -62,14 +62,14 @@ cv_lcd_parallel <- function(
   K,
   lambda_alpha_range = c(1e-8, 1e-1),
   lambda_theta_range = c(1e-8, 1e-1),
-  cv_grid_size       = 5,
+  cv_gridsize       = 5,
   n_restarts         = 1,
   max_iter           = 30,
   iter_eta           = 1e-3,
   maxdev             = NULL,
   resp_threshold     = 1e-3,
   nfold            = 5,
-  block_size         = 5,
+  blocksize         = 5,
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
@@ -79,12 +79,12 @@ cv_lcd_parallel <- function(
   alpha_lambdas <- flowmix::logspace(
     min    = lambda_alpha_range[1],
     max    = lambda_alpha_range[2],
-    length = cv_grid_size
+    length = cv_gridsize
   ) |> sort()
   theta_lambdas <- flowmix::logspace(
     min    = lambda_theta_range[1],
     max    = lambda_theta_range[2],
-    length = cv_grid_size
+    length = cv_gridsize
   ) |> sort()
   print(alpha_lambdas)
   print(theta_lambdas)
@@ -93,12 +93,12 @@ cv_lcd_parallel <- function(
   folds <- flowmix::make_cv_folds(
     ylist     = Y_bin,
     nfold     = nfold,
-    blocksize = block_size
+    blocksize = blocksize
   )
   
   #— Build index matrix of all (fold × rep × penalties) combos —#
   index_matrix <- make_cv_index_matrix(
-    cv_gridsize   = cv_grid_size,
+    cv_gridsize   = cv_gridsize,
     nfold          = nfold,
     nrep           = cv_reps,
     alpha_lambdas  = alpha_lambdas,
