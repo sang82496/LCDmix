@@ -2507,7 +2507,7 @@ refit_lcd <- function(
   
   # Identify best repeat
   best_idx <- which.max(refit_scores)
-  best_fit <- logs[[best_idx]]$iter
+  best_fit <- logs[[best_idx]]
   
   # Summary
   summary_msg <- paste0(
