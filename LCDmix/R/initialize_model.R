@@ -66,15 +66,16 @@ initialize_model <- function(
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res <- flowmix::flowmix(
-    Y            = Y_bin,
+    ylist        = Y_bin,
     X            = X,
-    weights      = bin_mass,
+    countslist   = bin_mass,
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
     nrep         = n_restarts,
     maxdev       = maxdev
   )
+  
   message("✔ flowmix initialization complete")
   
   # 2) Extract initial parameters

@@ -82,7 +82,7 @@ mstep_update_theta_lp <- function(
   
   # Epigraph constraints for log‐concavity
   for (j in seq_len(J)) {
-    tmp   <- cbind(Diagonal(n), b[j], b[j] * X_k)
+    tmp   <- cbind(Matrix::Diagonal(n), b[j], b[j] * X_k)
     block <- cbind(tmp, -tmp)
     const_mat <- rbind(const_mat, block)
     const_vec <- c(const_vec, b[j] * Y_k - beta0[j])

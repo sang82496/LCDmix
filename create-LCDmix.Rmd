@@ -360,15 +360,16 @@ initialize_model <- function(
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res <- flowmix::flowmix(
-    Y            = Y_bin,
+    ylist        = Y_bin,
     X            = X,
-    weights      = bin_mass,
+    countslist   = bin_mass,
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
     nrep         = n_restarts,
     maxdev       = maxdev
   )
+  
   message("✔ flowmix initialization complete")
   
   # 2) Extract initial parameters
@@ -557,7 +558,7 @@ mstep_update_intercepts <- function(
       # select which bins at time t belong to component k
       idx_tk <- indices[[t]][, k]
       # corresponding biomass weights for those bins
-      w_tk   <- weights[[t]][idx_tk]
+      w_tk   <- weights[[t]][idx_tk, k]
       # sum of binned responses in those bins
       resp_sum <- as.numeric(w_tk %*% Y_bin[[t]][idx_tk, , drop = FALSE])
       # adjustment from current slopes
@@ -1533,7 +1534,7 @@ mstep_update_theta_lp <- function(
   
   # Epigraph constraints for log‐concavity
   for (j in seq_len(J)) {
-    tmp   <- cbind(Diagonal(n), b[j], b[j] * X_k)
+    tmp   <- cbind(Matrix::Diagonal(n), b[j], b[j] * X_k)
     block <- cbind(tmp, -tmp)
     const_mat <- rbind(const_mat, block)
     const_vec <- c(const_vec, b[j] * Y_k - beta0[j])

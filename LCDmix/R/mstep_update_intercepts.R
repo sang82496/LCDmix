@@ -57,7 +57,7 @@ mstep_update_intercepts <- function(
       # select which bins at time t belong to component k
       idx_tk <- indices[[t]][, k]
       # corresponding biomass weights for those bins
-      w_tk   <- weights[[t]][idx_tk]
+      w_tk   <- weights[[t]][idx_tk, k]
       # sum of binned responses in those bins
       resp_sum <- as.numeric(w_tk %*% Y_bin[[t]][idx_tk, , drop = FALSE])
       # adjustment from current slopes
