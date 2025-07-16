@@ -17,7 +17,7 @@ cv_lcd_parallel(
   iter_eta = 0.001,
   maxdev = NULL,
   resp_threshold = 0.001,
-  n_folds = 5,
+  nfolds = 5,
   block_size = 5,
   cv_reps = 5,
   trim_prob = 0.05,
@@ -55,7 +55,7 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 
 \item{resp_threshold}{Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.}
 
-\item{n_folds}{Integer number of cross‐validation folds. Default: 5.}
+\item{nfolds}{Integer number of cross‐validation folds. Default: 5.}
 
 \item{block_size}{Integer block size for folding. Default: 5.}
 
@@ -94,7 +94,7 @@ results <- cv_lcd_parallel(
   lambda_alpha_range  = c(1e-4, 1e-2),
   lambda_theta_range  = c(1e-4, 1e-2),
   cv_grid_size        = 4,
-  n_folds             = 3,
+  nfolds             = 3,
   cv_reps             = 2,
   n_cores             = "max"
 )
