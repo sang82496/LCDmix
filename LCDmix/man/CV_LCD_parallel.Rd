@@ -11,14 +11,14 @@ cv_lcd_parallel(
   K,
   lambda_alpha_range = c(1e-08, 0.1),
   lambda_theta_range = c(1e-08, 0.1),
-  cv_grid_size = 5,
+  cv_gridsize = 5,
   n_restarts = 1,
   max_iter = 30,
   iter_eta = 0.001,
   maxdev = NULL,
   resp_threshold = 0.001,
   nfold = 5,
-  block_size = 5,
+  blocksize = 5,
   cv_reps = 5,
   trim_prob = 0.05,
   save_dir = "./result",
@@ -42,7 +42,7 @@ for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 \item{lambda_theta_range}{Numeric vector of length 2 giving the min and max values
 for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.}
 
-\item{cv_grid_size}{Integer number of candidate lambdas per penalty. Default: 5.}
+\item{cv_gridsize}{Integer number of candidate lambdas per penalty. Default: 5.}
 
 \item{n_restarts}{Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.}
 
@@ -56,7 +56,7 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 
 \item{nfold}{Integer number of cross‐validation folds. Default: 5.}
 
-\item{block_size}{Integer block size for folding. Default: 5.}
+\item{blocksize}{Integer block size for folding. Default: 5.}
 
 \item{cv_reps}{Integer number of repeated CV runs. Default: 5.}
 
@@ -90,7 +90,7 @@ results <- cv_lcd_parallel(
   K                   = 2,
   lambda_alpha_range  = c(1e-4, 1e-2),
   lambda_theta_range  = c(1e-4, 1e-2),
-  cv_grid_size        = 4,
+  cv_gridsize        = 4,
   nfold             = 3,
   cv_reps             = 2,
   n_cores             = "max"
