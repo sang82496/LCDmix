@@ -18,7 +18,7 @@ refit_lcd(
   cv_reps = 5,
   trim_prob = 0.05,
   save_dir = "./result",
-  sparse_matrix = TRUE,
+  sparseMatrix = TRUE,
   n_cores = "max"
 )
 }
@@ -52,7 +52,7 @@ of biomass weights per bin at time \(t\).}
 
 \item{save_dir}{Character; directory in which to save per‐repeat results. Default: "./result".}
 
-\item{sparse_matrix}{Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.}
+\item{sparseMatrix}{Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.}
 
 \item{n_cores}{Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".}
 }

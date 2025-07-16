@@ -22,7 +22,7 @@ cv_lcd_parallel(
   cv_reps = 5,
   trim_prob = 0.05,
   save_dir = "./result",
-  sparse_matrix = TRUE,
+  sparseMatrix = TRUE,
   n_cores = "max"
 )
 }
@@ -65,7 +65,7 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 
 \item{save_dir}{Character; directory in which to save per‐run results. Default: "./result".}
 
-\item{sparse_matrix}{Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.}
+\item{sparseMatrix}{Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.}
 
 \item{n_cores}{Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".}
 }
