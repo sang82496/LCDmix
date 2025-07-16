@@ -24,7 +24,7 @@
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
 #' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
 #' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
-#' @param nfolds Integer number of cross‐validation folds. Default: 5.
+#' @param nfold Integer number of cross‐validation folds. Default: 5.
 #' @param block_size Integer block size for folding. Default: 5.
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
@@ -50,7 +50,7 @@
 #'   lambda_alpha_range  = c(1e-4, 1e-2),
 #'   lambda_theta_range  = c(1e-4, 1e-2),
 #'   cv_grid_size        = 4,
-#'   nfolds             = 3,
+#'   nfold             = 3,
 #'   cv_reps             = 2,
 #'   n_cores             = "max"
 #' )
@@ -69,7 +69,7 @@ cv_lcd_parallel <- function(
   iter_eta           = 1e-3,
   maxdev             = NULL,
   resp_threshold     = 1e-3,
-  nfolds            = 5,
+  nfold            = 5,
   block_size         = 5,
   cv_reps            = 5,
   trim_prob          = 0.05,
@@ -94,14 +94,14 @@ cv_lcd_parallel <- function(
   #— Create CV folds —#
   folds <- flowmix::make_cv_folds(
     ylist     = Y_bin,
-    nfold     = nfolds,
+    nfold     = nfold,
     blocksize = block_size
   )
   
   #— Build index matrix of all (fold × rep × penalties) combos —#
   index_matrix <- make_cv_index_matrix(
     cv_gridsize   = cv_grid_size,
-    nfold          = nfolds,
+    nfold          = nfold,
     nrep           = cv_reps,
     alpha_lambdas  = alpha_lambdas,
     theta_lambdas  = theta_lambdas
