@@ -2706,7 +2706,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   
   # Identify best repeat
   best_idx &lt;- which.max(refit_scores)
-  best_fit &lt;- logs[[best_idx]]$iter
+  best_fit &lt;- logs[[best_idx]]
   
   # Summary
   summary_msg &lt;- paste0(
