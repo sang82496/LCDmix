@@ -14,8 +14,7 @@ mstep_update_theta_log_concave(
   intercepts,
   slopes,
   lambda_theta,
-  maxdev = NULL,
-  sparseMatrix = TRUE
+  maxdev = NULL
 )
 }
 \arguments{
@@ -38,8 +37,6 @@ mstep_update_theta_log_concave(
 \item{lambda_theta}{Nonnegative numeric L1 penalty on slopes.}
 
 \item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
-
-\item{sparseMatrix}{Logical; if \code{TRUE}, build constraints as sparse matrices. Default: \code{TRUE}.}
 }
 \value{
 A list with elements:

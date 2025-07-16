@@ -21,7 +21,6 @@
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally for speed. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -62,8 +61,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   maxdev         = NULL,
-  resp_threshold = 1e-3,
-  sparseMatrix   = TRUE
+  resp_threshold = 1e-3
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -101,8 +99,7 @@ main <- function(
     iter_eta,
     max_iter,
     maxdev,
-    resp_threshold,
-    sparseMatrix
+    resp_threshold
   )
   message("✔ Iterations complete")
   

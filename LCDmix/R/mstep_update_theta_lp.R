@@ -19,7 +19,6 @@
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
 #' @param maxdev Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices for constraint construction. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -39,8 +38,7 @@ mstep_update_theta_lp <- function(
   slopes_k,
   lambda_theta,
   component,
-  maxdev    = NULL,
-  sparseMatrix = TRUE
+  maxdev    = NULL
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -124,14 +122,13 @@ mstep_update_theta_lp <- function(
     const_vec <- c(const_vec, rep(maxdev, 2 * TT_new))
   }
   
-  # Convert to dense matrix if requested
-  if (!sparseMatrix) {
-    const_mat <- as.matrix(const_mat)
-  }
-  
   #–– Debugging: print size and memory usage of constraint matrix ––#
   print(dim(const_mat))
   print(format(object.size(const_mat), "Gb"))
+  
+  #–– Debugging: print size and memory usage of constraint matrix ––#
+  print(dim(const_mat))
+  print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
   N_total <- sum(unlist(posterior_weights))
@@ -147,13 +144,24 @@ mstep_update_theta_lp <- function(
   const_dir <- rep("<=", nrow(const_mat))
   
   # Solve the linear program
-  lp_res <- lpSolve::lp(
+  lp_res <- Rsymphony::Rsymphony_solve_LP(
+    obj = obj_coef, 
+    mat = const_mat, 
+    dir = const_dir, 
+    rhs = const_vec,  
+    max = TRUE)
+  
+  if (lp_res$status != 0) {
+    print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
+    lp_res <- lpSolve::lp(
     direction    = "max",
     objective.in = obj_coef,
     const.mat    = const_mat,
     const.dir    = const_dir,
     const.rhs    = const_vec
   )
+  }
+  
   if (lp_res$status != 0) {
     stop("LP did not find an optimal solution (status = ", lp_res$status, ")")
   }

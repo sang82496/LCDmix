@@ -23,7 +23,6 @@
 #' @param cv_reps Integer number of repeated fits. Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -48,7 +47,6 @@ refit_lcd <- function(
   cv_reps        = 5,
   trim_prob      = 0.05,
   save_dir       = "./result",
-  sparseMatrix  = TRUE,
   n_cores        = "max"
 ) {
   # Unpack optimal penalties
@@ -70,7 +68,7 @@ refit_lcd <- function(
       "main", "Y_bin", "X", "bin_mass", "K",
       "lambda_alpha", "lambda_theta",
       "n_restarts", "max_iter", "iter_eta",
-      "maxdev", "resp_threshold", "sparseMatrix"
+      "maxdev", "resp_threshold"
     ),
     envir = environment()
   )
@@ -96,8 +94,7 @@ refit_lcd <- function(
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           maxdev          = maxdev,
-          resp_threshold  = resp_threshold,
-          sparseMatrix   = sparseMatrix
+          resp_threshold  = resp_threshold
         ),
         error = function(e) e
       )
