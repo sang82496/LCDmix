@@ -1288,11 +1288,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta       = 1e-6,
-  max_iter       = 30,
-  maxdev         = NULL,
-  resp_threshold = 1e-3,
-  sparseMatrix   = TRUE
+  iter_eta,
+  max_iter,
+  maxdev,
+  resp_threshold,
+  sparseMatrix
 ) {
   TT &lt;- nrow(X)
   p  &lt;- ncol(X)
@@ -1758,9 +1758,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       w_k   &lt;- c(w_k, posterior_weights[[t]][idx_tk, component])
       Y_k   &lt;- c(Y_k, Y_bin[[t]][idx_tk, 1])
       X_k   &lt;- rbind(
-        X_k,
-        matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
-      )
+                X_k,
+                matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
+              )
     } else {
       skip_ts &lt;- c(skip_ts, t)
     }
@@ -1769,8 +1769,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   n &lt;- length(Y_k)
   
   # Extract knots and slopes of piecewise linear density
-  x_m     &lt;- density_k$x[density_k$IsKnot]
-  phi_m   &lt;- density_k$phi[density_k$IsKnot]
+  x_m     &lt;- density_k$x[as.logical(density_k$IsKnot)]
+  phi_m   &lt;- density_k$phi[as.logical(density_k$IsKnot)]
   J       &lt;- length(x_m) - 1
   b       &lt;- diff(phi_m) / diff(x_m)
   beta0   &lt;- b * x_m[-length(x_m)] - phi_m[-length(phi_m)]
