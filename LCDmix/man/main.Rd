@@ -17,8 +17,7 @@ main(
   max_iter = 30,
   iter_eta = 0.001,
   maxdev = NULL,
-  resp_threshold = 0.001,
-  sparseMatrix = TRUE
+  resp_threshold = 0.001
 )
 }
 \arguments{
@@ -47,8 +46,6 @@ main(
 \item{maxdev}{Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.}
 
 \item{resp_threshold}{Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.}
-
-\item{sparseMatrix}{Logical; if \code{TRUE}, use sparse matrices internally for speed. Default: \code{TRUE}.}
 }
 \value{
 A list with components:

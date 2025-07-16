@@ -15,8 +15,7 @@ mstep_update_theta_lp(
   slopes_k,
   lambda_theta,
   component,
-  maxdev = NULL,
-  sparseMatrix = TRUE
+  maxdev = NULL
 )
 }
 \arguments{
@@ -41,8 +40,6 @@ mstep_update_theta_lp(
 \item{component}{Integer in \(\{1,\dots,K\}\); index of the component to update.}
 
 \item{maxdev}{Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.}
-
-\item{sparseMatrix}{Logical; if \code{TRUE}, use sparse matrices for constraint construction. Default: \code{TRUE}.}
 }
 \value{
 A list with components:

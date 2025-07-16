@@ -23,7 +23,6 @@
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
-#' @param sparseMatrix Logical; if \code{TRUE}, build constraint matrices sparsely. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -52,8 +51,7 @@ iteration <- function(
   iter_eta,
   max_iter,
   maxdev,
-  resp_threshold,
-  sparseMatrix
+  resp_threshold
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -106,8 +104,7 @@ iteration <- function(
       intercepts          = theta0_old,
       slopes              = theta_old,
       lambda_theta        = lambda_theta,
-      maxdev              = maxdev,
-      sparseMatrix        = sparseMatrix
+      maxdev              = maxdev
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta

@@ -416,7 +416,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally for speed. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -457,8 +456,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   max_iter       = 30,
   iter_eta       = 1e-3,
   maxdev         = NULL,
-  resp_threshold = 1e-3,
-  sparseMatrix   = TRUE
+  resp_threshold = 1e-3
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -496,8 +494,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     iter_eta,
     max_iter,
     maxdev,
-    resp_threshold,
-    sparseMatrix
+    resp_threshold
   )
   message("✔ Iterations complete")
   
@@ -1262,7 +1259,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
-#' @param sparseMatrix Logical; if \code{TRUE}, build constraint matrices sparsely. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1291,8 +1287,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta,
   max_iter,
   maxdev,
-  resp_threshold,
-  sparseMatrix
+  resp_threshold
 ) {
   TT &lt;- nrow(X)
   p  &lt;- ncol(X)
@@ -1345,8 +1340,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       intercepts          = theta0_old,
       slopes              = theta_old,
       lambda_theta        = lambda_theta,
-      maxdev              = maxdev,
-      sparseMatrix        = sparseMatrix
+      maxdev              = maxdev
     )
     theta0_new &lt;- theta_lp$theta0
     theta_new  &lt;- theta_lp$theta
@@ -1626,7 +1620,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
 #' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
-#' @param sparseMatrix Logical; if \code{TRUE}, build constraints as sparse matrices. Default: \code{TRUE}.
 #'
 #' @return A list with elements:
 #' \describe{
@@ -1667,8 +1660,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   intercepts,
   slopes,
   lambda_theta,
-  maxdev      = NULL,
-  sparseMatrix = TRUE
+  maxdev      = NULL
 ) {
   K &lt;- length(densities)
   theta0_new &lt;- vector("list", K)
@@ -1686,8 +1678,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
       component           = k,
-      maxdev              = maxdev,
-      sparseMatrix        = sparseMatrix
+      maxdev              = maxdev
     )
     theta0_new[[k]] &lt;- tmp$theta0_k
     theta_new[[k]]  &lt;- tmp$theta_k
@@ -1718,7 +1709,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
 #' @param maxdev Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices for constraint construction. Default: \code{TRUE}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1738,8 +1728,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   slopes_k,
   lambda_theta,
   component,
-  maxdev    = NULL,
-  sparseMatrix = TRUE
+  maxdev    = NULL
 ) {
   TT &lt;- length(Y_bin)
   p  &lt;- ncol(X)
@@ -1823,14 +1812,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     const_vec &lt;- c(const_vec, rep(maxdev, 2 * TT_new))
   }
   
-  # Convert to dense matrix if requested
-  if (!sparseMatrix) {
-    const_mat &lt;- as.matrix(const_mat)
-  }
-  
   #–– Debugging: print size and memory usage of constraint matrix ––#
   print(dim(const_mat))
   print(format(object.size(const_mat), "Gb"))
+  
+  #–– Debugging: print size and memory usage of constraint matrix ––#
+  print(dim(const_mat))
+  print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
   N_total &lt;- sum(unlist(posterior_weights))
@@ -1846,13 +1834,24 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   const_dir &lt;- rep("&lt;=", nrow(const_mat))
   
   # Solve the linear program
-  lp_res &lt;- lpSolve::lp(
+  lp_res &lt;- Rsymphony::Rsymphony_solve_LP(
+    obj = obj_coef, 
+    mat = const_mat, 
+    dir = const_dir, 
+    rhs = const_vec,  
+    max = TRUE)
+  
+  if (lp_res$status != 0) {
+    print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
+    lp_res &lt;- lpSolve::lp(
     direction    = "max",
     objective.in = obj_coef,
     const.mat    = const_mat,
     const.dir    = const_dir,
     const.rhs    = const_vec
   )
+  }
+  
   if (lp_res$status != 0) {
     stop("LP did not find an optimal solution (status = ", lp_res$status, ")")
   }
@@ -2267,7 +2266,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#' @param sparseMatrix Logical; if \code{TRUE}, build LP constraints as sparse matrices. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -2312,7 +2310,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
-  sparseMatrix      = TRUE,
   n_cores            = "max"
 ) {
   #— Create penalty grids —#
@@ -2374,7 +2371,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       "Y_bin", "X", "bin_mass", "K",
       "n_restarts", "max_iter", "iter_eta", "maxdev",
       "resp_threshold", "trim_prob", "save_dir",
-      "sparseMatrix", "folds", "index_matrix"
+      "folds", "index_matrix"
     ),
     envir = environment()
   )
@@ -2421,8 +2418,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           maxdev          = maxdev,
-          resp_threshold  = resp_threshold,
-          sparseMatrix   = sparseMatrix
+          resp_threshold  = resp_threshold
         ),
         error = function(e) e
       )
@@ -2613,7 +2609,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param cv_reps Integer number of repeated fits. Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
-#' @param sparseMatrix Logical; if \code{TRUE}, use sparse matrices internally. Default: \code{TRUE}.
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
 #'
 #' @return A list with components:
@@ -2638,7 +2633,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   cv_reps        = 5,
   trim_prob      = 0.05,
   save_dir       = "./result",
-  sparseMatrix  = TRUE,
   n_cores        = "max"
 ) {
   # Unpack optimal penalties
@@ -2660,7 +2654,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       "main", "Y_bin", "X", "bin_mass", "K",
       "lambda_alpha", "lambda_theta",
       "n_restarts", "max_iter", "iter_eta",
-      "maxdev", "resp_threshold", "sparseMatrix"
+      "maxdev", "resp_threshold"
     ),
     envir = environment()
   )
@@ -2686,8 +2680,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           maxdev          = maxdev,
-          resp_threshold  = resp_threshold,
-          sparseMatrix   = sparseMatrix
+          resp_threshold  = resp_threshold
         ),
         error = function(e) e
       )
