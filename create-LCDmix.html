@@ -2701,7 +2701,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::stopCluster(cl)
   
   # Aggregate logs and scores
-  refit_scores &lt;- sapply(logs, function(x) x$iter$Q)
+  refit_scores &lt;- sapply(logs, function(x) x$Q)
   log_msgs     &lt;- sapply(logs, function(x) x$log)
   
   # Identify best repeat

@@ -115,7 +115,7 @@ refit_lcd <- function(
   parallel::stopCluster(cl)
   
   # Aggregate logs and scores
-  refit_scores <- sapply(logs, function(x) x$iter$Q)
+  refit_scores <- sapply(logs, function(x) x$Q)
   log_msgs     <- sapply(logs, function(x) x$log)
   
   # Identify best repeat
