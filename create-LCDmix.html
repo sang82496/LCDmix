@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-07-16">
+<meta name="date" content="2025-07-18">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-07-16</h4>
+<h4 class="date">2025-07-18</h4>
 
 </div>
 
@@ -2695,13 +2695,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       save_path &lt;- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       message("✔ Completed repeat ", rep_idx, "; Q = ", final_Q, "\n")
-      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try$iter))
+      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try))
     }
   )
   parallel::stopCluster(cl)
   
   # Aggregate logs and scores
-  refit_scores &lt;- sapply(logs, function(x) x$Q)
+  refit_scores &lt;- sapply(logs, function(x) x$iter$Q)
   log_msgs     &lt;- sapply(logs, function(x) x$log)
   
   # Identify best repeat

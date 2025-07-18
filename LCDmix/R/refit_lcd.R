@@ -109,13 +109,13 @@ refit_lcd <- function(
       save_path <- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       message("✔ Completed repeat ", rep_idx, "; Q = ", final_Q, "\n")
-      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try$iter))
+      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try))
     }
   )
   parallel::stopCluster(cl)
   
   # Aggregate logs and scores
-  refit_scores <- sapply(logs, function(x) x$Q)
+  refit_scores <- sapply(logs, function(x) x$iter$Q)
   log_msgs     <- sapply(logs, function(x) x$log)
   
   # Identify best repeat
