@@ -2520,59 +2520,81 @@ refit_lcd <- function(
   )
   
   # Perform repeated fits in parallel
-  logs <- parallel::parLapply(
+  results <- parallel::parLapply(
     cl,
     seq_len(cv_reps),
     function(rep_idx) {
-      message("▶ Refit repeat ", rep_idx, "\n")
+      # start log for this repeat
+      log_msg <- paste0("▶ Refit repeat ", rep_idx, "\n")
       set.seed(rep_idx)
-      fit_try <- tryCatch(
-        main(
-          Y       = Y_bin,
-          X       = X,
-          biomass = bin_mass,
-          binned          = TRUE,
-          n_bins          = 0,
-          K               = K,
-          lambda_alpha    = lambda_alpha,
-          lambda_theta    = lambda_theta,
-          n_restarts      = n_restarts,
-          max_iter        = max_iter,
-          iter_eta        = iter_eta,
-          maxdev          = maxdev,
-          resp_threshold  = resp_threshold
-        ),
-        error = function(e) e
-      )
       
-      if (inherits(fit_try, "error")) {
-        message("✖ Error on repeat ", rep_idx, ": ", fit_try$message, "\n")
-        return(list(log = paste0("Error on repeat ", rep_idx), Q = NA, iter = NULL))
+      # capture ALL output from main(), including messages
+      out_log <- capture.output({
+        fit_try <- tryCatch(
+          main(
+            Y               = Y_bin,
+            X               = X,
+            biomass         = bin_mass,
+            binned          = TRUE,
+            n_bins          = 0,
+            K               = K,
+            lambda_alpha    = lambda_alpha,
+            lambda_theta    = lambda_theta,
+            n_restarts      = n_restarts,
+            max_iter        = max_iter,
+            iter_eta        = iter_eta,
+            maxdev          = maxdev,
+            resp_threshold  = resp_threshold
+          ),
+          error = function(e) {
+            message("✖ Error on repeat ", rep_idx, ": ", e$message)
+            return(NA)
+          }
+        )
+      }, type = "message")
+      
+      # append captured output to our log
+      log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
+      
+      # check success / failure
+      if (is.na(fit_try)) {
+        # failed
+        return(list(
+          log = paste0(log_msg, "✖ Fit failed on repeat ", rep_idx, "\n"),
+          Q   = NA,
+          iter= NULL
+        ))
       }
-      
-      # Final surrogate log‐likelihood
-      final_Q <- fit_try$iter$Q[length(fit_try$iter$Q)]
+    
+    # if successful, record final Q and save
+      final_Q  <- fit_try$iter$Q[length(fit_try$iter$Q)]
       save_path <- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
-      message("✔ Completed repeat ", rep_idx, "; Q = ", final_Q, "\n")
-      return(list(log = paste0("Repeat ", rep_idx, " Q=", final_Q), Q = final_Q, iter = fit_try))
+      log_msg <- paste0(log_msg,
+                        "✔ Completed repeat ", rep_idx,
+                        "; final Q = ", round(final_Q, 4), "\n")
+      
+      return(list(
+        log  = log_msg,
+        Q    = final_Q,
+        iter = fit_try
+      ))
     }
   )
   parallel::stopCluster(cl)
   
-  # Aggregate logs and scores
-  refit_scores <- sapply(logs, function(x) x$Q)
-  log_msgs     <- sapply(logs, function(x) x$log)
-  
-  # Identify best repeat
-  best_idx <- which.max(refit_scores)
-  best_fit <- logs[[best_idx]]
+  # Aggregate
+  log_msgs     <- sapply(results, `[[`, "log")
+  refit_scores <- sapply(results, `[[`, "Q")
+  best_idx     <- which.max(refit_scores)
+  best_fit     <- results[[best_idx]]
   
   # Summary
   summary_msg <- paste0(
     "Completed ", cv_reps, " repeats; ",
     sum(is.na(refit_scores)), " failures; ",
-    "best Q = ", refit_scores[best_idx], " on repeat ", best_idx
+    "best Q = ", round(refit_scores[best_idx],4),
+    " on repeat ", best_idx, "\n"
   )
   log_msgs <- c(log_msgs, summary_msg)
   
