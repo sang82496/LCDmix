@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-07-18">
+<meta name="date" content="2025-07-21">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-07-18</h4>
+<h4 class="date">2025-07-21</h4>
 
 </div>
 
@@ -726,6 +726,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     alpha_init, idx_init, weight_init,
     lambda_alpha, lambda_theta
   )
+  names(Q_init) = ''
   
   # Return initialization results
   return(list(
@@ -1318,6 +1319,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     idx_new    &lt;- Estep$idx
     resp_new   &lt;- Estep$resp
     weight_new &lt;- Estep$weight
+    Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+      X                    = X,
+      densities            = g_old,
+      residuals            = resi_old,
+      slopes               = theta_old,
+      alpha                = alpha_old,
+      indices              = idx_new,
+      responsibilities     = weight_new,
+      lambda_alpha         = lambda_alpha,
+      lambda_theta         = lambda_theta
+    )
+    Q_every &lt;- c(Q_every, Q_new)
     message("✔ E‐step complete")
     
     #— M‐step α —#
@@ -1327,6 +1340,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       responsibility_mask  = idx_new,
       lambda_alpha         = lambda_alpha
     )
+    Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+      X                    = X,
+      densities            = g_old,
+      residuals            = resi_old,
+      slopes               = theta_old,
+      alpha                = alpha_new,
+      indices              = idx_new,
+      responsibilities     = weight_new,
+      lambda_alpha         = lambda_alpha,
+      lambda_theta         = lambda_theta
+    )
+    Q_every &lt;- c(Q_every, Q_new)
     message("✔ Updated α")
     
     #— M‐step θ via LP + shift —#
@@ -1344,6 +1369,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     )
     theta0_new &lt;- theta_lp$theta0
     theta_new  &lt;- theta_lp$theta
+    Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+      X                    = X,
+      densities            = g_old,
+      residuals            = resi_old,
+      slopes               = theta_new,
+      alpha                = alpha_new,
+      indices              = idx_new,
+      responsibilities     = weight_new,
+      lambda_alpha         = lambda_alpha,
+      lambda_theta         = lambda_theta
+    )
+    Q_every &lt;- c(Q_every, Q_new)
     message("✔ Updated θ via LP")
     
     # Shift intercepts analytically
@@ -1360,6 +1397,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       intercepts = theta0_new,
       slopes     = theta_new
     )
+    Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
+      X                    = X,
+      densities            = g_old,
+      residuals            = resi_new,
+      slopes               = theta_new,
+      alpha                = alpha_new,
+      indices              = idx_new,
+      responsibilities     = weight_new,
+      lambda_alpha         = lambda_alpha,
+      lambda_theta         = lambda_theta
+    )
+    Q_every &lt;- c(Q_every, Q_new)
     
     #— M‐step g —#
     g_new &lt;- <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>(
@@ -1367,7 +1416,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       weights             = weight_new,
       indices             = idx_new
     )
-    message("✔ Updated densities")
     
     # Surrogate log‐likelihood
     Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
@@ -1426,8 +1474,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     g_new          = g_new,
     lambda_alpha   = lambda_alpha,
     lambda_theta   = lambda_theta,
-    Q              = Q,
-    Q_every        = Q_every
+    Q              = as.vector(Q),
+    Q_every        = as.vector(Q_every)
   ))
 }</code></pre>
 <pre class="r"><code>#' Perform the E-step using log-concave component densities
