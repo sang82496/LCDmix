@@ -2514,7 +2514,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::stopCluster(cl)
   
   #— Summarize failures —#
-  num_na &lt;- sum(grepl("Error:", logs))
+  num_na &lt;- sum(grepl("Error", logs))
   logs   &lt;- c(
     logs,
     sprintf("Failures: %d/%d (%.1f%%)",
