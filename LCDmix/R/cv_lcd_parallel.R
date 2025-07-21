@@ -198,7 +198,7 @@ cv_lcd_parallel <- function(
                         "\n")
       
       # now res_ii contains either the fit or NA
-      if (is.na(res_ii)) {
+      if (!is.list(res_ii)) {
         prop_CV    <- NA
         trimmed_CV <- NA
         log_msg    <- paste0(log_msg, "Fit failed\n")
