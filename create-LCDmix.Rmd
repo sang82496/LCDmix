@@ -2304,7 +2304,7 @@ cv_lcd_parallel <- function(
   parallel::stopCluster(cl)
   
   #— Summarize failures —#
-  num_na <- sum(grepl("Error:", logs))
+  num_na <- sum(grepl("Error", logs))
   logs   <- c(
     logs,
     sprintf("Failures: %d/%d (%.1f%%)",
