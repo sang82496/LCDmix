@@ -2242,33 +2242,44 @@ cv_lcd_parallel <- function(
       
       # Fit model
       set.seed(rep_idx)
-      fit_try <- tryCatch(
-        main(
-          Y               = Y_tr,
-          X               = X_tr,
-          biomass         = bin_mass_tr,
-          binned          = TRUE,
-          n_bins          = 0,
-          K               = K,
-          lambda_alpha    = lambda_alpha,
-          lambda_theta    = lambda_theta,
-          n_restarts      = n_restarts,
-          max_iter        = max_iter,
-          iter_eta        = iter_eta,
-          maxdev          = maxdev,
-          resp_threshold  = resp_threshold
+      out_log <- capture.output(
+        res_ii <- tryCatch(
+          main(
+            Y               = Y_tr,
+            X               = X_tr,
+            biomass         = bin_mass_tr,
+            binned          = TRUE,
+            n_bins          = 0,
+            K               = K,
+            lambda_alpha    = lambda_alpha,
+            lambda_theta    = lambda_theta,
+            n_restarts      = n_restarts,
+            max_iter        = max_iter,
+            iter_eta        = iter_eta,
+            maxdev          = maxdev,
+            resp_threshold  = resp_threshold
+          ),
+          error = function(e) {
+            message("▶ Error fitting model: ", e$message)
+            return(NA)
+          }
         ),
-        error = function(e) e
+        type = "message"      # capture both message() and cat()/print()
       )
       
-      if (inherits(fit_try, "error")) {
-        log_msg <- paste0(log_msg, "Error: ", fit_try$message, "\n")
+      # append the captured log to your log_msg
+      log_msg <- paste0(log_msg,
+                        paste0(out_log, collapse = "\n"),
+                        "\n")
+      
+      # now res_ii contains either the fit or NA
+      if (is.na(res_ii)) {
         prop_CV    <- NA
         trimmed_CV <- NA
+        log_msg    <- paste0(log_msg, "Fit failed\n")
       } else {
-        # Evaluate on held‐out fold
         eval_res <- evaluate_lcd_model(
-          model     = fit_try$iter,
+          model     = res_ii$iter,
           Y         = Y_bin[test_i],
           X         = X[test_i, , drop = FALSE],
           biomass   = bin_mass[test_i],
@@ -2276,7 +2287,7 @@ cv_lcd_parallel <- function(
         )
         prop_CV    <- eval_res$prop_infinite
         trimmed_CV <- eval_res$trimmed_avg_loglike
-        log_msg <- paste0(log_msg, "Success\n")
+        log_msg    <- paste0(log_msg, "Fit succeeded\n")
       }
       
       # Save results
