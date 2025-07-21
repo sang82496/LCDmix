@@ -122,6 +122,7 @@ initialize_model <- function(
     alpha_init, idx_init, weight_init,
     lambda_alpha, lambda_theta
   )
+  names(Q_init) = ''
   
   # Return initialization results
   return(list(
