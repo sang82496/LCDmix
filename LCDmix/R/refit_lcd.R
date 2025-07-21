@@ -111,7 +111,7 @@ refit_lcd <- function(
       log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
       
       # check success / failure
-      if (is.na(fit_try)) {
+      if ((!is.list(fit_try))) {
         # failed
         return(list(
           log = paste0(log_msg, "✖ Fit failed on repeat ", rep_idx, "\n"),
