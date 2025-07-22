@@ -105,6 +105,8 @@ cv_lcd_parallel <- function(
     theta_lambdas  = theta_lambdas
   )
   print(index_matrix)
+  save_path <- file.path(save_dir, "iimat.Rdata")
+  save(iimat, file = save_path)
   
   #— Launch parallel cluster —#
   if (identical(n_cores, "max")) {
