@@ -15,15 +15,15 @@
 #' @param K Integer number of mixture components.
 #' @param opt_lambdas Numeric vector of length 2: optimal \(\lambda_{\alpha}\) and
 #'   \(\lambda_{\theta}\).
-#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #' @param max_iter Integer maximum number of EM iterations. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param cv_reps Integer number of repeated fits. Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
 #' @return A list with components:
 #' \describe{
@@ -39,15 +39,15 @@ refit_lcd <- function(
   bin_mass,
   K,
   opt_lambdas,
-  n_restarts     = 1,
   max_iter       = 30,
   iter_eta       = 1e-3,
-  maxdev         = NULL,
   resp_threshold = 1e-3,
   cv_reps        = 5,
   trim_prob      = 0.05,
   save_dir       = "./result",
-  n_cores        = "max"
+  n_cores        = "max",
+  maxdev         = NULL,
+  n_restarts     = 1
 ) {
   # Unpack optimal penalties
   lambda_alpha <- opt_lambdas[1]
@@ -94,11 +94,11 @@ refit_lcd <- function(
             K               = K,
             lambda_alpha    = lambda_alpha,
             lambda_theta    = lambda_theta,
-            n_restarts      = n_restarts,
             max_iter        = max_iter,
             iter_eta        = iter_eta,
+            resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            resp_threshold  = resp_threshold
+            n_restarts      = n_restarts
           ),
           error = function(e) {
             message("✖ Error on repeat ", rep_idx, ": ", e$message)

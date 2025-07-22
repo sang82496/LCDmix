@@ -21,8 +21,8 @@
 #' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
 #' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -50,8 +50,8 @@ iteration <- function(
   lambda_theta,
   iter_eta,
   max_iter,
-  maxdev,
-  resp_threshold
+  resp_threshold,
+  maxdev
 ) {
   TT <- nrow(X)
   p  <- ncol(X)

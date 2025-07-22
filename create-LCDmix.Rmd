@@ -84,11 +84,12 @@ Let's define a function for our R package:
 #' @param K Integer number of mixture components.
 #' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
 #' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
-#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
+#' 
 #'
 #' @return A list with components:
 #' \describe{
@@ -122,14 +123,14 @@ main <- function(
   biomass,
   binned         = FALSE,
   n_bins         = 40,
-  K,
+  K              = 2,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,
-  n_restarts     = 1,
   max_iter       = 30,
   iter_eta       = 1e-3,
+  resp_threshold = 1e-3,
   maxdev         = NULL,
-  resp_threshold = 1e-3
+  n_restarts     = 1
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -150,9 +151,9 @@ main <- function(
     K,
     lambda_alpha,
     lambda_theta,
-    n_restarts,
+    resp_threshold,
     maxdev,
-    resp_threshold
+    n_restarts
   )
   message("✔ Initialization complete")
   
@@ -166,8 +167,8 @@ main <- function(
     lambda_theta,
     iter_eta,
     max_iter,
+    resp_threshold,
     maxdev,
-    resp_threshold
   )
   message("✔ Iterations complete")
   
@@ -308,9 +309,9 @@ binning <- function(
 #' @param K Integer; number of mixture components.
 #' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
 #' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
-#' @param n_restarts Integer; number of random restarts in \code{flowmix::flowmix}.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.
 #' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.
+#' @param n_restarts Integer; number of random restarts in \code{flowmix::flowmix}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -337,9 +338,9 @@ binning <- function(
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
-#'   n_restarts     = 1,
+#'   resp_threshold = 1e-3,
 #'   maxdev         = NULL,
-#'   resp_threshold = 1e-3
+#'   n_restarts     = 1
 #' )
 #' str(init)
 #' }
@@ -351,9 +352,9 @@ initialize_model <- function(
   K,
   lambda_alpha,
   lambda_theta,
-  n_restarts,
+  resp_threshold,
   maxdev,
-  resp_threshold
+  n_restarts
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res <- flowmix::flowmix(
@@ -363,8 +364,8 @@ initialize_model <- function(
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
-    nrep         = n_restarts,
-    maxdev       = maxdev
+    maxdev       = maxdev,
+    nrep         = n_restarts
   )
   
   message("✔ flowmix initialization complete")
@@ -987,8 +988,8 @@ compute_surrogate_loglikelihood <- function(
 #' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
 #' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1016,8 +1017,8 @@ iteration <- function(
   lambda_theta,
   iter_eta,
   max_iter,
-  maxdev,
-  resp_threshold
+  resp_threshold,
+  maxdev
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -2094,17 +2095,17 @@ make_cv_index_matrix <- function(
 #' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
 #'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
 #' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
-#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
 #' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param nfold Integer number of cross‐validation folds. Default: 5.
-#' @param blocksize Integer block size for folding. Default: 5.
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#' @param blocksize Integer block size for folding. Default: 5.
+#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
 #' @return A list with components:
 #' \describe{
@@ -2138,17 +2139,17 @@ cv_lcd_parallel <- function(
   lambda_alpha_range = c(1e-8, 1e-1),
   lambda_theta_range = c(1e-8, 1e-1),
   cv_gridsize        = 5,
-  n_restarts         = 1,
   max_iter           = 30,
   iter_eta           = 1e-3,
-  maxdev             = NULL,
   resp_threshold     = 1e-3,
   nfold              = 5,
-  blocksize          = 5,
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
-  n_cores            = "max"
+  n_cores            = "max",
+  blocksize          = 5,
+  maxdev             = NULL,
+  n_restarts         = 1
 ) {
   #— Create penalty grids —#
   alpha_lambdas <- flowmix::logspace(
@@ -2255,11 +2256,11 @@ cv_lcd_parallel <- function(
             K               = K,
             lambda_alpha    = lambda_alpha,
             lambda_theta    = lambda_theta,
-            n_restarts      = n_restarts,
             max_iter        = max_iter,
             iter_eta        = iter_eta,
+            resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            resp_threshold  = resp_threshold
+            n_restarts      = n_restarts
           ),
           error = function(e) {
             message("▶ Error fitting model: ", e$message)
@@ -2475,15 +2476,15 @@ cv_summary <- function(
 #' @param K Integer number of mixture components.
 #' @param opt_lambdas Numeric vector of length 2: optimal \(\lambda_{\alpha}\) and
 #'   \(\lambda_{\theta}\).
-#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #' @param max_iter Integer maximum number of EM iterations. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param cv_reps Integer number of repeated fits. Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
+#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
 #' @return A list with components:
 #' \describe{
@@ -2499,15 +2500,15 @@ refit_lcd <- function(
   bin_mass,
   K,
   opt_lambdas,
-  n_restarts     = 1,
   max_iter       = 30,
   iter_eta       = 1e-3,
-  maxdev         = NULL,
   resp_threshold = 1e-3,
   cv_reps        = 5,
   trim_prob      = 0.05,
   save_dir       = "./result",
-  n_cores        = "max"
+  n_cores        = "max",
+  maxdev         = NULL,
+  n_restarts     = 1
 ) {
   # Unpack optimal penalties
   lambda_alpha <- opt_lambdas[1]
@@ -2554,11 +2555,11 @@ refit_lcd <- function(
             K               = K,
             lambda_alpha    = lambda_alpha,
             lambda_theta    = lambda_theta,
-            n_restarts      = n_restarts,
             max_iter        = max_iter,
             iter_eta        = iter_eta,
+            resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            resp_threshold  = resp_threshold
+            n_restarts      = n_restarts
           ),
           error = function(e) {
             message("✖ Error on repeat ", rep_idx, ": ", e$message)

@@ -11,9 +11,9 @@ initialize_model(
   K,
   lambda_alpha,
   lambda_theta,
-  n_restarts,
+  resp_threshold,
   maxdev,
-  resp_threshold
+  n_restarts
 )
 }
 \arguments{
@@ -29,11 +29,11 @@ initialize_model(
 
 \item{lambda_theta}{Numeric; L1 regularization parameter for regression slopes in GMR.}
 
-\item{n_restarts}{Integer; number of random restarts in \code{flowmix::flowmix}.}
+\item{resp_threshold}{Numeric; threshold on responsibilities for bin assignment.}
 
 \item{maxdev}{Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.}
 
-\item{resp_threshold}{Numeric; threshold on responsibilities for bin assignment.}
+\item{n_restarts}{Integer; number of random restarts in \code{flowmix::flowmix}.}
 }
 \value{
 A list with components:
@@ -72,9 +72,9 @@ init    <- initialize_model(
   Y_bin, X, bin_mass, K,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,
-  n_restarts     = 1,
+  resp_threshold = 1e-3,
   maxdev         = NULL,
-  resp_threshold = 1e-3
+  n_restarts     = 1
 )
 str(init)
 }

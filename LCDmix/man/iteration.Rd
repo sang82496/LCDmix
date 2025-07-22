@@ -13,8 +13,8 @@ iteration(
   lambda_theta,
   iter_eta,
   max_iter,
-  maxdev,
-  resp_threshold
+  resp_threshold,
+  maxdev
 )
 }
 \arguments{
@@ -36,9 +36,9 @@ iteration(
 
 \item{max_iter}{Integer; maximum number of EM iterations. Default: \code{30}.}
 
-\item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
-
 \item{resp_threshold}{Numeric in \link{0,1}; responsibilities below this are set to zero. Default: \code{1e-3}.}
+
+\item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
 }
 \value{
 A list with components:

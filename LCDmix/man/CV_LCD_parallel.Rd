@@ -12,17 +12,17 @@ cv_lcd_parallel(
   lambda_alpha_range = c(1e-08, 0.1),
   lambda_theta_range = c(1e-08, 0.1),
   cv_gridsize = 5,
-  n_restarts = 1,
   max_iter = 30,
   iter_eta = 0.001,
-  maxdev = NULL,
   resp_threshold = 0.001,
   nfold = 5,
-  blocksize = 5,
   cv_reps = 5,
   trim_prob = 0.05,
   save_dir = "./result",
-  n_cores = "max"
+  n_cores = "max",
+  blocksize = 5,
+  maxdev = NULL,
+  n_restarts = 1
 )
 }
 \arguments{
@@ -44,19 +44,13 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 
 \item{cv_gridsize}{Integer number of candidate lambdas per penalty. Default: 5.}
 
-\item{n_restarts}{Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.}
-
 \item{max_iter}{Integer maximum number of EM iterations per model fit. Default: 30.}
 
 \item{iter_eta}{Numeric convergence threshold (relative change in Q). Default: 1e-3.}
 
-\item{maxdev}{Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.}
-
 \item{resp_threshold}{Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.}
 
 \item{nfold}{Integer number of cross‐validation folds. Default: 5.}
-
-\item{blocksize}{Integer block size for folding. Default: 5.}
 
 \item{cv_reps}{Integer number of repeated CV runs. Default: 5.}
 
@@ -65,6 +59,12 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 \item{save_dir}{Character; directory in which to save per‐run results. Default: "./result".}
 
 \item{n_cores}{Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".}
+
+\item{blocksize}{Integer block size for folding. Default: 5.}
+
+\item{maxdev}{Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.}
+
+\item{n_restarts}{Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.}
 }
 \value{
 A list with components:
