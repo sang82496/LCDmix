@@ -2347,14 +2347,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   K,
   lambda_alpha_range = c(1e-8, 1e-1),
   lambda_theta_range = c(1e-8, 1e-1),
-  cv_gridsize       = 5,
+  cv_gridsize        = 5,
   n_restarts         = 1,
   max_iter           = 30,
   iter_eta           = 1e-3,
   maxdev             = NULL,
   resp_threshold     = 1e-3,
-  nfold            = 5,
-  blocksize         = 5,
+  nfold              = 5,
+  blocksize          = 5,
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
@@ -2592,9 +2592,21 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       sprintf("%d-%d-%d-%d.Rdata",
               alpha_idx, theta_idx, rep_idx, fold_idx)
     )
-    load(file_name, envir = environment())
-    CVmat[i, "prop_CV"]    &lt;- prop_CV
-    CVmat[i, "trimmed_CV"] &lt;- trimmed_CV
+    # skip runs whose file never got written
+    if (!file.exists(file_name)) {
+      warning("CV file missing: ", file_name, "; leaving NA")
+      next
+    }
+    
+    # try to load, but if it errors just warn &amp; continue
+    tryCatch({
+      load(file_name, envir = environment())
+      CVmat[i, "prop_CV"]    &lt;- prop_CV
+      CVmat[i, "trimmed_CV"] &lt;- trimmed_CV
+    }, error = function(e) {
+      warning("Failed to load or assign from ", file_name, ": ", e$message)
+      # CVmat row stays NA
+    })
   }
   
   # Compute max proportion of infinite/NA log‐likelihoods
