@@ -66,9 +66,21 @@ cv_summary <- function(
       sprintf("%d-%d-%d-%d.Rdata",
               alpha_idx, theta_idx, rep_idx, fold_idx)
     )
-    load(file_name, envir = environment())
-    CVmat[i, "prop_CV"]    <- prop_CV
-    CVmat[i, "trimmed_CV"] <- trimmed_CV
+    # skip runs whose file never got written
+    if (!file.exists(file_name)) {
+      warning("CV file missing: ", file_name, "; leaving NA")
+      next
+    }
+    
+    # try to load, but if it errors just warn & continue
+    tryCatch({
+      load(file_name, envir = environment())
+      CVmat[i, "prop_CV"]    <- prop_CV
+      CVmat[i, "trimmed_CV"] <- trimmed_CV
+    }, error = function(e) {
+      warning("Failed to load or assign from ", file_name, ": ", e$message)
+      # CVmat row stays NA
+    })
   }
   
   # Compute max proportion of infinite/NA log‐likelihoods
