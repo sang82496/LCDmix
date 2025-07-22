@@ -10,15 +10,15 @@ refit_lcd(
   bin_mass,
   K,
   opt_lambdas,
-  n_restarts = 1,
   max_iter = 30,
   iter_eta = 0.001,
-  maxdev = NULL,
   resp_threshold = 0.001,
   cv_reps = 5,
   trim_prob = 0.05,
   save_dir = "./result",
-  n_cores = "max"
+  n_cores = "max",
+  maxdev = NULL,
+  n_restarts = 1
 )
 }
 \arguments{
@@ -35,13 +35,9 @@ of biomass weights per bin at time \(t\).}
 \item{opt_lambdas}{Numeric vector of length 2: optimal \(\lambda_{\alpha}\) and
 \(\lambda_{\theta}\).}
 
-\item{n_restarts}{Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.}
-
 \item{max_iter}{Integer maximum number of EM iterations. Default: 30.}
 
 \item{iter_eta}{Numeric convergence threshold (relative change in Q). Default: 1e-3.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
 
 \item{resp_threshold}{Numeric in \link{0,1}; responsibilities below this are zeroed. Default: 1e-3.}
 
@@ -52,6 +48,10 @@ of biomass weights per bin at time \(t\).}
 \item{save_dir}{Character; directory in which to save per‐repeat results. Default: "./result".}
 
 \item{n_cores}{Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".}
+
+\item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
+
+\item{n_restarts}{Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.}
 }
 \value{
 A list with components:

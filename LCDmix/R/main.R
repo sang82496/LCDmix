@@ -16,11 +16,12 @@
 #' @param K Integer number of mixture components.
 #' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
 #' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
-#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
+#' 
 #'
 #' @return A list with components:
 #' \describe{
@@ -54,14 +55,14 @@ main <- function(
   biomass,
   binned         = FALSE,
   n_bins         = 40,
-  K,
+  K              = 2,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,
-  n_restarts     = 1,
   max_iter       = 30,
   iter_eta       = 1e-3,
+  resp_threshold = 1e-3,
   maxdev         = NULL,
-  resp_threshold = 1e-3
+  n_restarts     = 1
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -82,9 +83,9 @@ main <- function(
     K,
     lambda_alpha,
     lambda_theta,
-    n_restarts,
+    resp_threshold,
     maxdev,
-    resp_threshold
+    n_restarts
   )
   message("✔ Initialization complete")
   
@@ -98,8 +99,8 @@ main <- function(
     lambda_theta,
     iter_eta,
     max_iter,
+    resp_threshold,
     maxdev,
-    resp_threshold
   )
   message("✔ Iterations complete")
   

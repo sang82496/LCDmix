@@ -19,17 +19,17 @@
 #' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
 #'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
 #' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
-#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
 #' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param nfold Integer number of cross‐validation folds. Default: 5.
-#' @param blocksize Integer block size for folding. Default: 5.
 #' @param cv_reps Integer number of repeated CV runs. Default: 5.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#' @param blocksize Integer block size for folding. Default: 5.
+#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
 #' @return A list with components:
 #' \describe{
@@ -63,17 +63,17 @@ cv_lcd_parallel <- function(
   lambda_alpha_range = c(1e-8, 1e-1),
   lambda_theta_range = c(1e-8, 1e-1),
   cv_gridsize        = 5,
-  n_restarts         = 1,
   max_iter           = 30,
   iter_eta           = 1e-3,
-  maxdev             = NULL,
   resp_threshold     = 1e-3,
   nfold              = 5,
-  blocksize          = 5,
   cv_reps            = 5,
   trim_prob          = 0.05,
   save_dir           = "./result",
-  n_cores            = "max"
+  n_cores            = "max",
+  blocksize          = 5,
+  maxdev             = NULL,
+  n_restarts         = 1
 ) {
   #— Create penalty grids —#
   alpha_lambdas <- flowmix::logspace(
@@ -180,11 +180,11 @@ cv_lcd_parallel <- function(
             K               = K,
             lambda_alpha    = lambda_alpha,
             lambda_theta    = lambda_theta,
-            n_restarts      = n_restarts,
             max_iter        = max_iter,
             iter_eta        = iter_eta,
+            resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            resp_threshold  = resp_threshold
+            n_restarts      = n_restarts
           ),
           error = function(e) {
             message("▶ Error fitting model: ", e$message)
