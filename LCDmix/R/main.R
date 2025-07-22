@@ -100,7 +100,7 @@ main <- function(
     iter_eta,
     max_iter,
     resp_threshold,
-    maxdev,
+    maxdev
   )
   message("✔ Iterations complete")
   
