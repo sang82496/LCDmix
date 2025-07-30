@@ -521,7 +521,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     X        = X,
     bin_mass = bin_mass,
     initial  = init_res,
-    iter     = iter_res
+    iter     = iter_res$final
   ))
 }</code></pre>
 <pre class="r"><code>#' Bin responses by biomass weights into fixed or data-driven bins
@@ -2552,7 +2552,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         ),
         type = "message"      # capture both message() and cat()/print()
       )
-      
+
       # append the captured log to your log_msg
       log_msg &lt;- paste0(log_msg,
                         paste0(out_log, collapse = "\n"),
@@ -2560,16 +2560,19 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       
       # now res_ii contains either the fit or NA
       if (!is.list(res_ii)) {
+        
         log_msg    &lt;- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
-#      } else if (is.null(res_ii$iter)) {
-#        log_msg &lt;- paste0(log_msg, "Error at EM iteration")
-#        log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
-#                          ": ", res_ii$iter_partial$error, "\n")
-#        prop_CV    &lt;- NA
-#        trimmed_CV &lt;- NA
+        
+      } else if (is.null(res_ii$iter)) {
+        log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
+                          ": ", res_ii$iter_partial$error, "\n")
+        prop_CV    &lt;- NA
+        trimmed_CV &lt;- NA
+        
       } else {
+        
         log_msg    &lt;- paste0(log_msg, "Fit succeeded\n")
         eval_res   &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
           model     = res_ii$iter,
@@ -2594,8 +2597,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   )
   
   parallel::stopCluster(cl)
-  
-  print('1')
   
   #— Summarize failures —#
   num_na &lt;- sum(grepl("Error", logs))
