@@ -113,7 +113,8 @@ main <- function(
             X            = X,
             bin_mass     = bin_mass,
             initial      = init_res,
-            iter_partial = iter_res
+            iter_partial = iter_res,
+            iter         = NULL,
           ))
   }
 
