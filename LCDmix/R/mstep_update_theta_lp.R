@@ -127,7 +127,6 @@ mstep_update_theta_lp <- function(
   print(format(object.size(const_mat), "Gb"))
   
   #–– Debugging: print size and memory usage of constraint matrix ––#
-  print(dim(const_mat))
   print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'

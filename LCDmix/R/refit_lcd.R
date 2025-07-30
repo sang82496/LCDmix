@@ -43,6 +43,7 @@ refit_lcd <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   cv_reps        = 5,
+  seeds          = 1:5,
   trim_prob      = 0.05,
   save_dir       = "./result",
   n_cores        = "max",
@@ -77,10 +78,10 @@ refit_lcd <- function(
   results <- parallel::parLapply(
     cl,
     seq_len(cv_reps),
-    function(rep_idx) {
-      # start log for this repeat
-      log_msg <- paste0("▶ Refit repeat ", rep_idx, "\n")
-      set.seed(rep_idx)
+    function(seed_idx) {
+      # start log for this seed
+      log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")
+      set.seed(seed_idx)
       
       # capture ALL output from main(), including messages
       out_log <- capture.output({
@@ -101,7 +102,7 @@ refit_lcd <- function(
             n_restarts      = n_restarts
           ),
           error = function(e) {
-            message("✖ Error on repeat ", rep_idx, ": ", e$message)
+            message("✖ Error on seed ", seed_idx, ": ", e$message)
             return(NA)
           }
         )
@@ -114,7 +115,7 @@ refit_lcd <- function(
       if ((!is.list(fit_try))) {
         # failed
         return(list(
-          log = paste0(log_msg, "✖ Fit failed on repeat ", rep_idx, "\n"),
+          log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, "\n"),
           Q   = NA,
           iter= NULL
         ))
@@ -122,10 +123,10 @@ refit_lcd <- function(
     
     # if successful, record final Q and save
       final_Q  <- fit_try$iter$Q[length(fit_try$iter$Q)]
-      save_path <- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
+      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg <- paste0(log_msg,
-                        "✔ Completed repeat ", rep_idx,
+                        "✔ Completed seed ", seed_idx,
                         "; final Q = ", round(final_Q, 4), "\n")
       
       return(list(
