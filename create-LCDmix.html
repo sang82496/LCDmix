@@ -2287,76 +2287,76 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   )
   return(iimat)
 }</code></pre>
-<pre class="r"><code>#` Cross‐validate the LCD mixture‐of‐experts model in parallel
-#`
-#` @description
-#` Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
-#` and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
-#` folds (with optional blocking), repeats each fold either by explicit seeds
-#` or by a count of repeats, and evaluates models on held‐out data.  Computations
-#` are dispatched in parallel, and per‐run results are saved.
-#`
-#` @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
-#`   matrix of binned responses per time point.
-#` @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#` @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
-#`   biomass weights per bin at time \eqn{t}.
-#` @param K Integer number of mixture components.
-#` @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
-#`   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#` @param lambda_theta_range Numeric vector of length 2 giving the min and max values
-#`   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#` @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
-#` @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
-#` @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#` @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
-#` @param nfold Integer number of cross‐validation folds. Default: 5.
-#` @param seeds Integer vector of random seeds (one per repeat).  Must supply either
-#`   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
-#` @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
-#` @param trim_prob Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.
-#` @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#` @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
-#` @param blocksize Integer block size for CV fold creation. Default: 5.
-#` @param maxdev Numeric or \code{NULL}; maximum deviation for LP constraints. Default: \code{NULL}.
-#` @param n_restarts Integer number of random restarts for the initial GMR. Default: 1.
-#`
-#` @return A list with components:
-#` \describe{
-#`   \item{logs}{Character vector of log messages (one per CV run, plus summary).}
-#`   \item{index_matrix}{Integer matrix with one row per run (fold × seed × penalties),
-#`         showing \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
-#`         and actual \code{lambda_alpha}, \code{lambda_theta} values.}
-#` }
-#`
-#` @examples
-#` \dontrun{
-#` # Four folds, three repeats via explicit seeds
-#` seeds &lt;- c(101, 202, 303)
-#` results &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
-#`   Y_bin               = Y_binned,
-#`   X                   = X_mat,
-#`   bin_mass            = counts_list,
-#`   K                   = 2,
-#`   cv_gridsize         = 4,
-#`   nfold               = 4,
-#`   seeds               = seeds,
-#`   n_cores             = "max"
-#` )
-#`
-#` # Or specify number of repeats instead of seeds
-#` results2 &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
-#`   Y_bin               = Y_binned,
-#`   X                   = X_mat,
-#`   bin_mass            = counts_list,
-#`   K                   = 2,
-#`   cv_gridsize         = 4,
-#`   nfold               = 4,
-#`   cv_reps             = 3,
-#`   n_cores             = 2
-#` )
-#` }
-#` @export
+<pre class="r"><code>#' Cross‐validate the LCD mixture‐of‐experts model in parallel
+#'
+#' @description
+#' Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
+#' and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
+#' folds (with optional blocking), repeats each fold either by explicit seeds
+#' or by a count of repeats, and evaluates models on held‐out data.  Computations
+#' are dispatched in parallel, and per‐run results are saved.
+#'
+#' @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
+#'   matrix of binned responses per time point.
+#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#' @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
+#'   biomass weights per bin at time \eqn{t}.
+#' @param K Integer number of mixture components.
+#' @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
+#'   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
+#'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
+#' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
+#' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
+#' @param nfold Integer number of cross‐validation folds. Default: 5.
+#' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
+#'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
+#' @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
+#' @param trim_prob Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.
+#' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
+#' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#' @param blocksize Integer block size for CV fold creation. Default: 5.
+#' @param maxdev Numeric or \code{NULL}; maximum deviation for LP constraints. Default: \code{NULL}.
+#' @param n_restarts Integer number of random restarts for the initial GMR. Default: 1.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{logs}{Character vector of log messages (one per CV run, plus summary).}
+#'   \item{index_matrix}{Integer matrix with one row per run (fold × seed × penalties),
+#'         showing \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
+#'         and actual \code{lambda_alpha}, \code{lambda_theta} values.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Four folds, three repeats via explicit seeds
+#' seeds &lt;- c(101, 202, 303)
+#' results &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
+#'   Y_bin               = Y_binned,
+#'   X                   = X_mat,
+#'   bin_mass            = counts_list,
+#'   K                   = 2,
+#'   cv_gridsize         = 4,
+#'   nfold               = 4,
+#'   seeds               = seeds,
+#'   n_cores             = "max"
+#' )
+#'
+#' # Or specify number of repeats instead of seeds
+#' results2 &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
+#'   Y_bin               = Y_binned,
+#'   X                   = X_mat,
+#'   bin_mass            = counts_list,
+#'   K                   = 2,
+#'   cv_gridsize         = 4,
+#'   nfold               = 4,
+#'   cv_reps             = 3,
+#'   n_cores             = 2
+#' )
+#' }
+#' @export
 <span id="cv_lcd_parallel">cv_lcd_parallel</span> &lt;- function(
   Y_bin,
   X,
@@ -2553,48 +2553,48 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     index_matrix  = index_matrix
   ))
 }</code></pre>
-<pre class="r"><code>#` Summarize CV results and select optimal penalty values
-#`
-#` @description
-#` Loads saved per‐run CV results (from \code{save_dir}) according to the
-#` supplied \code{index_matrix}, warns on any missing or failed loads, and then
-#` aggregates:
-#` 1. Per‐seed average of \code{trimmed_CV} across folds,
-#` 2. The maximum of those seed‐averages per (\code{alpha_idx},\code{theta_idx}),
-#` 3. The count of non‐missing runs per combination,
-#` and merges these with the corresponding penalty values.  Finally selects the
-#` optimal \code{lambda_alpha} and \code{lambda_theta} that maximize the CV score.
-#`
-#` @param index_matrix Integer matrix with one row per CV run, containing columns
-#`   \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
-#`   \code{lambda_alpha}, and \code{lambda_theta}.
-#` @param save_dir     Character; directory where the CV run \*.Rdata files are stored.
-#`
-#` @return A list with components:
-#` \describe{
-#`   \item{\code{CVmat}}{Numeric matrix of dimension \code{n_runs × 8}, combining
-#`     the original \code{index_matrix} columns with two new columns:
-#`     \code{prop_CV} and \code{trimmed_CV}, one row per run.}
-#`   \item{\code{reduced_mat}}{Numeric matrix with one row per unique
-#`     (\code{alpha_idx},\code{theta_idx}) combination, and columns:
-#`     \code{alpha_idx}, \code{theta_idx}, \code{lambda_alpha},
-#`     \code{lambda_theta}, \code{cv_score} (max seed‐average),
-#`     and \code{count} (number of non‐NA runs).}
-#`   \item{\code{opt_lambdas}}{Numeric vector of length 2 giving the
-#`     optimal \code{lambda_alpha} and \code{lambda_theta}.}
-#`   \item{\code{max_NA_prop}}{Numeric; the maximum \code{prop_CV} value
-#`     across all runs, ignoring \code{NA}.}
-#` }
-#`
-#` @examples
-#` \dontrun{
-#` # Given `index_matrix` and CV .Rdata files in "./result":
-#` summary &lt;- <a href="create-LCDmix.html#cv_summary">cv_summary</a>(index_matrix, save_dir = "./result")
-#` print(summary$opt_lambdas)
-#` head(summary$reduced_mat)
-#` }
-#`
-#` @export
+<pre class="r"><code>#' Summarize CV results and select optimal penalty values
+#'
+#' @description
+#' Loads saved per‐run CV results (from \code{save_dir}) according to the
+#' supplied \code{index_matrix}, warns on any missing or failed loads, and then
+#' aggregates:
+#' 1. Per‐seed average of \code{trimmed_CV} across folds,
+#' 2. The maximum of those seed‐averages per (\code{alpha_idx},\code{theta_idx}),
+#' 3. The count of non‐missing runs per combination,
+#' and merges these with the corresponding penalty values.  Finally selects the
+#' optimal \code{lambda_alpha} and \code{lambda_theta} that maximize the CV score.
+#'
+#' @param index_matrix Integer matrix with one row per CV run, containing columns
+#'   \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
+#'   \code{lambda_alpha}, and \code{lambda_theta}.
+#' @param save_dir     Character; directory where the CV run \*.Rdata files are stored.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{CVmat}}{Numeric matrix of dimension \code{n_runs × 8}, combining
+#'     the original \code{index_matrix} columns with two new columns:
+#'     \code{prop_CV} and \code{trimmed_CV}, one row per run.}
+#'   \item{\code{reduced_mat}}{Numeric matrix with one row per unique
+#'     (\code{alpha_idx},\code{theta_idx}) combination, and columns:
+#'     \code{alpha_idx}, \code{theta_idx}, \code{lambda_alpha},
+#'     \code{lambda_theta}, \code{cv_score} (max seed‐average),
+#'     and \code{count} (number of non‐NA runs).}
+#'   \item{\code{opt_lambdas}}{Numeric vector of length 2 giving the
+#'     optimal \code{lambda_alpha} and \code{lambda_theta}.}
+#'   \item{\code{max_NA_prop}}{Numeric; the maximum \code{prop_CV} value
+#'     across all runs, ignoring \code{NA}.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Given `index_matrix` and CV .Rdata files in "./result":
+#' summary &lt;- <a href="create-LCDmix.html#cv_summary">cv_summary</a>(index_matrix, save_dir = "./result")
+#' print(summary$opt_lambdas)
+#' head(summary$reduced_mat)
+#' }
+#'
+#' @export
 <span id="cv_summary">cv_summary</span> &lt;- function(
   index_matrix,
   save_dir = "./result"
@@ -2836,61 +2836,61 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     best_fit     = best_fit
   ))
 }</code></pre>
-<pre class="r"><code>#` Generate skewed mixture‐of‐experts time‐series data, binned for LCDmix
-#`
-#` @description
-#` Simulate a two‐component mixture‐of‐experts over \code{n_time} equally‐spaced time points.  
-#` Each component has a linear mean function (intercept + covariates), where one component’s 
-#` intercept is shifted by \code{intercept_gap}.  Observations are drawn from a skew‐normal 
-#` noise distribution with shape parameter \code{skew_alpha}, then binned into \code{grid_size} 
-#` bins via \pkg{flowmix} utilities.  The function returns both the raw simulated bins and 
-#` the true underlying mixture parameters and component densities at each bin midpoint.
-#`
-#` @param seed          Integer or \code{NULL}.  If non‐\code{NULL}, used to set \code{set.seed()} for reproducibility.
-#` @param n_per_time    Integer; total number of observations per time point in the second half of the series.
-#`                      In the first half, only \(0.8 \times n\_per\_time\) observations are drawn.  
-#`                      Must be a multiple of 5.
-#` @param beta_par      Numeric; slope coefficient on the first covariate (“baseline”) for component 1 (and \(-\beta\_par\) for component 2).
-#` @param n_covariates  Integer ≥ 3; total number of covariates (including baseline trend and change‐point indicator).
-#` @param grid_size     Integer; number of bins per marginal histogram for each time point.
-#` @param skew_alpha    Numeric; shape parameter of the skew‐normal noise distribution.
-#` @param intercept_gap Numeric; intercept shift for component 2 relative to component 1.
-#` @param n_time        Integer &gt; 0 and even; total number of time points \(T\).  Must be even.
-#`
-#` @return A list with components:
-#` \describe{
-#`   \item{\code{ylist}}{List of length \code{n_time}; each element is an \code{n_t × 1} matrix of raw observations (pre‐binning).}
-#`   \item{\code{X}}{Numeric \code{n_time × p} covariate matrix (columns: baseline trend, change‐point indicator, noise covariates).}
-#`   \item{\code{countslist}}{List of length \code{n_time}; each element is a numeric vector of binned counts at the midpoints in \code{ylist}.}
-#`   \item{\code{mnmat}}{Numeric \code{n_time × 2} matrix of true component means at each time.}
-#`   \item{\code{prob}}{Numeric \code{n_time × 2} matrix of true mixing probabilities \(\pi_{t,k}\).}
-#`   \item{\code{dens_true}}{List of length \code{n_time}; each element is an \code{n_t × 2} matrix giving the true component‐density 
-#`     values evaluated at each bin midpoint (matching \code{countslist}).}
-#`   \item{\code{mn}}{Array of dimension \code{n_time × 1 × 2}, same as \code{mnmat} but in 3D.}
-#`   \item{\code{numclust}}{Integer; number of mixture components (2).}
-#`   \item{\code{alpha}}{Numeric \((p+1)\times 2\) matrix of true mixture‐weight (logit) coefficients.}
-#`   \item{\code{beta}}{Numeric \((p+1)\times 2\) matrix of true regression coefficients for each component.}
-#` }
-#`
-#` @examples
-#` \dontrun{
-#` sim &lt;- <a href="create-LCDmix.html#generate_skewed_data">generate_skewed_data</a>(
-#`   seed = 123,
-#`   n_per_time   = 200,
-#`   beta_par     = 0.5,
-#`   n_covariates = 4,
-#`   grid_size    = 30,
-#`   skew_alpha   = 5,
-#`   intercept_gap= 2,
-#`   n_time       = 100
-#` )
-#` str(sim)
-#` # ylist[[1]] is the raw draws for time 1
-#` # countslist[[1]] gives the binned counts
-#` # sim$prob[1,] are true mixing proportions at t=1
-#` # sim$dens_true[[1]] gives the true component‐densities at each bin
-#` }
-#` @export
+<pre class="r"><code>#' Generate skewed mixture‐of‐experts time‐series data, binned for LCDmix
+#'
+#' @description
+#' Simulate a two‐component mixture‐of‐experts over \code{n_time} equally‐spaced time points.  
+#' Each component has a linear mean function (intercept + covariates), where one component’s 
+#' intercept is shifted by \code{intercept_gap}.  Observations are drawn from a skew‐normal 
+#' noise distribution with shape parameter \code{skew_alpha}, then binned into \code{grid_size} 
+#' bins via \pkg{flowmix} utilities.  The function returns both the raw simulated bins and 
+#' the true underlying mixture parameters and component densities at each bin midpoint.
+#'
+#' @param seed          Integer or \code{NULL}.  If non‐\code{NULL}, used to set \code{set.seed()} for reproducibility.
+#' @param n_per_time    Integer; total number of observations per time point in the second half of the series.
+#'                      In the first half, only \(0.8 \times n\_per\_time\) observations are drawn.  
+#'                      Must be a multiple of 5.
+#' @param beta_par      Numeric; slope coefficient on the first covariate (“baseline”) for component 1 (and \(-\beta\_par\) for component 2).
+#' @param n_covariates  Integer ≥ 3; total number of covariates (including baseline trend and change‐point indicator).
+#' @param grid_size     Integer; number of bins per marginal histogram for each time point.
+#' @param skew_alpha    Numeric; shape parameter of the skew‐normal noise distribution.
+#' @param intercept_gap Numeric; intercept shift for component 2 relative to component 1.
+#' @param n_time        Integer &gt; 0 and even; total number of time points \(T\).  Must be even.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{ylist}}{List of length \code{n_time}; each element is an \code{n_t × 1} matrix of raw observations (pre‐binning).}
+#'   \item{\code{X}}{Numeric \code{n_time × p} covariate matrix (columns: baseline trend, change‐point indicator, noise covariates).}
+#'   \item{\code{countslist}}{List of length \code{n_time}; each element is a numeric vector of binned counts at the midpoints in \code{ylist}.}
+#'   \item{\code{mnmat}}{Numeric \code{n_time × 2} matrix of true component means at each time.}
+#'   \item{\code{prob}}{Numeric \code{n_time × 2} matrix of true mixing probabilities \(\pi_{t,k}\).}
+#'   \item{\code{dens_true}}{List of length \code{n_time}; each element is an \code{n_t × 2} matrix giving the true component‐density 
+#'     values evaluated at each bin midpoint (matching \code{countslist}).}
+#'   \item{\code{mn}}{Array of dimension \code{n_time × 1 × 2}, same as \code{mnmat} but in 3D.}
+#'   \item{\code{numclust}}{Integer; number of mixture components (2).}
+#'   \item{\code{alpha}}{Numeric \((p+1)\times 2\) matrix of true mixture‐weight (logit) coefficients.}
+#'   \item{\code{beta}}{Numeric \((p+1)\times 2\) matrix of true regression coefficients for each component.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' sim &lt;- <a href="create-LCDmix.html#generate_skewed_data">generate_skewed_data</a>(
+#'   seed = 123,
+#'   n_per_time   = 200,
+#'   beta_par     = 0.5,
+#'   n_covariates = 4,
+#'   grid_size    = 30,
+#'   skew_alpha   = 5,
+#'   intercept_gap= 2,
+#'   n_time       = 100
+#' )
+#' str(sim)
+#' # ylist[[1]] is the raw draws for time 1
+#' # countslist[[1]] gives the binned counts
+#' # sim$prob[1,] are true mixing proportions at t=1
+#' # sim$dens_true[[1]] gives the true component‐densities at each bin
+#' }
+#' @export
 <span id="generate_skewed_data">generate_skewed_data</span> &lt;- function(
   seed           = NULL,
   n_per_time     = 200,
@@ -3082,52 +3082,52 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     beta        = beta
   ))
 }</code></pre>
-<pre class="r"><code>#` Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
-#`
-#` @description
-#` For each time point \code{t}, evaluates the estimated mixture density 
-#` (either from an LCDmix fit or a flowmix fit) and the true mixture density 
-#` at the observed bin midpoints, computes the \(L^1\) distance, and then 
-#` returns both the per‐time distances and the overall weighted average 
-#` distance (weighted by total biomass at each \code{t}).
-#`
-#` @param Y_bin List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.
-#` @param X Numeric \code{TT × p} matrix of covariates (rows = time points).
-#` @param bin_mass List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.
-#` @param est_res A fitted model object:
-#`   \describe{
-#`     \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
-#`     \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
-#`   }
-#` @param true_res A list with components:
-#`   \describe{
-#`     \item{\code{prob}}{\code{TT × K} numeric matrix of true mixing proportions \eqn{\pi_{t,k}}.}
-#`     \item{\code{dens_true}}{List of length \code{TT}, each an \code{n_t × K} numeric matrix of the true component densities evaluated at \code{Y_bin[[t]]}.}
-#`   }
-#`
-#` @return A list with elements:
-#` \describe{
-#`   \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
-#`   \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
-#` }
-#`
-#` @examples
-#` \dontrun{
-#` sim &lt;- <a href="create-LCDmix.html#generate_skewed_data">generate_skewed_data</a>(seed = 42)
-#` Y_bin    &lt;- sim$ylist
-#` X        &lt;- sim$X
-#` bin_mass &lt;- sim$countslist
-#`
-#` # Fit an LCDmix model
-#` fit &lt;- <a href="create-LCDmix.html#main">main</a>(Y = Y_bin, X = X, biomass = bin_mass, K = sim$numclust)
-#` true_res &lt;- list(prob = sim$prob, dens_true = sim$dens_true)
-#`
-#` # Compute metric
-#` dist &lt;- <a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(Y_bin, X, bin_mass, fit$iter, true_res)
-#` plot(dist$per_time, type = "b", xlab = "Time", ylab = "L1 distance")
-#` print(dist$weighted)
-#` }
-#` @export
+<pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
+#'
+#' @description
+#' For each time point \code{t}, evaluates the estimated mixture density 
+#' (either from an LCDmix fit or a flowmix fit) and the true mixture density 
+#' at the observed bin midpoints, computes the \(L^1\) distance, and then 
+#' returns both the per‐time distances and the overall weighted average 
+#' distance (weighted by total biomass at each \code{t}).
+#'
+#' @param Y_bin List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.
+#' @param X Numeric \code{TT × p} matrix of covariates (rows = time points).
+#' @param bin_mass List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.
+#' @param est_res A fitted model object:
+#'   \describe{
+#'     \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
+#'     \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
+#'   }
+#' @param true_res A list with components:
+#'   \describe{
+#'     \item{\code{prob}}{\code{TT × K} numeric matrix of true mixing proportions \eqn{\pi_{t,k}}.}
+#'     \item{\code{dens_true}}{List of length \code{TT}, each an \code{n_t × K} numeric matrix of the true component densities evaluated at \code{Y_bin[[t]]}.}
+#'   }
+#'
+#' @return A list with elements:
+#' \describe{
+#'   \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
+#'   \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' sim &lt;- <a href="create-LCDmix.html#generate_skewed_data">generate_skewed_data</a>(seed = 42)
+#' Y_bin    &lt;- sim$ylist
+#' X        &lt;- sim$X
+#' bin_mass &lt;- sim$countslist
+#'
+#' # Fit an LCDmix model
+#' fit &lt;- <a href="create-LCDmix.html#main">main</a>(Y = Y_bin, X = X, biomass = bin_mass, K = sim$numclust)
+#' true_res &lt;- list(prob = sim$prob, dens_true = sim$dens_true)
+#'
+#' # Compute metric
+#' dist &lt;- <a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(Y_bin, X, bin_mass, fit$iter, true_res)
+#' plot(dist$per_time, type = "b", xlab = "Time", ylab = "L1 distance")
+#' print(dist$weighted)
+#' }
+#' @export
 <span id="mixture_metric">mixture_metric</span> &lt;- function(
   Y_bin,
   X,
@@ -3195,13 +3195,17 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 ## Writing 'compute_l1_distance.Rd'
 ## Writing 'compute_residuals.Rd'
 ## Writing 'compute_surrogate_loglikelihood.Rd'
+## Writing 'cv_lcd_parallel.Rd'
+## Writing 'cv_summary.Rd'
 ## Writing 'e_step_log_concave.Rd'
 ## Writing 'evaluate_lcd_model.Rd'
+## Writing 'generate_skewed_data.Rd'
 ## Writing 'initialize_model.Rd'
 ## Writing 'is_increasing.Rd'
 ## Writing 'iteration.Rd'
 ## Writing 'main.Rd'
 ## Writing 'make_cv_index_matrix.Rd'
+## Writing 'mixture_metric.Rd'
 ## Writing 'modified_logcondens.Rd'
 ## Writing 'mstep_estimate_log_concave_densities.Rd'
 ## Writing 'mstep_update_alpha.Rd'
