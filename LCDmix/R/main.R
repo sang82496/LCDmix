@@ -126,6 +126,6 @@ main <- function(
     X        = X,
     bin_mass = bin_mass,
     initial  = init_res,
-    iter     = iter_res
+    iter     = iter_res$final
   ))
 }
