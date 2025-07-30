@@ -2563,15 +2563,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         log_msg    &lt;- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
-      } else if (!is.list(res_ii$iter)) {
-        log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
-                          ": ", res_ii$iter_partial$error, "\n")
+      } else if (is.null(res_ii$iter)) {
+        log_msg &lt;- paste0(log_msg, "Error at EM iteration")
+#        log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
+#                          ": ", res_ii$iter_partial$error, "\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
-      }
-      else {
+      } else {
         log_msg    &lt;- paste0(log_msg, "Fit succeeded\n")
-        eval_res &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
+        eval_res   &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
           model     = res_ii$iter,
           Y         = Y_bin[test_i],
           X         = X[test_i, , drop = FALSE],
@@ -2849,7 +2849,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       log_msg &lt;- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
       
       # check success / failure
-      if ((!is.list(fit_try))) {
+      if (!is.list(fit_try)) {
         # failed
         return(list(
           log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, "\n"),
