@@ -1033,7 +1033,8 @@ iteration <- function(
   iter_eta       = 1e-6,
   max_iter       = 30,
   resp_threshold = 1e-3,
-  debug          = FALSE
+  debug          = FALSE,
+  maxdev         = NULL
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
