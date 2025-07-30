@@ -70,20 +70,6 @@ iteration <- function(
   Q           <- init_res$Q
   Q_every     <- init_res$Q_every
   
-  # Store the current parameters
-  last_state <- list(
-    idx_old     = idx_old,
-    resp_old    = resp_old,
-    weight_old  = weight_old,
-    resi_old    = resi_old,
-    alpha_old   = alpha_old,
-    theta0_old  = theta0_old,
-    theta_old   = theta_old, 
-    g_old       = g_old,
-    Q           = Q,
-    Q_every     = Q_every
-  )
-  
   res <- tryCatch({
   for (i in seq_len(max_iter)){
     
@@ -273,5 +259,16 @@ iteration <- function(
       stop(e)
     }}
   )
-  return(res)
+  return(list(
+    idx_new     = idx_new,
+    resp_new    = resp_new,
+    weight_new  = weight_new,
+    resi_new    = resi_new,
+    alpha_new   = alpha_new,
+    theta0_new  = theta0_new,
+    theta_new   = theta_new, 
+    g_new       = g_new,
+    Q           = Q,
+    Q_every     = Q_every,
+    i           = i))
 }
