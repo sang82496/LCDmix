@@ -2559,13 +2559,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
                         "\n")
       
       # now res_ii contains either the fit or NA
-      if (is.na(res_ii)) {
+      if (!is.list(res_ii)) {
         log_msg    &lt;- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
-      } else if (is.null(res_ii$iter)) {
+      } else if (!is.list(res_ii$iter)) {
         log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
-                          ": ", res_ii$error, "\n")
+                          ": ", res_ii$iter_partial$error, "\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
       }
