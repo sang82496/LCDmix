@@ -228,15 +228,15 @@ cv_lcd_parallel <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-      } else if (!is.list(res_ii$iter)) {
-        log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
-                          ": ", res_ii$iter_partial$error, "\n")
+      } else if (is.null(res_ii$iter)) {
+        log_msg <- paste0(log_msg, "Error at EM iteration")
+#        log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
+#                          ": ", res_ii$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-      }
-      else {
+      } else {
         log_msg    <- paste0(log_msg, "Fit succeeded\n")
-        eval_res <- evaluate_lcd_model(
+        eval_res   <- evaluate_lcd_model(
           model     = res_ii$iter,
           Y         = Y_bin[test_i],
           X         = X[test_i, , drop = FALSE],
