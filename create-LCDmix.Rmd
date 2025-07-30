@@ -2557,7 +2557,7 @@ refit_lcd <- function(
   # Perform repeated fits in parallel
   results <- parallel::parLapply(
     cl,
-    seq_len(cv_reps),
+    seeds,
     function(seed_idx) {
       # start log for this seed
       log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")

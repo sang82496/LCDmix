@@ -2756,7 +2756,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # Perform repeated fits in parallel
   results &lt;- parallel::parLapply(
     cl,
-    seq_len(cv_reps),
+    seeds,
     function(seed_idx) {
       # start log for this seed
       log_msg &lt;- paste0("▶ Refit seed ", seed_idx, "\n")
