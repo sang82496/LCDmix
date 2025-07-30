@@ -48,10 +48,10 @@ iteration <- function(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta,
-  max_iter,
-  resp_threshold,
-  maxdev
+  iter_eta       = 1e-6,
+  max_iter       = 30,
+  resp_threshold = 1e-3,
+  debug          = FALSE
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -69,7 +69,23 @@ iteration <- function(
   Q           <- init_res$Q
   Q_every     <- init_res$Q_every
   
-  for (i in seq_len(max_iter)) {
+  # Store the current parameters
+  last_state <- list(
+    idx_old     = idx_old,
+    resp_old    = resp_old,
+    weight_old  = weight_old,
+    resi_old    = resi_old,
+    alpha_old   = alpha_old,
+    theta0_old  = theta0_old,
+    theta_old   = theta_old, 
+    g_old       = g_old,
+    Q           = Q,
+    Q_every     = Q_every
+  )
+  
+  res <- tryCatch({
+  for (i in seq_len(max_iter)){
+    
     #— E‐step —#
     Estep   <- e_step_log_concave(
       X               = X,
@@ -196,6 +212,7 @@ iteration <- function(
     Q       <- c(Q, Q_new)
     message("✔ Q[i] = ", Q_new)
     
+    
     # Check convergence or decrease
     inc <- (Q[i + 1] - Q[i]) / abs(Q[i])
     if (inc < 0) {
@@ -224,20 +241,36 @@ iteration <- function(
     theta0_old <- theta0_new
     theta_old  <- theta_new
     g_old      <- g_new
+    
+    # Store the current parameters
+    last_state <- list(
+    idx_old     = idx_old,
+    resp_old    = resp_old,
+    weight_old  = weight_old,
+    resi_old    = resi_old,
+    alpha_old   = alpha_old,
+    theta0_old  = theta0_old,
+    theta_old   = theta_old, 
+    g_old       = g_old,
+    Q           = Q,
+    Q_every     = Q_every,
+    i           = i)
   }
-  
-  return(list(
-    idx_new        = idx_new,
-    resp_new       = resp_new,
-    weight_new     = weight_new,
-    resi_new       = resi_new,
-    alpha_new      = alpha_new,
-    theta0_new     = theta0_new,
-    theta_new      = theta_new,
-    g_new          = g_new,
-    lambda_alpha   = lambda_alpha,
-    lambda_theta   = lambda_theta,
-    Q              = as.vector(Q),
-    Q_every        = as.vector(Q_every)
-  ))
+    
+    list(final = last_state,
+         error = NULL)
+    }, error = function(e){
+    # on *any* error inside the loop:
+    if (debug) {
+      # return the last successful state + the error message
+      list(
+        final       = last_state,
+        error       = conditionMessage(e),
+        failed_iter = i
+      )
+    } else {
+      stop(e)
+    }}
+  )
+  return(res)
 }
