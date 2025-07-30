@@ -2562,7 +2562,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
         log_msg    &lt;- paste0(log_msg, "Fit completely failed\n")
-      } else if (!is.list(res_ii$iter_partial)) {
+      } else if (is.list(res_ii$iter_partial)) {
         log_msg &lt;- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
                           ": ", res_ii$error, "\n")
         prop_CV    &lt;- NA
