@@ -18,10 +18,12 @@
 #' @param max_iter Integer maximum number of EM iterations. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
-#' @param cv_reps Integer number of repeated fits. Default: 5.
+#' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
+#'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
+#' @param cv_reps Integer number of repeated fits. Default: \code{NULL}.
 #' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
@@ -42,11 +44,11 @@ refit_lcd <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  cv_reps        = 5,
-  seeds          = 1:5,
+  seeds          = NULL,
   trim_prob      = 0.05,
   save_dir       = "./result",
   n_cores        = "max",
+  cv_reps        = NULL,
   maxdev         = NULL,
   n_restarts     = 1
 ) {

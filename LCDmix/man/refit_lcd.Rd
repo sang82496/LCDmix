@@ -13,11 +13,11 @@ refit_lcd(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
-  cv_reps = 5,
-  seeds = 1:5,
+  seeds = NULL,
   trim_prob = 0.05,
   save_dir = "./result",
   n_cores = "max",
+  cv_reps = NULL,
   maxdev = NULL,
   n_restarts = 1
 )
@@ -42,13 +42,16 @@ of biomass weights per bin at time \(t\).}
 
 \item{resp_threshold}{Numeric in \link{0,1}; responsibilities below this are zeroed. Default: 1e-3.}
 
-\item{cv_reps}{Integer number of repeated fits. Default: 5.}
+\item{seeds}{Integer vector of random seeds (one per repeat).  Must supply either
+\code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.}
 
 \item{trim_prob}{Numeric in \link{0,0.5}; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.}
 
 \item{save_dir}{Character; directory in which to save per‐repeat results. Default: "./result".}
 
 \item{n_cores}{Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".}
+
+\item{cv_reps}{Integer number of repeated fits. Default: \code{NULL}.}
 
 \item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
 

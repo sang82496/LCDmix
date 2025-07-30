@@ -2103,10 +2103,10 @@ make_cv_index_matrix <- function(
 #' @param nfold Integer number of cross‐validation folds. Default: 5.
 #' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
 #'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
-#' @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
 #' @param trim_prob Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#' @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
 #' @param blocksize Integer block size for CV fold creation. Default: 5.
 #' @param maxdev Numeric or \code{NULL}; maximum deviation for LP constraints. Default: \code{NULL}.
 #' @param n_restarts Integer number of random restarts for the initial GMR. Default: 1.
@@ -2142,8 +2142,8 @@ make_cv_index_matrix <- function(
 #'   K                   = 2,
 #'   cv_gridsize         = 4,
 #'   nfold               = 4,
-#'   cv_reps             = 3,
-#'   n_cores             = 2
+#'   n_cores             = 2,
+#'   cv_reps             = 3
 #' )
 #' }
 #' @export
@@ -2160,10 +2160,10 @@ cv_lcd_parallel <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  cv_reps            = NULL,
   trim_prob          = 0.05,
   save_dir           = "./result",
   n_cores            = "max",
+  cv_reps            = NULL,
   blocksize          = 5,
   maxdev             = NULL,
   n_restarts         = 1
@@ -2496,10 +2496,12 @@ cv_summary <- function(
 #' @param max_iter Integer maximum number of EM iterations. Default: 30.
 #' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
-#' @param cv_reps Integer number of repeated fits. Default: 5.
+#' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
+#'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
+#' @param cv_reps Integer number of repeated fits. Default: \code{NULL}.
 #' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
 #'
@@ -2520,11 +2522,11 @@ refit_lcd <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  cv_reps        = 5,
-  seeds          = 1:5,
+  seeds          = NULL,
   trim_prob      = 0.05,
   save_dir       = "./result",
   n_cores        = "max",
+  cv_reps        = NULL,
   maxdev         = NULL,
   n_restarts     = 1
 ) {
