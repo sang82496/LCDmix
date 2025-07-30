@@ -17,6 +17,7 @@ refit_lcd(
   trim_prob = 0.05,
   save_dir = "./result",
   n_cores = "max",
+  debug = FALSE,
   cv_reps = NULL,
   maxdev = NULL,
   n_restarts = 1

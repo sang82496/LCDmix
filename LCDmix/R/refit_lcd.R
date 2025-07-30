@@ -48,6 +48,7 @@ refit_lcd <- function(
   trim_prob      = 0.05,
   save_dir       = "./result",
   n_cores        = "max",
+  debug          = FALSE,
   cv_reps        = NULL,
   maxdev         = NULL,
   n_restarts     = 1
@@ -121,6 +122,14 @@ refit_lcd <- function(
           Q   = NA,
           iter= NULL
         ))
+      } else if (!is.null(fit_try$iter_partial)) {
+        # Error at EM iteration
+        return(list(
+          log = paste0("Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+                          ": ", fit_try$error, "\n"),
+          Q   = NA,
+          iter= NULL
+        ))
       }
     
     # if successful, record final Q and save
@@ -130,7 +139,6 @@ refit_lcd <- function(
       log_msg <- paste0(log_msg,
                         "✔ Completed seed ", seed_idx,
                         "; final Q = ", round(final_Q, 4), "\n")
-      
       return(list(
         log  = log_msg,
         Q    = final_Q,
