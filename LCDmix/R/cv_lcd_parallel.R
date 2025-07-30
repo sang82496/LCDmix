@@ -206,6 +206,7 @@ cv_lcd_parallel <- function(
             max_iter        = max_iter,
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
+            debug           = TRUE,
             maxdev          = maxdev,
             n_restarts      = n_restarts
           ),
