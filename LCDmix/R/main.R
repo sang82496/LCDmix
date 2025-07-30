@@ -61,6 +61,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
+  debug          = FALSE,
   maxdev         = NULL,
   n_restarts     = 1
 ) {
@@ -100,8 +101,22 @@ main <- function(
     iter_eta,
     max_iter,
     resp_threshold,
-    maxdev
+    debug
   )
+  
+  if (debug && !is.null(iter_res$error)) {
+    # here iter_res$final contains your last parameters
+    warning("EM failed at iteration ", iter_res$failed_iter, 
+            ": ", iter_res$error)
+    return(list(
+            Y_bin        = Y_bin,
+            X            = X,
+            bin_mass     = bin_mass,
+            initial      = init_res,
+            iter_partial = iter_res
+          ))
+  }
+
   message("✔ Iterations complete")
   
   #— Return all key results —#

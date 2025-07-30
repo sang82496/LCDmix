@@ -11,10 +11,10 @@ iteration(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta,
-  max_iter,
-  resp_threshold,
-  maxdev
+  iter_eta = 1e-06,
+  max_iter = 30,
+  resp_threshold = 0.001,
+  debug = FALSE
 )
 }
 \arguments{

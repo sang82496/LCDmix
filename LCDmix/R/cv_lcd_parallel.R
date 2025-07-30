@@ -223,11 +223,18 @@ cv_lcd_parallel <- function(
                         "\n")
       
       # now res_ii contains either the fit or NA
+
       if (!is.list(res_ii)) {
         prop_CV    <- NA
         trimmed_CV <- NA
-        log_msg    <- paste0(log_msg, "Fit failed\n")
-      } else {
+        log_msg    <- paste0(log_msg, "Fit completely failed\n")
+      } else if (!is.null(res_ii$iter_partial)) {
+        log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
+                          ": ", res_ii$error, "\n")
+        prop_CV    <- NA
+        trimmed_CV <- NA
+      }
+      else {
         eval_res <- evaluate_lcd_model(
           model     = res_ii$iter,
           Y         = Y_bin[test_i],
