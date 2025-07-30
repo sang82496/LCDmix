@@ -224,8 +224,8 @@ cv_lcd_parallel <- function(
                         "\n")
       
       # now res_ii contains either the fit or NA
-      if (!is.list(res_ii)) {
-        log_msg    <- paste0(log_msg, "Fit completely failed\n")
+      if (is.na(res_ii)) {
+        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    <- NA
         trimmed_CV <- NA
       } else if (is.null(res_ii$iter)) {
@@ -259,6 +259,8 @@ cv_lcd_parallel <- function(
   )
   
   parallel::stopCluster(cl)
+  
+  print('1')
   
   #— Summarize failures —#
   num_na <- sum(grepl("Error", logs))
