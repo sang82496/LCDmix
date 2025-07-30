@@ -17,10 +17,10 @@ cv_lcd_parallel(
   resp_threshold = 0.001,
   nfold = 5,
   seeds = NULL,
-  cv_reps = NULL,
   trim_prob = 0.05,
   save_dir = "./result",
   n_cores = "max",
+  cv_reps = NULL,
   blocksize = 5,
   maxdev = NULL,
   n_restarts = 1
@@ -56,13 +56,13 @@ for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}
 \item{seeds}{Integer vector of random seeds (one per repeat).  Must supply either
 \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.}
 
-\item{cv_reps}{Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.}
-
 \item{trim_prob}{Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.}
 
 \item{save_dir}{Character; directory in which to save per‐run results. Default: "./result".}
 
 \item{n_cores}{Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".}
+
+\item{cv_reps}{Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.}
 
 \item{blocksize}{Integer block size for CV fold creation. Default: 5.}
 
@@ -109,8 +109,8 @@ results2 <- cv_lcd_parallel(
   K                   = 2,
   cv_gridsize         = 4,
   nfold               = 4,
-  cv_reps             = 3,
-  n_cores             = 2
+  n_cores             = 2,
+  cv_reps             = 3
 )
 }
 }
