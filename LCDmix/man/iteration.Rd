@@ -14,7 +14,8 @@ iteration(
   iter_eta = 1e-06,
   max_iter = 30,
   resp_threshold = 0.001,
-  debug = FALSE
+  debug = FALSE,
+  maxdev = NULL
 )
 }
 \arguments{
