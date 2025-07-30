@@ -14,6 +14,7 @@ refit_lcd(
   iter_eta = 0.001,
   resp_threshold = 0.001,
   cv_reps = 5,
+  seeds = 1:5,
   trim_prob = 0.05,
   save_dir = "./result",
   n_cores = "max",

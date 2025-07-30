@@ -1619,7 +1619,6 @@ mstep_update_theta_lp <- function(
   print(format(object.size(const_mat), "Gb"))
   
   #–– Debugging: print size and memory usage of constraint matrix ––#
-  print(dim(const_mat))
   print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
@@ -2010,12 +2009,13 @@ evaluate_lcd_model <- function(
 #' Generate cross‐validation index matrix for penalty grid search
 #'
 #' @description
-#' Constructs a matrix of all combinations of cross‐validation fold, repetition,
+#' Constructs a matrix of all combinations of cross‐validation fold, random seeds (repeats),
 #' and penalty indices for tuning \code{lambda_alpha} and \code{lambda_theta}.
+#' 
 #'
 #' @param cv_gridsize Integer; number of candidate values for each penalty (\code{lambda_alpha} and \code{lambda_theta}).
 #' @param nfold Integer; number of folds in cross‐validation.
-#' @param nrep Integer; number of repeated CV runs.
+#' @param seeds Integer vector. Random seeds (or repeat identifiers) to use for each repetition.
 #' @param alpha_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_alpha}.
 #' @param theta_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_theta}.
 #'
@@ -2025,7 +2025,7 @@ evaluate_lcd_model <- function(
 #' \describe{
 #'   \item{\code{alpha_idx}}{Index in \code{alpha_lambdas} (1..\code{cv_gridsize}).}
 #'   \item{\code{theta_idx}}{Index in \code{theta_lambdas} (1..\code{cv_gridsize}).}
-#'   \item{\code{rep_idx}}{Repetition index (1..\code{nrep}).}
+#'   \item{\code{seed_idx}}{The seed or repeat identifier for this run.}
 #'   \item{\code{fold_idx}}{Fold index (1..\code{nfold}).}
 #'   \item{\code{lambda_alpha}}{Value of \code{alpha_lambdas[alpha_idx]}.}
 #'   \item{\code{lambda_theta}}{Value of \code{theta_lambdas[theta_idx]}.}
@@ -2036,10 +2036,11 @@ evaluate_lcd_model <- function(
 #' # 5 candidate lambdas for each penalty, 4 folds, 3 repetitions
 #' alpha_vals <- seq(0.01, 0.1, length.out = 5)
 #' theta_vals <- seq(0.001, 0.01, length.out = 5)
+#' seeds      <- c(101, 202, 303)  # three repeats
 #' idx_mat <- make_cv_index_matrix(
 #'   cv_gridsize   = 5,
 #'   nfold         = 4,
-#'   nrep          = 3,
+#'   seeds         = seeds,
 #'   alpha_lambdas = alpha_vals,
 #'   theta_lambdas = theta_vals
 #' )
@@ -2049,14 +2050,14 @@ evaluate_lcd_model <- function(
 make_cv_index_matrix <- function(
   cv_gridsize,
   nfold,
-  nrep,
+  seeds,
   alpha_lambdas,
   theta_lambdas
 ) {
   # Create all combinations of fold, repetition, theta‐index, and alpha‐index
   grid <- expand.grid(
     fold_idx   = seq_len(nfold),
-    rep_idx    = seq_len(nrep),
+    seed_idx   = seeds,
     theta_idx  = seq_len(cv_gridsize),
     alpha_idx  = seq_len(cv_gridsize)
   )
@@ -2065,7 +2066,7 @@ make_cv_index_matrix <- function(
   iimat <- cbind(
     alpha_idx    = grid$alpha_idx,
     theta_idx    = grid$theta_idx,
-    rep_idx      = grid$rep_idx,
+    seed_idx     = grid$seed_idx,
     fold_idx     = grid$fold_idx,
     lambda_alpha = alpha_lambdas[grid$alpha_idx],
     lambda_theta = theta_lambdas[grid$theta_idx]
@@ -2076,61 +2077,76 @@ make_cv_index_matrix <- function(
 
 
 ```{r}
-#' Cross‐validate the LCD mixture‐of‐experts model in parallel
-#'
-#' @description
-#' Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
-#' and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
-#' folds (with optional blocking), runs multiple repetitions per fold, and evaluates
-#' models on held‐out data.  Computations are dispatched in parallel.
-#'
-#' @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
-#'   matrix of binned responses per time point.
-#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
-#'   biomass weights per bin at time \eqn{t}.
-#' @param K Integer number of mixture components.
-#' @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
-#'   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
-#'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
-#' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
-#' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
-#' @param nfold Integer number of cross‐validation folds. Default: 5.
-#' @param cv_reps Integer number of repeated CV runs. Default: 5.
-#' @param trim_prob Numeric in \[0,1\]; fraction of lowest‐likelihood points to trim when averaging. Default: 0.05.
-#' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
-#' @param blocksize Integer block size for folding. Default: 5.
-#' @param maxdev Numeric or \code{NULL}; max‐deviation constraint for LP updates. Default: \code{NULL}.
-#' @param n_restarts Integer number of random restarts for \code{flowmix::flowmix()}. Default: 1.
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{logs}{Character vector of log messages (one per CV run, plus a summary).}
-#'   \item{index_matrix}{Numeric matrix with one row per combination (fold × rep × penalties),
-#'         showing indices and actual \code{lambda_alpha}, \code{lambda_theta} values.}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' # 2‐component model, small grid, 3 folds, 2 reps
-#' results <- cv_lcd_parallel(
-#'   Y_bin               = Y_binned,
-#'   X                   = X_mat,
-#'   bin_mass            = bin_mass_list,
-#'   K                   = 2,
-#'   lambda_alpha_range  = c(1e-4, 1e-2),
-#'   lambda_theta_range  = c(1e-4, 1e-2),
-#'   cv_gridsize        = 4,
-#'   nfold             = 3,
-#'   cv_reps             = 2,
-#'   n_cores             = "max"
-#' )
-#' }
-#' @export
+#` Cross‐validate the LCD mixture‐of‐experts model in parallel
+#`
+#` @description
+#` Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
+#` and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
+#` folds (with optional blocking), repeats each fold either by explicit seeds
+#` or by a count of repeats, and evaluates models on held‐out data.  Computations
+#` are dispatched in parallel, and per‐run results are saved.
+#`
+#` @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
+#`   matrix of binned responses per time point.
+#` @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
+#` @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
+#`   biomass weights per bin at time \eqn{t}.
+#` @param K Integer number of mixture components.
+#` @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
+#`   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#` @param lambda_theta_range Numeric vector of length 2 giving the min and max values
+#`   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
+#` @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
+#` @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
+#` @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
+#` @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
+#` @param nfold Integer number of cross‐validation folds. Default: 5.
+#` @param seeds Integer vector of random seeds (one per repeat).  Must supply either
+#`   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
+#` @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
+#` @param trim_prob Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.
+#` @param save_dir Character; directory in which to save per‐run results. Default: "./result".
+#` @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
+#` @param blocksize Integer block size for CV fold creation. Default: 5.
+#` @param maxdev Numeric or \code{NULL}; maximum deviation for LP constraints. Default: \code{NULL}.
+#` @param n_restarts Integer number of random restarts for the initial GMR. Default: 1.
+#`
+#` @return A list with components:
+#` \describe{
+#`   \item{logs}{Character vector of log messages (one per CV run, plus summary).}
+#`   \item{index_matrix}{Integer matrix with one row per run (fold × seed × penalties),
+#`         showing \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
+#`         and actual \code{lambda_alpha}, \code{lambda_theta} values.}
+#` }
+#`
+#` @examples
+#` \dontrun{
+#` # Four folds, three repeats via explicit seeds
+#` seeds <- c(101, 202, 303)
+#` results <- cv_lcd_parallel(
+#`   Y_bin               = Y_binned,
+#`   X                   = X_mat,
+#`   bin_mass            = counts_list,
+#`   K                   = 2,
+#`   cv_gridsize         = 4,
+#`   nfold               = 4,
+#`   seeds               = seeds,
+#`   n_cores             = "max"
+#` )
+#`
+#` # Or specify number of repeats instead of seeds
+#` results2 <- cv_lcd_parallel(
+#`   Y_bin               = Y_binned,
+#`   X                   = X_mat,
+#`   bin_mass            = counts_list,
+#`   K                   = 2,
+#`   cv_gridsize         = 4,
+#`   nfold               = 4,
+#`   cv_reps             = 3,
+#`   n_cores             = 2
+#` )
+#` }
+#` @export
 cv_lcd_parallel <- function(
   Y_bin,
   X,
@@ -2143,7 +2159,8 @@ cv_lcd_parallel <- function(
   iter_eta           = 1e-3,
   resp_threshold     = 1e-3,
   nfold              = 5,
-  cv_reps            = 5,
+  seeds              = NULL,
+  cv_reps            = NULL,
   trim_prob          = 0.05,
   save_dir           = "./result",
   n_cores            = "max",
@@ -2173,10 +2190,17 @@ cv_lcd_parallel <- function(
   )
   
   #— Build index matrix of all (fold × rep × penalties) combos —#
+  
+  if (is.null(seeds) & is.null(cv_reps)) {
+    stop("`seeds` and `cv_reps` cannot be both NULL")
+  }
+  if (is.null(seeds)) {
+    seeds = seq_len(cv_reps)
+  }
   index_matrix <- make_cv_index_matrix(
-    cv_gridsize   = cv_gridsize,
+    cv_gridsize    = cv_gridsize,
     nfold          = nfold,
-    nrep           = cv_reps,
+    seeds          = seeds,
     alpha_lambdas  = alpha_lambdas,
     theta_lambdas  = theta_lambdas
   )
@@ -2225,7 +2249,7 @@ cv_lcd_parallel <- function(
       # Extract combination parameters
       alpha_idx   <- index_matrix[ii, "alpha_idx"]
       theta_idx   <- index_matrix[ii, "theta_idx"]
-      rep_idx     <- index_matrix[ii, "rep_idx"]
+      seed_idx    <- index_matrix[ii, "seed_idx"]
       fold_idx    <- index_matrix[ii, "fold_idx"]
       lambda_alpha<- index_matrix[ii, "lambda_alpha"]
       lambda_theta<- index_matrix[ii, "lambda_theta"]
@@ -2233,7 +2257,7 @@ cv_lcd_parallel <- function(
       log_msg <- paste0(
         "alpha=", lambda_alpha,
         ", theta=", lambda_theta,
-        ", rep=", rep_idx,
+        ", seed=", seed_idx,
         ", fold=", fold_idx, "\n"
       )
       
@@ -2244,7 +2268,7 @@ cv_lcd_parallel <- function(
       X_tr       <- X[-test_i, , drop = FALSE]
       
       # Fit model
-      set.seed(rep_idx)
+      set.seed(seed_idx)
       out_log <- capture.output(
         res_ii <- tryCatch(
           main(
@@ -2297,9 +2321,9 @@ cv_lcd_parallel <- function(
       save_path <- file.path(
         save_dir,
         sprintf("%d-%d-%d-%d.Rdata",
-                alpha_idx, theta_idx, rep_idx, fold_idx)
+                alpha_idx, theta_idx, seed_idx, fold_idx)
       )
-      save(prop_CV, trimmed_CV, file = save_path)
+      save(prop_CV, trimmed_CV, log_msg, file = save_path)
       return(log_msg)
     }
   )
@@ -2324,49 +2348,48 @@ cv_lcd_parallel <- function(
 
 
 ```{r}
-#' Summarize cross‐validation results for the LCD mixture model
-#'
-#' @description
-#' Loads per‐run CV results saved as \code{.Rdata} files and assembles them into a
-#' full CV matrix.  Computes a reduced summary of the best cross‐validation score
-#' for each combination of \code{lambda_alpha} and \code{lambda_theta}, and selects
-#' the optimal penalties.
-#'
-#' @param index_matrix Numeric matrix with columns:
-#'   \describe{
-#'     \item{\code{alpha_idx}}{Index of \code{lambda_alpha} in the grid.}
-#'     \item{\code{theta_idx}}{Index of \code{lambda_theta} in the grid.}
-#'     \item{\code{rep_idx}}{Cross‐validation repetition index.}
-#'     \item{\code{fold_idx}}{Cross‐validation fold index.}
-#'     \item{\code{lambda_alpha}}{Value of the \code{lambda_alpha} penalty.}
-#'     \item{\code{lambda_theta}}{Value of the \code{lambda_theta} penalty.}
-#'   }
-#' @param save_dir Character; directory where per‐run \code{.Rdata} files are stored.
-#'   Files should be named “\code{alpha_idx-theta_idx-rep_idx-fold_idx.Rdata}” and
-#'   contain objects \code{prop_CV} and \code{trimmed_CV}.
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{\code{CVmat}}{Numeric matrix of dimension \code{n_runs × 8}, containing
-#'     the original \code{index_matrix} plus two new columns:
-#'     \code{prop_CV} and \code{trimmed_CV}.}
-#'   \item{\code{reduced_mat}}{Numeric \code{n_alpha*n_theta × 3} matrix, with columns
-#'     \code{lambda_alpha}, \code{lambda_theta}, and the best (max) mean
-#'     \code{trimmed_CV} across repetitions for each penalty pair.}
-#'   \item{\code{opt_lambdas}} Numeric vector of length 2: the optimal
-#'     \code{lambda_alpha} and \code{lambda_theta} (row of \code{reduced_mat} with
-#'     largest CV score).}
-#'   \item{\code{max_NA_prop}} Numeric; the maximum proportion of infinite (NA)
-#'     CV log‐likelihoods across all runs.}
-#'
-#' @examples
-#' \dontrun{
-#' # After running `cv_lcd_parallel()` which saved .Rdata files in "./result":
-#' idx_mat <- make_cv_index_matrix(5, 5, 3, alpha_lambdas, theta_lambdas)
-#' summary <- cv_summary(idx_mat, save_dir = "./result")
-#' str(summary)
-#' }
-#' @export
+#` Summarize CV results and select optimal penalty values
+#`
+#` @description
+#` Loads saved per‐run CV results (from \code{save_dir}) according to the
+#` supplied \code{index_matrix}, warns on any missing or failed loads, and then
+#` aggregates:
+#` 1. Per‐seed average of \code{trimmed_CV} across folds,
+#` 2. The maximum of those seed‐averages per (\code{alpha_idx},\code{theta_idx}),
+#` 3. The count of non‐missing runs per combination,
+#` and merges these with the corresponding penalty values.  Finally selects the
+#` optimal \code{lambda_alpha} and \code{lambda_theta} that maximize the CV score.
+#`
+#` @param index_matrix Integer matrix with one row per CV run, containing columns
+#`   \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
+#`   \code{lambda_alpha}, and \code{lambda_theta}.
+#` @param save_dir     Character; directory where the CV run \*.Rdata files are stored.
+#`
+#` @return A list with components:
+#` \describe{
+#`   \item{\code{CVmat}}{Numeric matrix of dimension \code{n_runs × 8}, combining
+#`     the original \code{index_matrix} columns with two new columns:
+#`     \code{prop_CV} and \code{trimmed_CV}, one row per run.}
+#`   \item{\code{reduced_mat}}{Numeric matrix with one row per unique
+#`     (\code{alpha_idx},\code{theta_idx}) combination, and columns:
+#`     \code{alpha_idx}, \code{theta_idx}, \code{lambda_alpha},
+#`     \code{lambda_theta}, \code{cv_score} (max seed‐average),
+#`     and \code{count} (number of non‐NA runs).}
+#`   \item{\code{opt_lambdas}}{Numeric vector of length 2 giving the
+#`     optimal \code{lambda_alpha} and \code{lambda_theta}.}
+#`   \item{\code{max_NA_prop}}{Numeric; the maximum \code{prop_CV} value
+#`     across all runs, ignoring \code{NA}.}
+#` }
+#`
+#` @examples
+#` \dontrun{
+#` # Given `index_matrix` and CV .Rdata files in "./result":
+#` summary <- cv_summary(index_matrix, save_dir = "./result")
+#` print(summary$opt_lambdas)
+#` head(summary$reduced_mat)
+#` }
+#`
+#` @export
 cv_summary <- function(
   index_matrix,
   save_dir = "./result"
@@ -2383,12 +2406,12 @@ cv_summary <- function(
   for (i in seq_len(n_runs)) {
     alpha_idx  <- index_matrix[i, "alpha_idx"]
     theta_idx  <- index_matrix[i, "theta_idx"]
-    rep_idx    <- index_matrix[i, "rep_idx"]
+    seed_idx   <- index_matrix[i, "seed_idx"]
     fold_idx   <- index_matrix[i, "fold_idx"]
     file_name  <- file.path(
       save_dir,
       sprintf("%d-%d-%d-%d.Rdata",
-              alpha_idx, theta_idx, rep_idx, fold_idx)
+              alpha_idx, theta_idx, seed_idx, fold_idx)
     )
     # skip runs whose file never got written
     if (!file.exists(file_name)) {
@@ -2407,53 +2430,47 @@ cv_summary <- function(
     })
   }
   
-  # Compute max proportion of infinite/NA log‐likelihoods
-  max_NA_prop <- max(CVmat[, "prop_CV"], na.rm = TRUE)
-  
-  # Determine grid dimensions
-  n_rep   <- length(unique(index_matrix[, "rep_idx"]))
-  n_fold  <- length(unique(index_matrix[, "fold_idx"]))
-  n_alpha <- length(unique(index_matrix[, "alpha_idx"]))
-  n_theta <- length(unique(index_matrix[, "theta_idx"]))
-  n_chunk <- n_alpha * n_theta
-  block_sz <- n_rep * n_fold
-  
-  # Build reduced summary: one row per (alpha, theta) pair
-  reduced_mat <- matrix(
-    NA_real_,
-    nrow = n_chunk,
-    ncol = 3,
-    dimnames = list(NULL, c("lambda_alpha", "lambda_theta", "cv_score"))
+  # 4) Compute per‐seed mean over folds
+  rep_means <- aggregate(
+    trimmed_CV ~ alpha_idx + theta_idx + seed_idx,
+    data = CVmat,
+    FUN  = function(x) mean(x, na.rm = TRUE)
   )
   
-  for (j in seq_len(n_chunk)) {
-    rows_j <- ((j - 1) * block_sz + 1):(j * block_sz)
-    submat <- CVmat[rows_j, , drop = FALSE]
-    # Compute mean trimmed_CV per repetition, then take the maximum across reps
-    mean_by_rep <- tapply(
-      submat[, "trimmed_CV"],
-      submat[, "rep_idx"],
-      mean,
-      na.rm = TRUE
-    )
-    best_score <- max(mean_by_rep, na.rm = TRUE)
-    reduced_mat[j, ] <- c(
-      submat[1, "lambda_alpha"],
-      submat[1, "lambda_theta"],
-      best_score
-    )
-  }
+  # 5) Take max across seeds → cv_score
+  best_by_combo <- aggregate(
+    trimmed_CV ~ alpha_idx + theta_idx,
+    data = rep_means,
+    FUN  = function(x) max(x, na.rm = TRUE)
+  )
+  names(best_by_combo)[3] <- "cv_score"
   
-  # Select optimal penalties (max CV score)
-  opt_row     <- which.max(reduced_mat[, "cv_score"])
-  opt_lambdas <- reduced_mat[opt_row, c("lambda_alpha", "lambda_theta")]
+  # 6) Unique lambda values per combo
+  unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
   
-  return(list(
+  # 7) Count non‐NA original runs per combo
+  counts_df <- aggregate(
+    I(!is.na(trimmed_CV)) ~ alpha_idx + theta_idx,
+    data = CVmat,
+    FUN  = sum
+  )
+  names(counts_df)[3] <- "count"
+  
+  # 8) Merge everything
+  reduced_mat <- merge(unique_lams, best_by_combo, by = c("alpha_idx","theta_idx"))
+  reduced_mat <- merge(reduced_mat,  counts_df,    by = c("alpha_idx","theta_idx"))
+  reduced_mat <- reduced_mat[order(reduced_mat$alpha_idx, reduced_mat$theta_idx), ]
+  
+  # 9) Pick optimal lambdas
+  opt_row     <- which.max(reduced_mat$cv_score)
+  opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha","lambda_theta")])
+  
+  list(
     CVmat        = CVmat,
-    reduced_mat  = reduced_mat,
+    reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
-    max_NA_prop  = max_NA_prop
-  ))
+    max_NA_prop  = max(CVmat[, "prop_CV"], na.rm = TRUE)
+  )
 }
 ```
 
@@ -2504,6 +2521,7 @@ refit_lcd <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   cv_reps        = 5,
+  seeds          = 1:5,
   trim_prob      = 0.05,
   save_dir       = "./result",
   n_cores        = "max",
@@ -2538,10 +2556,10 @@ refit_lcd <- function(
   results <- parallel::parLapply(
     cl,
     seq_len(cv_reps),
-    function(rep_idx) {
-      # start log for this repeat
-      log_msg <- paste0("▶ Refit repeat ", rep_idx, "\n")
-      set.seed(rep_idx)
+    function(seed_idx) {
+      # start log for this seed
+      log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")
+      set.seed(seed_idx)
       
       # capture ALL output from main(), including messages
       out_log <- capture.output({
@@ -2562,7 +2580,7 @@ refit_lcd <- function(
             n_restarts      = n_restarts
           ),
           error = function(e) {
-            message("✖ Error on repeat ", rep_idx, ": ", e$message)
+            message("✖ Error on seed ", seed_idx, ": ", e$message)
             return(NA)
           }
         )
@@ -2575,7 +2593,7 @@ refit_lcd <- function(
       if ((!is.list(fit_try))) {
         # failed
         return(list(
-          log = paste0(log_msg, "✖ Fit failed on repeat ", rep_idx, "\n"),
+          log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, "\n"),
           Q   = NA,
           iter= NULL
         ))
@@ -2583,10 +2601,10 @@ refit_lcd <- function(
     
     # if successful, record final Q and save
       final_Q  <- fit_try$iter$Q[length(fit_try$iter$Q)]
-      save_path <- file.path(save_dir, paste0("refit_", rep_idx, ".Rdata"))
+      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg <- paste0(log_msg,
-                        "✔ Completed repeat ", rep_idx,
+                        "✔ Completed seed ", seed_idx,
                         "; final Q = ", round(final_Q, 4), "\n")
       
       return(list(
@@ -2625,63 +2643,61 @@ refit_lcd <- function(
 
 
 ```{r}
-#' Generate synthetic time‐series data from a 2‐component skewed mixture model
-#'
-#' @description
-#' Simulates a univariate response observed over \code{n_time} time points from a
-#' two‐component mixture‐of‐experts model with skew‐normal noise.  At each time
-#' point, a changing‐probability mixture of two regression lines generates
-#' responses; the mixture weights vary with a binary “change‐point” covariate
-#' and an optional smooth baseline trend.  The resulting continuous observations
-#' are then binned into histograms for use with the LCDmix pipeline.
-#'
-#' @param seed Optional integer; random seed for reproducibility. Default: \code{NULL}.
-#' @param n_per_time Integer; base number of observations per time point in the
-#'   second half of the series.  The first half uses \code{0.8 * n_per_time}.
-#'   Must be a multiple of 5. Default: \code{200}.
-#' @param beta_par Numeric; slope coefficient on the baseline covariate for component 1
-#'   (component 2 has intercept offset given by \code{intercept_gap}). Default: \code{0.5}.
-#' @param n_covariates Integer ≥ 3; total number of covariates (including baseline and change‐point). Default: \code{3}.
-#' @param grid_size Integer; number of grid cells per axis for binning the data. Default: \code{30}.
-#' @param skew_alpha Numeric; shape parameter \(\alpha\) for the skew‐normal noise. Default: \code{10}.
-#' @param intercept_gap Numeric; difference in intercepts between component 2 and 1. Default: \code{3}.
-#' @param n_time Integer; total number of time points (must be even). Default: \code{100}.
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{\code{ylist}}{List of length \code{n_time}, each an \eqn{M_t \times 1}
-#'     matrix of binned counts per time point.}
-#'   \item{\code{X}}{\eqn{n_time \times n_covariates} covariate matrix:  
-#'     column 1 = scaled smooth baseline trend,  
-#'     column 2 = binary change‐point indicator (0 for first half, 1 for second),  
-#'     columns 3:\(n_{\text{covariates}}\) = i.i.d.\ noise covariates.}
-#'   \item{\code{countslist}}{List of length \code{n_time} of numeric vectors of raw
-#'     histogram counts (before normalization).}
-#'   \item{\code{mnmat}}{\eqn{n_time \times 2} matrix of true component means at each time.}
-#'   \item{\code{prob}}{\eqn{n_time \times 2} matrix of true mixture probabilities.}
-#'   \item{\code{mn}}{\eqn{n_time \times 1 \times 2} array of true means (for plotting consistency).}
-#'   \item{\code{numclust}}{Integer number of mixture components (always 2).}
-#'   \item{\code{alpha}}{\eqn{(n_{\text{covariates}}+1)\times 2} matrix of true mixture‐weight coefficients.}
-#'   \item{\code{beta}}{\eqn{(n_{\text{covariates}}+1)\times 2} matrix of true regression coefficients.}
-#'   \item{\code{sigma}}{\eqn{2\times1\times1} array of true noise variances for each component.}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' # Simulate a small dataset
-#' dat <- generate_skewed_data(
-#'   seed          = 42,
-#'   n_per_time    = 50,
-#'   beta_par      = 1.0,
-#'   n_covariates  = 4,
-#'   grid_size     = 20,
-#'   skew_alpha    = 5,
-#'   intercept_gap = 2,
-#'   n_time        = 20
-#' )
-#' str(dat)
-#' }
-#' @export
+#` Generate skewed mixture‐of‐experts time‐series data, binned for LCDmix
+#`
+#` @description
+#` Simulate a two‐component mixture‐of‐experts over \code{n_time} equally‐spaced time points.  
+#` Each component has a linear mean function (intercept + covariates), where one component’s 
+#` intercept is shifted by \code{intercept_gap}.  Observations are drawn from a skew‐normal 
+#` noise distribution with shape parameter \code{skew_alpha}, then binned into \code{grid_size} 
+#` bins via \pkg{flowmix} utilities.  The function returns both the raw simulated bins and 
+#` the true underlying mixture parameters and component densities at each bin midpoint.
+#`
+#` @param seed          Integer or \code{NULL}.  If non‐\code{NULL}, used to set \code{set.seed()} for reproducibility.
+#` @param n_per_time    Integer; total number of observations per time point in the second half of the series.
+#`                      In the first half, only \(0.8 \times n\_per\_time\) observations are drawn.  
+#`                      Must be a multiple of 5.
+#` @param beta_par      Numeric; slope coefficient on the first covariate (“baseline”) for component 1 (and \(-\beta\_par\) for component 2).
+#` @param n_covariates  Integer ≥ 3; total number of covariates (including baseline trend and change‐point indicator).
+#` @param grid_size     Integer; number of bins per marginal histogram for each time point.
+#` @param skew_alpha    Numeric; shape parameter of the skew‐normal noise distribution.
+#` @param intercept_gap Numeric; intercept shift for component 2 relative to component 1.
+#` @param n_time        Integer > 0 and even; total number of time points \(T\).  Must be even.
+#`
+#` @return A list with components:
+#` \describe{
+#`   \item{\code{ylist}}{List of length \code{n_time}; each element is an \code{n_t × 1} matrix of raw observations (pre‐binning).}
+#`   \item{\code{X}}{Numeric \code{n_time × p} covariate matrix (columns: baseline trend, change‐point indicator, noise covariates).}
+#`   \item{\code{countslist}}{List of length \code{n_time}; each element is a numeric vector of binned counts at the midpoints in \code{ylist}.}
+#`   \item{\code{mnmat}}{Numeric \code{n_time × 2} matrix of true component means at each time.}
+#`   \item{\code{prob}}{Numeric \code{n_time × 2} matrix of true mixing probabilities \(\pi_{t,k}\).}
+#`   \item{\code{dens_true}}{List of length \code{n_time}; each element is an \code{n_t × 2} matrix giving the true component‐density 
+#`     values evaluated at each bin midpoint (matching \code{countslist}).}
+#`   \item{\code{mn}}{Array of dimension \code{n_time × 1 × 2}, same as \code{mnmat} but in 3D.}
+#`   \item{\code{numclust}}{Integer; number of mixture components (2).}
+#`   \item{\code{alpha}}{Numeric \((p+1)\times 2\) matrix of true mixture‐weight (logit) coefficients.}
+#`   \item{\code{beta}}{Numeric \((p+1)\times 2\) matrix of true regression coefficients for each component.}
+#` }
+#`
+#` @examples
+#` \dontrun{
+#` sim <- generate_skewed_data(
+#`   seed = 123,
+#`   n_per_time   = 200,
+#`   beta_par     = 0.5,
+#`   n_covariates = 4,
+#`   grid_size    = 30,
+#`   skew_alpha   = 5,
+#`   intercept_gap= 2,
+#`   n_time       = 100
+#` )
+#` str(sim)
+#` # ylist[[1]] is the raw draws for time 1
+#` # countslist[[1]] gives the binned counts
+#` # sim$prob[1,] are true mixing proportions at t=1
+#` # sim$dens_true[[1]] gives the true component‐densities at each bin
+#` }
+#` @export
 generate_skewed_data <- function(
   seed           = NULL,
   n_per_time     = 200,
@@ -2707,6 +2723,10 @@ generate_skewed_data <- function(
   n_first_half  <- rep(0.8 * n_per_time, n_time / 2)
   n_second_half <- rep(n_per_time,     n_time / 2)
   n_list        <- c(n_first_half, n_second_half)
+  
+  #— precompute the skew‐normal centering constants once —#
+  omega   <- sqrt(1 / (1 - 2*(1/pi)*skew_alpha^2/(1 + skew_alpha^2)))
+  mn_shift<- omega * skew_alpha / sqrt(1 + skew_alpha^2) * sqrt(2/pi)
   
   #— Simulate covariates —#
   # Baseline trend: smooth version of a fixed sequence
@@ -2814,15 +2834,12 @@ generate_skewed_data <- function(
     )
     # True component means
     means_t <- mnmat[t, clust_ids]
-    # Skew‐normal noise centered at zero
-    omega   <- sqrt(1 / (1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
-    shift   <- omega * skew_alpha / sqrt(1 + skew_alpha^2) * sqrt(2/pi)
     noise_t <- sn::rsn(
       n      = n_list[t],
       xi     = 0,
       omega  = omega,
       alpha  = skew_alpha
-    ) - shift
+    ) - mn_shift
     # Observations
     ylist[[t]] <- matrix(means_t + noise_t, ncol = 1)
   }
@@ -2838,25 +2855,145 @@ generate_skewed_data <- function(
   ylist         <- binned$ybin_list
   countslist    <- binned$counts_list
   
+  #— Compute true component densities on the same bin‐midpoints —#
+  # residual error was SN(xi=0, omega, alpha)-mn_shift, so
+  # f_resid(r) = dsn(r + mn_shift)
+  dens_true <- lapply(seq_len(n_time), function(t) {
+    y_mid <- as.numeric(ylist[[t]])
+    # build a n_t × numclust matrix
+    sapply(seq_len(numclust), function(k) {
+      resid <- y_mid - mnmat[t, k]
+      sn::dsn(resid + mn_shift,
+              xi    = 0,
+              omega = omega,
+              alpha = skew_alpha)
+    })
+  })
+  
   #— Pack return object —#
   mn_array <- array(
     dim = c(n_time, 1, numclust),
     data = as.vector(mnmat)
   )
-  sigma_array <- array(1, dim = c(numclust, 1, 1))
-  
+ 
   return(list(
     ylist       = ylist,
     X           = X,
     countslist  = countslist,
     mnmat       = mnmat,
-    prob        = pi_mat,
+    prob        = pi_mat,        # TT × K matrix of true π
+    dens_true   = dens_true,     # list of length TT, each n_t × K densities
     mn          = mn_array,
     numclust    = numclust,
     alpha       = alpha,
-    beta        = beta,
-    sigma       = sigma_array
+    beta        = beta
   ))
+}
+```
+
+
+
+```{r}
+#` Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
+#`
+#` @description
+#` For each time point \code{t}, evaluates the estimated mixture density 
+#` (either from an LCDmix fit or a flowmix fit) and the true mixture density 
+#` at the observed bin midpoints, computes the \(L^1\) distance, and then 
+#` returns both the per‐time distances and the overall weighted average 
+#` distance (weighted by total biomass at each \code{t}).
+#`
+#` @param Y_bin List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.
+#` @param X Numeric \code{TT × p} matrix of covariates (rows = time points).
+#` @param bin_mass List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.
+#` @param est_res A fitted model object:
+#`   \describe{
+#`     \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
+#`     \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
+#`   }
+#` @param true_res A list with components:
+#`   \describe{
+#`     \item{\code{prob}}{\code{TT × K} numeric matrix of true mixing proportions \eqn{\pi_{t,k}}.}
+#`     \item{\code{dens_true}}{List of length \code{TT}, each an \code{n_t × K} numeric matrix of the true component densities evaluated at \code{Y_bin[[t]]}.}
+#`   }
+#`
+#` @return A list with elements:
+#` \describe{
+#`   \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
+#`   \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
+#` }
+#`
+#` @examples
+#` \dontrun{
+#` sim <- generate_skewed_data(seed = 42)
+#` Y_bin    <- sim$ylist
+#` X        <- sim$X
+#` bin_mass <- sim$countslist
+#`
+#` # Fit an LCDmix model
+#` fit <- main(Y = Y_bin, X = X, biomass = bin_mass, K = sim$numclust)
+#` true_res <- list(prob = sim$prob, dens_true = sim$dens_true)
+#`
+#` # Compute metric
+#` dist <- mixture_metric(Y_bin, X, bin_mass, fit$iter, true_res)
+#` plot(dist$per_time, type = "b", xlab = "Time", ylab = "L1 distance")
+#` print(dist$weighted)
+#` }
+#` @export
+mixture_metric <- function(
+  Y_bin,
+  X,
+  bin_mass,
+  est_res,
+  true_res
+) {
+  TT <- length(Y_bin)
+  
+  ## 1) mixing proportions
+  if (!is.null(est_res$alpha_new)) {
+    pi_est <- pi_k(X, est_res$alpha_new)
+  } else if (!is.null(est_res$alpha)) {
+    pi_est <- pi_k(X, est_res$alpha)
+  } else {
+    stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
+  }
+  
+  ## 2) component‐density function
+  if (!is.null(est_res$g_new)) {
+    K <- length(est_res$g_new)
+    dens_est_fun <- function(t, y_mid) {
+      sapply(seq_len(K), function(k) {
+        mu <- est_res$theta0_new[[k]] + sum(X[t, ] * est_res$theta_new[[k]])
+        logcondens::evaluateLogConDens(y_mid - mu, est_res$g_new[[k]])[,3]
+      })
+    }
+  } else {
+    mn_arr <- est_res$mn
+    sigma  <- as.numeric(est_res$sigma)
+    K      <- dim(mn_arr)[3]
+    dens_est_fun <- function(t, y_mid) {
+      sapply(seq_len(K), function(k) {
+        stats::dnorm(y_mid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
+      })
+    }
+  }
+  
+  ## 3) compute per‐time L1
+  per_time <- numeric(TT)
+  for (t in seq_len(TT)) {
+    y_mid     <- as.numeric(Y_bin[[t]])
+    dens_est  <- dens_est_fun(t, y_mid)
+    mix_est   <- rowSums(pi_est[t, ] * dens_est)
+    mix_true  <- rowSums(true_res$prob[t, ] * true_res$dens_true[[t]])
+    dy        <- if (length(y_mid) > 1L) median(diff(sort(y_mid))) else 1
+    per_time[t] <- sum(abs(mix_est - mix_true)) * dy
+  }
+  
+  ## 4) biomass‐weighted average
+  w_t      <- vapply(bin_mass, sum, numeric(1))
+  weighted <- sum(w_t * per_time) / sum(w_t)
+  
+  list(per_time = per_time, weighted = weighted)
 }
 ```
 
