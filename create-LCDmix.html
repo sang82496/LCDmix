@@ -1457,7 +1457,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     # Check convergence or decrease
     inc &lt;- (Q[i + 1] - Q[i]) / abs(Q[i])
     if (inc &lt; 0) {
-      message("⚠ Q decreased; reverting to previous iteration")
+      message("⚠ Q decreased at iteration ", i,  "; reverting to previous iteration")
       idx_new    &lt;- idx_old
       resp_new   &lt;- resp_old
       weight_new &lt;- weight_old
