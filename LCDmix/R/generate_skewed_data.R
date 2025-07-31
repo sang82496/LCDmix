@@ -245,6 +245,8 @@ generate_skewed_data <- function(
     alpha       = alpha,
     beta        = beta,
     omega       = omega,
-    mn_shift    = mn_shift
+    mn_shift    = mn_shift,
+    skew_alpha  = skew_alpha,        
+    intercept_gap = intercept_gap
   ))
 }
