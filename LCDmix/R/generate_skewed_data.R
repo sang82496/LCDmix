@@ -243,6 +243,8 @@ generate_skewed_data <- function(
     mn          = mn_array,
     numclust    = numclust,
     alpha       = alpha,
-    beta        = beta
+    beta        = beta,
+    omega       = omega,
+    mn_shift    = mn_shift
   ))
 }
