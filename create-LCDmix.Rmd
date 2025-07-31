@@ -1186,7 +1186,7 @@ iteration <- function(
     # Check convergence or decrease
     inc <- (Q[i + 1] - Q[i]) / abs(Q[i])
     if (inc < 0) {
-      message("⚠ Q decreased; reverting to previous iteration")
+      message("⚠ Q decreased at iteration ", i,  "; reverting to previous iteration")
       idx_new    <- idx_old
       resp_new   <- resp_old
       weight_new <- weight_old
