@@ -1250,6 +1250,8 @@ iteration <- function(
     alpha_new   = alpha_new,
     theta0_new  = theta0_new,
     theta_new   = theta_new, 
+    lambda_alpha = lambda_alpha,
+    lambda_theta = lambda_theta,
     g_new       = g_new,
     Q           = Q,
     Q_every     = Q_every,
