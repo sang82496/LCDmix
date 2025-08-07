@@ -44,7 +44,9 @@
 #' @export
 cv_summary <- function(
   index_matrix,
-  save_dir = "./result"
+  save_dir = "./result",
+  simul    = FALSE,
+  sim_id
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -60,26 +62,28 @@ cv_summary <- function(
     theta_idx  <- index_matrix[i, "theta_idx"]
     seed_idx   <- index_matrix[i, "seed_idx"]
     fold_idx   <- index_matrix[i, "fold_idx"]
-    file_name  <- file.path(
+    
+    if (!simul){
+      file_name  <- file.path(
       save_dir,
       sprintf("%d-%d-%d-%d.Rdata",
-              alpha_idx, theta_idx, seed_idx, fold_idx)
-    )
+              alpha_idx, theta_idx, seed_idx, fold_idx))
+      } else {
+      file_name  <- file.path(
+      save_dir,
+      sprintf("%d_%d-%d-%d-%d.Rdata",
+              sim_id, alpha_idx, theta_idx, seed_idx, fold_idx))
+    }
+    
     # skip runs whose file never got written
     if (!file.exists(file_name)) {
       warning("CV file missing: ", file_name, "; leaving NA")
       next
     }
-    
-    # try to load, but if it errors just warn & continue
-    tryCatch({
-      load(file_name, envir = environment())
-      CVmat[i, "prop_CV"]    <- prop_CV
-      CVmat[i, "trimmed_CV"] <- trimmed_CV
-    }, error = function(e) {
-      warning("Failed to load or assign from ", file_name, ": ", e$message)
-      # CVmat row stays NA
-    })
+    # load
+    load(file_name, envir = environment())
+    CVmat[i, "prop_CV"]    <- prop_CV
+    CVmat[i, "trimmed_CV"] <- trimmed_CV
   }
   good <- !is.na(CVmat[,"trimmed_CV"])
   if (!any(good)) {

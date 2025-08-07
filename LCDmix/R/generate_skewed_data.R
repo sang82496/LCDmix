@@ -57,9 +57,9 @@
 #' @export
 generate_skewed_data <- function(
   seed           = NULL,
-  n_per_time     = 200,
+  n_per_time     = 1000,
   beta_par       = 0.5,
-  n_covariates   = 3,
+  n_covariates   = 10,
   grid_size      = 30,
   skew_alpha     = 10,
   intercept_gap  = 3,
