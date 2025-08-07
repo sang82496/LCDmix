@@ -2451,7 +2451,7 @@ cv_summary <- function(
   index_matrix,
   save_dir = "./result",
   simul    = FALSE,
-  sim_id
+  sim_idx
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -2477,7 +2477,7 @@ cv_summary <- function(
       file_name  <- file.path(
       save_dir,
       sprintf("%d-%d-%d-%d-%d.Rdata",
-              sim_id, alpha_idx, theta_idx, seed_idx, fold_idx))
+              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx))
     }
     
     # skip runs whose file never got written

@@ -4,7 +4,7 @@
 \alias{cv_summary}
 \title{Summarize CV results and select optimal penalty values}
 \usage{
-cv_summary(index_matrix, save_dir = "./result", simul = FALSE, sim_id)
+cv_summary(index_matrix, save_dir = "./result", simul = FALSE, sim_idx)
 }
 \arguments{
 \item{index_matrix}{Integer matrix with one row per CV run, containing columns
