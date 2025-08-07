@@ -46,7 +46,7 @@ cv_summary <- function(
   index_matrix,
   save_dir = "./result",
   simul    = FALSE,
-  sim_idx
+  sim_idx  = NA
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
