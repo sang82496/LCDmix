@@ -147,36 +147,43 @@ run_cv_simul <- function(
     # 3) fit main()
     set.seed(idx_row["seed_idx"])
     err_msg <- NULL
-    fit_try <- tryCatch({
-      main(
-        Y              = Y_tr,
-        X              = X_tr,
-        biomass        = bin_mass_tr,
-        binned          = TRUE,
-        n_bins          = 0,
-        K               = K,
-        lambda_alpha    = idx_row["lambda_alpha"],
-        lambda_theta    = idx_row["lambda_theta"],
-        max_iter        = max_iter,
-        iter_eta        = iter_eta,
-        resp_threshold  = resp_threshold,
-        debug           = TRUE,
-        maxdev          = maxdev,
-        n_restarts      = n_restarts
+    out_log <- capture.output(
+      fit_try <- tryCatch({
+        main(
+          Y              = Y_tr,
+          X              = X_tr,
+          biomass        = bin_mass_tr,
+          binned          = TRUE,
+          n_bins          = 0,
+          K               = K,
+          lambda_alpha    = idx_row["lambda_alpha"],
+          lambda_theta    = idx_row["lambda_theta"],
+          max_iter        = max_iter,
+          iter_eta        = iter_eta,
+          resp_threshold  = resp_threshold,
+          debug           = TRUE,
+          maxdev          = maxdev,
+          n_restarts      = n_restarts
+        )
+      }, error = function(e) {
+        err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
+                            ", alpha=", idx_row["lambda_alpha"],
+                            ", theta=", idx_row["lambda_theta"], 
+                              " seed=", idx_row["seed_idx"], 
+                              " fold=", idx_row["fold_idx"],": ",
+                               e$message)
+        return(NULL)
+      }),
+        type = "message"      # capture both message() and cat()/print()
       )
-    }, error = function(e) {
-      err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
-                          ", alpha=", idx_row["lambda_alpha"],
-                          ", theta=", idx_row["lambda_theta"], 
-                            " seed=", idx_row["seed_idx"], 
-                            " fold=", idx_row["fold_idx"],": ",
-                             e$message)
-      return(NULL)
-    })
+    
+    log_msg <- paste0(log_msg,
+                        paste0(out_log, collapse = "\n"),
+                        "\n")
     
     # now fit_try contains either the fit or NA
       if (is.null(fit_try)) {
-        log_msg    <- paste0(log_msg, "✖ Error - Fit completely failed: ", err_msg, "\n")
+        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
         prop_CV    <- NA
         trimmed_CV <- NA
         
