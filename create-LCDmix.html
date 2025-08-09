@@ -2886,7 +2886,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       }
     
     # if successful, record final Q and save
-      final_Q  &lt;- fit_try$iter$Q[length(fit_try$iter$Q)]
+      final_Q  &lt;- tail(fit_try$iter$Q, 1)
       save_path &lt;- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg &lt;- paste0(log_msg,
@@ -3572,7 +3572,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     
     # now fit_try contains either the fit or NA
       if (is.null(fit_try)) {
-        log_msg    &lt;- paste0(log_msg, "Error: Fit completely failed\n")
+        log_msg    &lt;- paste0(log_msg, "✖ Error - Fit completely failed: ", err_msg, "\n")
         prop_CV    &lt;- NA
         trimmed_CV &lt;- NA
         

@@ -176,7 +176,7 @@ run_cv_simul <- function(
     
     # now fit_try contains either the fit or NA
       if (is.null(fit_try)) {
-        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
+        log_msg    <- paste0(log_msg, "✖ Error - Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
         
