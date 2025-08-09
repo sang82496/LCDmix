@@ -140,7 +140,7 @@ refit_lcd <- function(
       }
     
     # if successful, record final Q and save
-      final_Q  <- fit_try$iter$Q[length(fit_try$iter$Q)]
+      final_Q  <- tail(fit_try$iter$Q, 1)
       save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg <- paste0(log_msg,
