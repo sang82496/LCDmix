@@ -117,7 +117,7 @@ simul_refit <- function(
     envir   = environment()
   )
   
-  logs <- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
+  res_i <- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
     idx_row <- best_table[i, ]
     sim     <- readRDS(file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds")))
     log_msg <- paste0(
@@ -129,29 +129,37 @@ simul_refit <- function(
     
     set.seed(idx_row["seed_idx"])
     err_msg <- NULL
-    fit_try <- tryCatch({
-      main(
-        Y               = sim$ylist,
-        X               = sim$X,
-        biomass         = sim$countslist,
-        binned          = TRUE,
-        n_bins          = 0,
-        K               = K,
-        lambda_alpha    = idx_row["lambda_alpha"],
-        lambda_theta    = idx_row["lambda_theta"],
-        max_iter        = max_iter,
-        iter_eta        = iter_eta,
-        resp_threshold  = resp_threshold,
-        debug           = TRUE
+    out_log <- capture.output(
+      fit_try <- tryCatch({
+        main(
+          Y               = sim$ylist,
+          X               = sim$X,
+          biomass         = sim$countslist,
+          binned          = TRUE,
+          n_bins          = 0,
+          K               = K,
+          lambda_alpha    = idx_row["lambda_alpha"],
+          lambda_theta    = idx_row["lambda_theta"],
+          max_iter        = max_iter,
+          iter_eta        = iter_eta,
+          resp_threshold  = resp_threshold,
+          debug           = TRUE
+        )
+      }, error = function(e) {
+        err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
+                            ", alpha=", idx_row["lambda_alpha"],
+                            ", theta=", idx_row["lambda_theta"], 
+                             ", seed=", idx_row["seed_idx"], ": ",
+                          e$message)
+        return(NULL)
+      }),
+        type = "message"      # capture both message() and cat()/print()
       )
-    }, error = function(e) {
-      err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
-                          ", alpha=", idx_row["lambda_alpha"],
-                          ", theta=", idx_row["lambda_theta"], 
-                           ", seed=", idx_row["seed_idx"], ": ",
-                        e$message)
-      return(NULL)
-    })
+
+      # append the captured log to your log_msg
+      log_msg <- paste0(log_msg,
+                        paste0(out_log, collapse = "\n"),
+                        "\n")
     
       if (is.null(fit_try) || !is.list(fit_try$iter)) {
         log_msg    <- paste0(log_msg, "✖ Error: ", err_msg, "\n")
@@ -189,6 +197,15 @@ simul_refit <- function(
               metric         = metric))
   })
   parallel::stopCluster(cl)
+  
+   #— Summarize failures —#
+  res = unlist(lapply(res_i, function(x) {is.na(x$Q_final)}))
+  res_logs   <- c(sprintf("Failures: %d/%d (%.1f%%)",
+            sum(res), length(res), 100 * sum(res) / length(res))
+  )
+  
   # bind into a data.frame
-  return(do.call(rbind, logs))
+  return(list(res_logs = res_logs,
+              res_table = do.call(rbind, res_i))
+        )
 }
