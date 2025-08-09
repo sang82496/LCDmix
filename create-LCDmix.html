@@ -1324,6 +1324,19 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   Q           &lt;- init_res$Q
   Q_every     &lt;- init_res$Q_every
   
+  last_state &lt;- list(
+    idx_old     = idx_old,
+    resp_old    = resp_old,
+    weight_old  = weight_old,
+    resi_old    = resi_old,
+    alpha_old   = alpha_old,
+    theta0_old  = theta0_old,
+    theta_old   = theta_old, 
+    g_old       = g_old,
+    Q           = Q,
+    Q_every     = Q_every,
+    i           = 0)
+  
   res &lt;- tryCatch({
   for (i in seq_len(max_iter)){
     
@@ -1497,7 +1510,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     Q_every     = Q_every,
     i           = i)
   }
-    
     list(final = last_state,
          error = NULL)
     }, error = function(e){

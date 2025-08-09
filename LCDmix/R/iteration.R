@@ -70,6 +70,19 @@ iteration <- function(
   Q           <- init_res$Q
   Q_every     <- init_res$Q_every
   
+  last_state <- list(
+    idx_old     = idx_old,
+    resp_old    = resp_old,
+    weight_old  = weight_old,
+    resi_old    = resi_old,
+    alpha_old   = alpha_old,
+    theta0_old  = theta0_old,
+    theta_old   = theta_old, 
+    g_old       = g_old,
+    Q           = Q,
+    Q_every     = Q_every,
+    i           = 0)
+  
   res <- tryCatch({
   for (i in seq_len(max_iter)){
     
@@ -243,7 +256,6 @@ iteration <- function(
     Q_every     = Q_every,
     i           = i)
   }
-    
     list(final = last_state,
          error = NULL)
     }, error = function(e){
