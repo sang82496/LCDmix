@@ -57,6 +57,13 @@ refit_lcd <- function(
   lambda_alpha <- opt_lambdas[1]
   lambda_theta <- opt_lambdas[2]
   
+  if (is.null(seeds) & is.null(cv_reps)) {
+    stop("`seeds` and `cv_reps` cannot be both NULL")
+  }
+  if (is.null(seeds)) {
+    seeds = seq_len(cv_reps)
+  }
+  
   # Determine number of workers
   workers <- if (identical(n_cores, "max")) {
     parallel::detectCores(logical = FALSE) - 1
@@ -156,7 +163,7 @@ refit_lcd <- function(
   
   # Summary
   summary_msg <- paste0(
-    "Completed ", cv_reps, " repeats; ",
+    "Completed ", length(seeds), " repeats; ",
     sum(is.na(refit_scores)), " failures; ",
     "best Q = ", round(refit_scores[best_idx],4),
     " on repeat ", best_idx, "\n"
