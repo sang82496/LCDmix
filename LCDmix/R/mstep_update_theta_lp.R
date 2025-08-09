@@ -146,7 +146,8 @@ mstep_update_theta_lp <- function(
     mat = const_mat, 
     dir = const_dir, 
     rhs = const_vec,  
-    max = TRUE)
+    max = TRUE,
+    time_limit = 3600)
   
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")

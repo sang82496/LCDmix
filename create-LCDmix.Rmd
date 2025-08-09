@@ -1687,7 +1687,8 @@ mstep_update_theta_lp <- function(
     mat = const_mat, 
     dir = const_dir, 
     rhs = const_vec,  
-    max = TRUE)
+    max = TRUE,
+    time_limit = 3600)
   
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
@@ -2603,6 +2604,13 @@ refit_lcd <- function(
   lambda_alpha <- opt_lambdas[1]
   lambda_theta <- opt_lambdas[2]
   
+  if (is.null(seeds) & is.null(cv_reps)) {
+    stop("`seeds` and `cv_reps` cannot be both NULL")
+  }
+  if (is.null(seeds)) {
+    seeds = seq_len(cv_reps)
+  }
+  
   # Determine number of workers
   workers <- if (identical(n_cores, "max")) {
     parallel::detectCores(logical = FALSE) - 1
@@ -2702,7 +2710,7 @@ refit_lcd <- function(
   
   # Summary
   summary_msg <- paste0(
-    "Completed ", cv_reps, " repeats; ",
+    "Completed ", length(seeds), " repeats; ",
     sum(is.na(refit_scores)), " failures; ",
     "best Q = ", round(refit_scores[best_idx],4),
     " on repeat ", best_idx, "\n"
@@ -3080,6 +3088,614 @@ mixture_metric <- function(
 ```
 
 
+
+```{r}
+#' Simulate multiple skew‐normal mixture datasets and save to disk
+#'
+#' @description
+#' For each combination of \code{seed}, \code{intercept_gap}, and
+#' \code{skew_alpha}, this function calls \code{generate_skewed_data()}
+#' with the supplied simulation parameters and writes the result out
+#' (one list per file) as \code{sim_<i>.rds} in \code{sim_dir}.  
+#' It returns the data‐frame of all parameter combinations (in the same
+#' row‐order as the saved files).
+#'
+#' @param seeds          Integer vector of random seeds.
+#' @param intercept_gaps Numeric vector of change‐point intercept gaps.
+#' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
+#' @param sim_dir       Character; directory to hold \code{sim_<i>.rds} files.
+#'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
+#' @param n_per_time     Number of observations per time‐point in the second half.
+#'                       Passed to \code{generate_skewed_data()}. Default: 1000.
+#' @param beta_par       The slope magnitude for the “baseline” covariate.
+#'                       Default: 0.5.
+#' @param n_covariates   Number of covariates (including baseline & change‐point).
+#'                       Default: 10.
+#' @param grid_size      Number of histogram bins for each time‐point.
+#'                       Default: 30.
+#' @param n_time         Total number of time‐points to simulate. Default: 100.
+#'
+#' @return A data.frame with columns \code{seed}, \code{intercept_gap},
+#'   \code{skew_alpha}, where each row \code{i} corresponds to file
+#'   \code{sim_dir/sim_i.rds}.
+#'
+#' @export
+simulate_and_save <- function(
+  seeds,
+  intercept_gaps,
+  skew_alphas,
+  sim_dir    = "sim_data",
+  n_per_time  = 1000,
+  beta_par    = 0.5,
+  n_covariates= 10,
+  grid_size   = 30,
+  n_time      = 100
+) {
+  combos <- expand.grid(
+    seed          = seeds,
+    intercept_gap = intercept_gaps,
+    skew_alpha    = skew_alphas,
+    stringsAsFactors = FALSE
+  )
+  if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
+
+  for (i in seq_len(nrow(combos))) {
+    sc  <- combos[i, ]
+    sim <- generate_skewed_data(
+      seed          = sc$seed,
+      intercept_gap = sc$intercept_gap,
+      skew_alpha    = sc$skew_alpha,
+      n_per_time    = n_per_time,
+      beta_par      = beta_par,
+      n_covariates  = n_covariates,
+      grid_size     = grid_size,
+      n_time        = n_time
+    )
+    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+  }
+  return(combos)
+}
+```
+
+```{r}
+#' Build a CV job index matrix across simulations, folds, seeds, and penalties
+#'
+#' @description
+#' Creates the full factorial grid over simulation IDs, CV folds, random seeds,
+#' and the indices of \code{alpha_lambdas} and \code{theta_lambdas}. It also
+#' attaches the actual \code{lambda_alpha} and \code{lambda_theta} values for
+#' each row. Each row corresponds to one cross-validation job.
+#'
+#' @param n_sims Integer number of simulated datasets (files \code{sim_<i>.rds}).
+#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values.
+#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values.
+#' @param seeds Vector of random seeds to use for repeated CV runs.
+#' @param nfold Integer number of CV folds per simulation.
+#'
+#' @return A numeric matrix with columns:
+#' \describe{
+#'   \item{sim_idx}{Simulation index (1..\code{n_sims}).}
+#'   \item{alpha_idx}{Index into \code{alpha_lambdas}.}
+#'   \item{theta_idx}{Index into \code{theta_lambdas}.}
+#'   \item{seed_idx}{Random seed used for that job.}
+#'   \item{fold_idx}{CV fold index (1..\code{nfold}).}
+#'   \item{lambda_alpha}{Actual \code{alpha_lambdas[alpha_idx]}.}
+#'   \item{lambda_theta}{Actual \code{theta_lambdas[theta_idx]}.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' idx_mat <- simul_idx_matrix(
+#'   n_sims        = 3,
+#'   alpha_lambdas = c(1e-3, 1e-2),
+#'   theta_lambdas = c(1e-3, 1e-2, 1e-1),
+#'   seeds         = 1:2,
+#'   nfold         = 5
+#' )
+#' head(idx_mat)
+#' }
+#'
+#' @export
+simul_idx_matrix <- function(
+  n_sims,
+  alpha_lambdas,
+  theta_lambdas,
+  seeds,
+  nfold
+) {
+  grid <- expand.grid(
+    fold_idx   = seq_len(nfold),
+    seed_idx   = seeds,
+    theta_idx  = seq_len(length(theta_lambdas)),
+    alpha_idx  = seq_len(length(alpha_lambdas)),
+    sim_idx    = seq_len(n_sims),
+    stringsAsFactors = FALSE
+  )
+  grid <- grid[, c("sim_idx","alpha_idx","theta_idx","seed_idx","fold_idx")]
+  grid$lambda_alpha <- alpha_lambdas[grid$alpha_idx]
+  grid$lambda_theta <- theta_lambdas[grid$theta_idx]
+  return(as.matrix(grid))
+}
+```
+
+```{r}
+#' Run cross-validation jobs across many simulations in parallel
+#'
+#' @description
+#' Executes one CV job per row of \code{simul_idx_mat} in parallel. Each row
+#' identifies a simulation file, a fold, a random seed, and a pair of
+#' penalty indices/values. For each job, the function:
+#' (1) loads the simulation from \code{sim_dir}, (2) rebuilds CV folds,
+#' (3) fits the LCD mixture model on the train split with \code{main()},
+#' (4) evaluates on the held-out split via \code{evaluate_lcd_model()},
+#' and (5) saves \code{prop_CV}, \code{trimmed_CV}, and a text log to \code{save_dir}.
+#'
+#' @param simul_idx_mat Numeric matrix where each row is one job. Must contain
+#'   columns \code{sim_idx}, \code{alpha_idx}, \code{theta_idx}, \code{seed_idx},
+#'   \code{fold_idx}, and the corresponding \code{lambda_alpha}, \code{lambda_theta}
+#'   values (e.g., as produced by \code{simul_idx_matrix()}).
+#' @param sim_dir Character path to the directory with simulation files named
+#'   \code{sim_<sim_idx>.rds}. Default: \code{"sim_data"}.
+#' @param K Integer number of mixture components.
+#' @param max_iter Integer; maximum EM iterations per fit. Default: 30.
+#' @param iter_eta Numeric; convergence threshold on relative change in Q. Default: 1e-3.
+#' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed
+#'   for numerical stability. Default: 1e-3.
+#' @param nfold Integer number of CV folds (used when rebuilding folds for each simulation).
+#'   Default: 5.
+#' @param trim_prob Numeric in [0,1]; fraction of lowest-likelihood points to trim
+#'   when averaging held-out log-likelihood. Default: 0.05.
+#' @param save_dir Character path to write per-job results (\code{*.Rdata}).
+#'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
+#'   Default: \code{"cv_results"}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
+#'   uses all physical cores minus one. Default: \code{"max"}.
+#' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
+#'   Default: 5.
+#' @param maxdev Numeric or \code{NULL}; max-deviation constraint for LP updates
+#'   in theta-step. Default: \code{NULL}.
+#' @param n_restarts Integer; number of random restarts for initialization in \code{main()}.
+#'   Default: 1.
+#'
+#' @return A character vector of per-job log messages, followed by a summary line
+#'   reporting the number and fraction of failures (jobs where fitting or evaluation failed).
+#'
+#' @examples
+#' \dontrun{
+#' # Build an index matrix over sims × folds × seeds × penalties
+#' idx <- simul_idx_matrix(
+#'   n_sims        = 2,
+#'   alpha_lambdas = c(1e-3, 1e-2),
+#'   theta_lambdas = c(1e-3, 1e-2),
+#'   seeds         = 1:2,
+#'   nfold         = 3
+#' )
+#' # Run CV jobs and save results under "cv_results/"
+#' logs <- run_cv_simul(
+#'   simul_idx_mat = idx,
+#'   sim_dir       = "sim_data",
+#'   K             = 2,
+#'   save_dir      = "cv_results",
+#'   n_cores       = "max"
+#' )
+#' cat(tail(logs), sep = "\n")
+#' }
+#'
+#' @export
+run_cv_simul <- function(
+  simul_idx_mat,
+  sim_dir  = "sim_data",
+  K,
+  max_iter           = 30,
+  iter_eta           = 1e-3,
+  resp_threshold     = 1e-3,
+  nfold              = 5,
+  trim_prob          = 0.05,
+  save_dir           = "cv_results",
+  n_cores            = "max",
+  blocksize          = 5,
+  maxdev             = NULL,
+  n_restarts         = 1
+) {
+  # ensure output folder
+  if (!dir.exists(save_dir)) dir.create(save_dir)
+  
+  # determine worker count
+  if (identical(n_cores, "max")) {
+    n_workers <- parallel::detectCores(logical = FALSE) - 1
+  } else {
+    n_workers <- as.integer(n_cores)
+  }
+  cl <- parallel::makeCluster(n_workers)
+  # export functions and data that workers need
+  parallel::clusterExport(
+    cl,
+    varlist = c("simul_idx_mat", "sim_dir", "main","binning",
+                "initialize_model", "iteration", "compute_residuals",
+                "pi_k", "mstep_update_alpha",
+                "mstep_update_theta_log_concave",
+                "mstep_update_intercepts",
+                "mstep_estimate_log_concave_densities",
+                "compute_surrogate_loglikelihood",
+                "modified_logcondens", "e_step_log_concave",
+                "weighted_quantile", "evaluate_lcd_model", 
+                "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
+                "nfold", "trim_prob", "blocksize", "save_dir"),
+    envir   = environment()
+  )
+  
+  logs <- parallel::parLapply(cl, seq_len(nrow(simul_idx_mat)), function(i) {
+    idx_row <- simul_idx_mat[i, ]
+    sim_file <- file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds"))
+    log_msg  <- character(0)
+    
+    # 1) load sim
+    if (!file.exists(sim_file)) {
+      msg <- paste0("Sim file missing: ", sim_file)
+      return(msg)
+    }
+    sim <- readRDS(sim_file)
+    
+    # 2) split into train / test
+    fold_idx   <- idx_row["fold_idx"]
+    Y_bin      <- sim$ylist
+    X          <- sim$X
+    bin_mass   <- sim$countslist
+    TT         <- length(Y_bin)
+    
+    # Create CV folds
+    folds <- flowmix::make_cv_folds(
+      ylist     = Y_bin,
+      nfold     = nfold,
+      blocksize = blocksize
+    )
+    
+    # fold splits by time‐index
+    test_i     <- folds[[fold_idx]]
+    Y_tr       <- Y_bin[-test_i]
+    bin_mass_tr<- bin_mass[-test_i]
+    X_tr       <- X[-test_i, , drop = FALSE]
+    
+    log_msg <- paste0(
+        "alpha=",  idx_row["lambda_alpha"],
+        ", theta=",idx_row["lambda_theta"],
+        ", seed=", idx_row["seed_idx"],
+        ", fold=", idx_row["fold_idx"], "\n"
+      )
+    
+    # 3) fit main()
+    set.seed(idx_row["seed_idx"])
+    err_msg <- NULL
+    fit_try <- tryCatch({
+      main(
+        Y              = Y_tr,
+        X              = X_tr,
+        biomass        = bin_mass_tr,
+        binned          = TRUE,
+        n_bins          = 0,
+        K               = K,
+        lambda_alpha    = idx_row["lambda_alpha"],
+        lambda_theta    = idx_row["lambda_theta"],
+        max_iter        = max_iter,
+        iter_eta        = iter_eta,
+        resp_threshold  = resp_threshold,
+        debug           = TRUE,
+        maxdev          = maxdev,
+        n_restarts      = n_restarts
+      )
+    }, error = function(e) {
+      err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
+                          ", alpha=", idx_row["lambda_alpha"],
+                          ", theta=", idx_row["lambda_theta"], 
+                            " seed=", idx_row["seed_idx"], 
+                            " fold=", idx_row["fold_idx"],": ",
+                             e$message)
+      return(NULL)
+    })
+    
+    # now fit_try contains either the fit or NA
+      if (is.null(fit_try)) {
+        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
+        prop_CV    <- NA
+        trimmed_CV <- NA
+        
+      } else if (is.null(fit_try$iter)) {
+        log_msg <- paste0("Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+                          ": ", fit_try$iter_partial$error, "\n")
+        prop_CV    <- NA
+        trimmed_CV <- NA
+        
+      } else {
+        ev <- evaluate_lcd_model(
+          model     = fit_try$iter,
+          Y         = Y_bin[test_i],
+          X         = X[test_i, , drop = FALSE],
+          biomass   = bin_mass[test_i],
+          trim_prob = trim_prob
+        )
+        prop_CV    <- ev$prop_infinite
+        trimmed_CV <- ev$trimmed_avg_loglike
+        log_msg <- paste0(
+        "Success sim=", idx_row["sim_idx"],
+        " fold=", idx_row["fold_idx"],
+        " seed=", idx_row["seed_idx"],
+        " alpha=", round(idx_row["lambda_alpha"],5),
+        " theta=", round(idx_row["lambda_theta"],5),
+        " -> prop=", round(prop_CV,3),
+        ", trimmed=", round(trimmed_CV,3)
+      )
+      }
+    
+    # 5) save result
+    save_path <- file.path(
+      save_dir,
+      sprintf("%d-%d-%d-%d-%d.Rdata",
+              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
+              idx_row["seed_idx"],idx_row["fold_idx"])
+    )
+    save(prop_CV, trimmed_CV, log_msg, file = save_path)
+    return(log_msg)
+  })
+  parallel::stopCluster(cl)
+  
+  # 7) Summarize failures
+  num_na <- sum(grepl("Error", logs))
+  logs   <- c(
+    logs,
+    sprintf("Failures: %d/%d (%.1f%%)",
+            num_na, length(logs), 100 * num_na / length(logs))
+  )
+  return(logs)
+}
+```
+
+
+```{r}
+#' Summarize CV results across simulations and pick best lambdas
+#'
+#' @description
+#' For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
+#' corresponding rows, calls \code{cv_summary()} to aggregate the CV results for
+#' that simulation, and extracts the optimal penalty pair
+#' \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
+#' per simulation.
+#'
+#' @param simul_idx_mat Numeric matrix of CV jobs (e.g., from
+#'   \code{simul_idx_matrix()}). Must contain a \code{sim_idx} column; all other
+#'   columns required by your \code{cv_summary()} are passed along after removing
+#'   \code{sim_idx}.
+#' @param save_dir Character path to the directory containing the per–CV-run
+#'   result files produced by \code{run_cv_simul()}.
+#'
+#' @return A numeric matrix with three columns:
+#' \describe{
+#'   \item{\code{sim_idx}}{Simulation identifier.}
+#'   \item{\code{lambda_alpha}}{Selected \code{lambda_alpha} for that simulation.}
+#'   \item{\code{lambda_theta}}{Selected \code{lambda_theta} for that simulation.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose you already ran:
+#' # logs <- run_cv_simul(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_results")
+#'
+#' best_tbl <- summarize_simul_cv(
+#'   simul_idx_mat = idx_mat,
+#'   save_dir      = "cv_results"
+#' )
+#' head(best_tbl)
+#' }
+#'
+#' @export
+summarize_simul_cv <- function(simul_idx_mat, save_dir) {
+  sim_idxs <- unique(simul_idx_mat[,"sim_idx"])
+  bests   <- matrix(0, nrow = length(sim_idxs), ncol = 3)
+  colnames(bests) = c("sim_idx", "lambda_alpha", "lambda_theta")
+  for (sim in sim_idxs) {
+    idx_mat <- simul_idx_mat[simul_idx_mat[,"sim_idx"] == sim, -1]
+    out     <- cv_summary(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
+    bests[sim,] <- c(sim, out$opt_lambdas[1], out$opt_lambdas[2])
+  }
+  return(bests)
+}
+```
+
+
+
+```{r}
+#' Refit LCDmix per simulation (with best lambdas) and score via \code{mixture_metric}
+#'
+#' @description
+#' For each simulation in \code{best_table}, this function refits the LCD
+#' mixture-of-experts model using the provided optimal penalty pair
+#' \code{(lambda_alpha, lambda_theta)} and multiple random seeds. Each fit is
+#' evaluated with \code{mixture_metric()} against the simulation ground truth,
+#' and a per-run result is written to \code{save_dir} as
+#' \code{refit_sim<sim_idx>_seed<seed>.rds}. Results are computed in parallel.
+#'
+#' @param best_table A two- or three-column matrix/data.frame with at least
+#'   columns \code{sim_idx}, \code{lambda_alpha}, \code{lambda_theta}. Typically
+#'   the output of \code{summarize_simul_cv()}.
+#' @param sim_dir Directory containing simulation files named
+#'   \code{"sim_<sim_idx>.rds"} produced by \code{simulate_and_save()}.
+#' @param save_dir Directory to write per-refit result files
+#'   \code{"refit_sim<sim_idx>_seed<seed>.rds"}.
+#' @param K Integer; number of mixture components.
+#' @param max_iter Integer; maximum EM iterations in \code{main()}. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance (relative change in Q). Default \code{1e-3}.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed
+#'   for numerical stability. Default \code{1e-3}.
+#' @param refit_seeds Integer vector of RNG seeds for repeated refits per
+#'   simulation. Default \code{1:1}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
+#'   uses all physical cores minus one. Default \code{"max"}.
+#'
+#' @details
+#' Each job:
+#' \enumerate{
+#'   \item Loads \code{sim_<sim_idx>.rds} (which contains \code{ylist}, \code{X},
+#'         \code{countslist}, \code{prob}, and \code{dens_true}).
+#'   \item Calls \code{main()} with the best \code{lambda_alpha/theta} and the
+#'         given seed.
+#'   \item Computes the weighted L1 mixture distance via \code{mixture_metric()}.
+#'   \item Saves an \code{.rds} with \code{metric}, \code{Q_final}, \code{fit_try},
+#'         and log/error text.
+#' }
+#'
+#' @return A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
+#' \describe{
+#'   \item{\code{sim_idx}}{Simulation ID.}
+#'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
+#'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
+#'   \item{\code{seed_idx}}{Refit seed.}
+#'   \item{\code{Q_final}}{Final surrogate objective value (NA on failure).}
+#'   \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
+#' }
+#'
+#' @seealso \code{\link{simulate_and_save}}, \code{\link{run_cv_simul}},
+#'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose 'best_tbl' came from summarize_simul_cv()
+#' out <- simul_refit(
+#'   best_table  = best_tbl,
+#'   sim_dir     = "sim_data",
+#'   save_dir    = "cv_results",
+#'   K           = 2,
+#'   refit_seeds = 1:3,
+#'   n_cores     = "max"
+#' )
+#' head(out)
+#' }
+#'
+#' @export
+simul_refit <- function(
+    best_table, 
+    sim_dir = "sim_data", 
+    save_dir = "cv_results",
+    K,
+    max_iter           = 30,
+    iter_eta           = 1e-3,
+    resp_threshold     = 1e-3,
+    refit_seeds        = 1:1,
+    n_cores            = "max"
+    ) {
+  # Use expand.grid to get every combination
+  idx <- expand.grid(
+    sim_idx        = best_table[, "sim_idx"],
+    seed_idx       = refit_seeds
+  )
+  # join in the penalty columns
+  best_table <- merge(
+    idx,
+    best_table[, c("sim_idx","lambda_alpha","lambda_theta")],
+    by = "sim_idx",
+    sort = FALSE
+  )
+  # ensure columns in desired order
+  best_table <- as.matrix(best_table[, c("sim_idx","lambda_alpha","lambda_theta","seed_idx")])
+  
+  # determine worker count
+  if (identical(n_cores, "max")) {
+    n_workers <- parallel::detectCores(logical = FALSE) - 1
+  } else {
+    n_workers <- as.integer(n_cores)
+  }
+  cl <- parallel::makeCluster(n_workers)
+  # export functions and data that workers need
+  parallel::clusterExport(
+    cl,
+    varlist = c("best_table", "sim_dir", "save_dir", "main","binning",
+                "initialize_model", "iteration", "compute_residuals",
+                "pi_k", "mstep_update_alpha",
+                "mstep_update_theta_log_concave",
+                "mstep_update_intercepts",
+                "mstep_estimate_log_concave_densities",
+                "compute_surrogate_loglikelihood",
+                "modified_logcondens", "e_step_log_concave",
+                "weighted_quantile", "mixture_metric",
+                "K", "max_iter", "iter_eta", "resp_threshold", 
+                "refit_seeds"),
+    envir   = environment()
+  )
+  
+  logs <- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
+    idx_row <- best_table[i, ]
+    sim     <- readRDS(file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds")))
+    log_msg <- paste0(
+        "sim_idx=", idx_row["sim_idx"],
+        ", alpha=", idx_row["lambda_alpha"],
+        ", theta=", idx_row["lambda_theta"], 
+        ", seed=",  idx_row["seed_idx"], "\n"
+      )
+    
+    set.seed(idx_row["seed_idx"])
+    err_msg <- NULL
+    fit_try <- tryCatch({
+      main(
+        Y               = sim$ylist,
+        X               = sim$X,
+        biomass         = sim$countslist,
+        binned          = TRUE,
+        n_bins          = 0,
+        K               = K,
+        lambda_alpha    = idx_row["lambda_alpha"],
+        lambda_theta    = idx_row["lambda_theta"],
+        max_iter        = max_iter,
+        iter_eta        = iter_eta,
+        resp_threshold  = resp_threshold,
+        debug           = TRUE
+      )
+    }, error = function(e) {
+      err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
+                          ", alpha=", idx_row["lambda_alpha"],
+                          ", theta=", idx_row["lambda_theta"], 
+                           ", seed=", idx_row["seed_idx"], ": ",
+                        e$message)
+      return(NULL)
+    })
+    
+      if (is.null(fit_try) || !is.list(fit_try$iter)) {
+        log_msg    <- paste0(log_msg, "✖ Error: ", err_msg, "\n")
+        Q_final    <- NA
+        metric     <- NA
+      } else {
+        log_msg    <- paste0(log_msg, "Fit succeeded\n")
+        Q_final    <- tail(fit_try$iter$Q, 1)
+        metric     <- mixture_metric(
+                        sim$ylist, sim$X, sim$countslist,
+                        est_res  = fit_try$iter,
+                        true_res = list(prob=sim$prob, dens_true=sim$dens_true)
+                      )$weighted
+      }
+    
+    # save RDS
+    saveRDS(
+      list(metric  = metric,
+           Q_final = Q_final,
+           fit_try = fit_try,
+           error   = err_msg,
+           logs    = log_msg),
+      file = file.path(
+        save_dir,
+        sprintf("refit_sim%d_seed%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+      )
+    )
+    
+    # return summary
+    return(c( sim_idx        = idx_row["sim_idx"],
+              lambda_alpha   = idx_row["lambda_alpha"],
+              lambda_theta   = idx_row["lambda_theta"],
+              seed_idx       = idx_row["seed_idx"],
+              Q_final        = Q_final,
+              metric         = metric))
+  })
+  parallel::stopCluster(cl)
+  # bind into a data.frame
+  return(do.call(rbind, logs))
+}
+```
 
 
 ## Documenting the package and building
