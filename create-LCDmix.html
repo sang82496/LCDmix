@@ -3878,17 +3878,17 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     )
     
     # return summary
-    return(c( sim_idx        = idx_row["sim_idx"],
-              lambda_alpha   = idx_row["lambda_alpha"],
-              lambda_theta   = idx_row["lambda_theta"],
-              seed_idx       = idx_row["seed_idx"],
-              Q_final        = Q_final,
-              metric         = metric))
+    return(list(sim_idx        = idx_row["sim_idx"],
+                lambda_alpha   = idx_row["lambda_alpha"],
+                lambda_theta   = idx_row["lambda_theta"],
+                seed_idx       = idx_row["seed_idx"],
+                Q_final        = Q_final,
+                metric         = metric))
   })
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res = unlist(lapply(res_i, function(x) {is.na(x[,'Q_final'])}))
+  res = unlist(lapply(res_i, function(x) {is.na(x$Q_final)}))
   res_logs   &lt;- c(sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
   )
