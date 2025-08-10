@@ -3705,7 +3705,7 @@ simul_refit <- function(
            logs    = log_msg),
       file = file.path(
         save_dir,
-        sprintf("refit_sim%d_seed%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+        sprintf("refit-%d-%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
       )
     )
     
