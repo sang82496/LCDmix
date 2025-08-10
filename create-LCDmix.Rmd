@@ -3720,7 +3720,7 @@ simul_refit <- function(
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res = unlist(lapply(res_i, function(x) {is.na(x$Q_final)}))
+  res = unlist(lapply(res_i, function(x) {is.na(x[,'Q_final'])}))
   res_logs   <- c(sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
   )
