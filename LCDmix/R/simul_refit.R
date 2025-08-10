@@ -86,7 +86,7 @@ simul_refit <- function(
   # join in the penalty columns
   best_table <- merge(
     idx,
-    best_table[, c("sim_idx","lambda_alpha","lambda_theta")],
+    as.data.frame(best_table)[, c("sim_idx","lambda_alpha","lambda_theta")],
     by = "sim_idx",
     sort = FALSE
   )
