@@ -2453,13 +2453,13 @@ cv_lcd_parallel <- function(
 #' @examples
 #' \dontrun{
 #' # Given `index_matrix` and CV .Rdata files in "./result":
-#' summary <- cv_summary(index_matrix, save_dir = "./result")
+#' summary <- LCD_cv_summary(index_matrix, save_dir = "./result")
 #' print(summary$opt_lambdas)
 #' head(summary$reduced_mat)
 #' }
 #'
 #' @export
-cv_summary <- function(
+LCD_cv_summary <- function(
   index_matrix,
   save_dir = "./result",
   simul    = FALSE,
@@ -3473,14 +3473,14 @@ run_cv_simul <- function(
 #'
 #' @description
 #' For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
-#' corresponding rows, calls \code{cv_summary()} to aggregate the CV results for
+#' corresponding rows, calls \code{LCD_cv_summary()} to aggregate the CV results for
 #' that simulation, and extracts the optimal penalty pair
 #' \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
 #' per simulation.
 #'
 #' @param simul_idx_mat Numeric matrix of CV jobs (e.g., from
 #'   \code{simul_idx_matrix()}). Must contain a \code{sim_idx} column; all other
-#'   columns required by your \code{cv_summary()} are passed along after removing
+#'   columns required by your \code{LCD_cv_summary()} are passed along after removing
 #'   \code{sim_idx}.
 #' @param save_dir Character path to the directory containing the per–CV-run
 #'   result files produced by \code{run_cv_simul()}.
@@ -3511,7 +3511,7 @@ summarize_simul_cv <- function(simul_idx_mat, save_dir) {
   colnames(bests) = c("sim_idx", "lambda_alpha", "lambda_theta")
   for (sim in sim_idxs) {
     idx_mat <- simul_idx_mat[simul_idx_mat[,"sim_idx"] == sim, -1]
-    out     <- cv_summary(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
+    out     <- LCD_cv_summary(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
     bests[sim,] <- c(sim, out$opt_lambdas[1], out$opt_lambdas[2])
   }
   return(bests)
