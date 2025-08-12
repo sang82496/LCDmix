@@ -36,13 +36,13 @@
 #' @examples
 #' \dontrun{
 #' # Given `index_matrix` and CV .Rdata files in "./result":
-#' summary <- cv_summary(index_matrix, save_dir = "./result")
+#' summary <- LCD_cv_summary(index_matrix, save_dir = "./result")
 #' print(summary$opt_lambdas)
 #' head(summary$reduced_mat)
 #' }
 #'
 #' @export
-cv_summary <- function(
+LCD_cv_summary <- function(
   index_matrix,
   save_dir = "./result",
   simul    = FALSE,

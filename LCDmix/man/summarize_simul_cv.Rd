@@ -9,7 +9,7 @@ summarize_simul_cv(simul_idx_mat, save_dir)
 \arguments{
 \item{simul_idx_mat}{Numeric matrix of CV jobs (e.g., from
 \code{simul_idx_matrix()}). Must contain a \code{sim_idx} column; all other
-columns required by your \code{cv_summary()} are passed along after removing
+columns required by your \code{LCD_cv_summary()} are passed along after removing
 \code{sim_idx}.}
 
 \item{save_dir}{Character path to the directory containing the per–CV-run
@@ -25,7 +25,7 @@ A numeric matrix with three columns:
 }
 \description{
 For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
-corresponding rows, calls \code{cv_summary()} to aggregate the CV results for
+corresponding rows, calls \code{LCD_cv_summary()} to aggregate the CV results for
 that simulation, and extracts the optimal penalty pair
 \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
 per simulation.

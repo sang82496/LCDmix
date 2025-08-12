@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-08-09">
+<meta name="date" content="2025-08-12">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-08-09</h4>
+<h4 class="date">2025-08-12</h4>
 
 </div>
 
@@ -2658,13 +2658,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @examples
 #' \dontrun{
 #' # Given `index_matrix` and CV .Rdata files in "./result":
-#' summary &lt;- <a href="create-LCDmix.html#cv_summary">cv_summary</a>(index_matrix, save_dir = "./result")
+#' summary &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(index_matrix, save_dir = "./result")
 #' print(summary$opt_lambdas)
 #' head(summary$reduced_mat)
 #' }
 #'
 #' @export
-<span id="cv_summary">cv_summary</span> &lt;- function(
+<span id="LCD_cv_summary">LCD_cv_summary</span> &lt;- function(
   index_matrix,
   save_dir = "./result",
   simul    = FALSE,
@@ -3646,14 +3646,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'
 #' @description
 #' For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
-#' corresponding rows, calls \code{<a href="create-LCDmix.html#cv_summary">cv_summary</a>()} to aggregate the CV results for
+#' corresponding rows, calls \code{<a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>()} to aggregate the CV results for
 #' that simulation, and extracts the optimal penalty pair
 #' \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
 #' per simulation.
 #'
 #' @param simul_idx_mat Numeric matrix of CV jobs (e.g., from
 #'   \code{<a href="create-LCDmix.html#simul_idx_matrix">simul_idx_matrix</a>()}). Must contain a \code{sim_idx} column; all other
-#'   columns required by your \code{<a href="create-LCDmix.html#cv_summary">cv_summary</a>()} are passed along after removing
+#'   columns required by your \code{<a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>()} are passed along after removing
 #'   \code{sim_idx}.
 #' @param save_dir Character path to the directory containing the per–CV-run
 #'   result files produced by \code{<a href="create-LCDmix.html#run_cv_simul">run_cv_simul</a>()}.
@@ -3684,7 +3684,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   colnames(bests) = c("sim_idx", "lambda_alpha", "lambda_theta")
   for (sim in sim_idxs) {
     idx_mat &lt;- simul_idx_mat[simul_idx_mat[,"sim_idx"] == sim, -1]
-    out     &lt;- <a href="create-LCDmix.html#cv_summary">cv_summary</a>(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
+    out     &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
     bests[sim,] &lt;- c(sim, out$opt_lambdas[1], out$opt_lambdas[2])
   }
   return(bests)
@@ -3906,12 +3906,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <pre><code>## ℹ Updating LCDmix documentation
 ## ℹ Loading LCDmix
 ## Writing 'NAMESPACE'
+## Writing 'LCD_cv_summary.Rd'
 ## Writing 'binning.Rd'
 ## Writing 'compute_l1_distance.Rd'
 ## Writing 'compute_residuals.Rd'
 ## Writing 'compute_surrogate_loglikelihood.Rd'
 ## Writing 'cv_lcd_parallel.Rd'
-## Writing 'cv_summary.Rd'
 ## Writing 'e_step_log_concave.Rd'
 ## Writing 'evaluate_lcd_model.Rd'
 ## Writing 'generate_skewed_data.Rd'
