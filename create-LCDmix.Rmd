@@ -2305,6 +2305,7 @@ cv_lcd_parallel <- function(
       lambda_alpha<- index_matrix[ii, "lambda_alpha"]
       lambda_theta<- index_matrix[ii, "lambda_theta"]
       
+      # Skip if already exists
       save_path <- file.path(
         save_dir,
         sprintf("%d-%d-%d-%d.Rdata",
