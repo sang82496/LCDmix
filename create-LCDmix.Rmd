@@ -2220,7 +2220,6 @@ make_cv_index_matrix <- function(
 #' }
 #'
 #' @export
-
 cv_lcd_parallel <- function(
   Y_bin,
   X,
