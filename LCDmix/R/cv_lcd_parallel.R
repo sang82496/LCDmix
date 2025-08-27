@@ -138,24 +138,10 @@ cv_lcd_parallel <- function(
     workers <- n_cores
   }
   cl <- parallel::makeCluster(workers)
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "main",
-      "binning",
-      "initialize_model",
-      "iteration",
-      "compute_residuals",
-      "pi_k",
-      "mstep_update_alpha",
-      "mstep_update_theta_log_concave",
-      "mstep_update_intercepts",
-      "mstep_estimate_log_concave_densities",
-      "compute_surrogate_loglikelihood",
-      "modified_logcondens",
-      "e_step_log_concave",
-      "weighted_quantile",
-      "evaluate_lcd_model",
       "Y_bin", "X", "bin_mass", "K",
       "n_restarts", "max_iter", "iter_eta", "maxdev",
       "resp_threshold", "trim_prob", "save_dir",

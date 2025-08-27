@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-08-12">
+<meta name="date" content="2025-08-27">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-08-12</h4>
+<h4 class="date">2025-08-27</h4>
 
 </div>
 
@@ -1923,9 +1923,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   
   #–– Debugging: print size and memory usage of constraint matrix ––#
-#  print(dim(const_mat))
-#  print(format(object.size(const_mat), "Gb"))
-#  print(format(object.size(const_mat), "Mb"))
+  print(dim(const_mat))
+  print(format(object.size(as.matrix(const_mat)), "Gb"))
+  print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
   N_total &lt;- sum(unlist(posterior_weights))
@@ -2485,24 +2485,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     workers &lt;- n_cores
   }
   cl &lt;- parallel::makeCluster(workers)
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "main",
-      "binning",
-      "initialize_model",
-      "iteration",
-      "compute_residuals",
-      "pi_k",
-      "mstep_update_alpha",
-      "mstep_update_theta_log_concave",
-      "mstep_update_intercepts",
-      "mstep_estimate_log_concave_densities",
-      "compute_surrogate_loglikelihood",
-      "modified_logcondens",
-      "e_step_log_concave",
-      "weighted_quantile",
-      "evaluate_lcd_model",
       "Y_bin", "X", "bin_mass", "K",
       "n_restarts", "max_iter", "iter_eta", "maxdev",
       "resp_threshold", "trim_prob", "save_dir",
@@ -2830,10 +2816,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   cl &lt;- parallel::makeCluster(workers)
   
   # Export necessary objects and functions
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "main", "Y_bin", "X", "bin_mass", "K",
+      "Y_bin", "X", "bin_mass", "K",
       "lambda_alpha", "lambda_theta",
       "n_restarts", "max_iter", "iter_eta",
       "maxdev", "resp_threshold", "save_dir"
@@ -3496,17 +3483,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   cl &lt;- parallel::makeCluster(n_workers)
   # export functions and data that workers need
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir", "main","binning",
-                "initialize_model", "iteration", "compute_residuals",
-                "pi_k", "mstep_update_alpha",
-                "mstep_update_theta_log_concave",
-                "mstep_update_intercepts",
-                "mstep_estimate_log_concave_densities",
-                "compute_surrogate_loglikelihood",
-                "modified_logcondens", "e_step_log_concave",
-                "weighted_quantile", "evaluate_lcd_model", 
+    varlist = c("simul_idx_mat", "sim_dir",
                 "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
                 "nfold", "trim_prob", "blocksize", "save_dir"),
     envir   = environment()
@@ -3790,17 +3770,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   cl &lt;- parallel::makeCluster(n_workers)
   # export functions and data that workers need
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("best_table", "sim_dir", "save_dir", "main","binning",
-                "initialize_model", "iteration", "compute_residuals",
-                "pi_k", "mstep_update_alpha",
-                "mstep_update_theta_log_concave",
-                "mstep_update_intercepts",
-                "mstep_estimate_log_concave_densities",
-                "compute_surrogate_loglikelihood",
-                "modified_logcondens", "e_step_log_concave",
-                "weighted_quantile", "mixture_metric",
+    varlist = c("best_table", "sim_dir", "save_dir",
                 "K", "max_iter", "iter_eta", "resp_threshold", 
                 "refit_seeds"),
     envir   = environment()

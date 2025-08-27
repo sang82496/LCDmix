@@ -89,17 +89,10 @@ run_cv_simul <- function(
   }
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir", "main","binning",
-                "initialize_model", "iteration", "compute_residuals",
-                "pi_k", "mstep_update_alpha",
-                "mstep_update_theta_log_concave",
-                "mstep_update_intercepts",
-                "mstep_estimate_log_concave_densities",
-                "compute_surrogate_loglikelihood",
-                "modified_logcondens", "e_step_log_concave",
-                "weighted_quantile", "evaluate_lcd_model", 
+    varlist = c("simul_idx_mat", "sim_dir",
                 "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
                 "nfold", "trim_prob", "blocksize", "save_dir"),
     envir   = environment()

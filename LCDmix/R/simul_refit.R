@@ -101,17 +101,10 @@ simul_refit <- function(
   }
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("best_table", "sim_dir", "save_dir", "main","binning",
-                "initialize_model", "iteration", "compute_residuals",
-                "pi_k", "mstep_update_alpha",
-                "mstep_update_theta_log_concave",
-                "mstep_update_intercepts",
-                "mstep_estimate_log_concave_densities",
-                "compute_surrogate_loglikelihood",
-                "modified_logcondens", "e_step_log_concave",
-                "weighted_quantile", "mixture_metric",
+    varlist = c("best_table", "sim_dir", "save_dir",
                 "K", "max_iter", "iter_eta", "resp_threshold", 
                 "refit_seeds"),
     envir   = environment()
