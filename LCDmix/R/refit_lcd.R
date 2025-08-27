@@ -73,10 +73,11 @@ refit_lcd <- function(
   cl <- parallel::makeCluster(workers)
   
   # Export necessary objects and functions
+  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "main", "Y_bin", "X", "bin_mass", "K",
+      "Y_bin", "X", "bin_mass", "K",
       "lambda_alpha", "lambda_theta",
       "n_restarts", "max_iter", "iter_eta",
       "maxdev", "resp_threshold", "save_dir"
