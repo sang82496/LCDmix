@@ -2066,60 +2066,55 @@ evaluate_lcd_model <- function(
 
 
 ```{r}
-#' Generate cross‐validation index matrix for penalty grid search
+#' Create a cross-validation index matrix (folds × seeds × penalty grids)
 #'
 #' @description
-#' Constructs a matrix of all combinations of cross‐validation fold, random seeds (repeats),
-#' and penalty indices for tuning \code{lambda_alpha} and \code{lambda_theta}.
-#' 
+#' Builds the full factorial grid over CV folds, random seeds, and the indices
+#' of \code{alpha_lambdas} and \code{theta_lambdas}, and attaches the actual
+#' penalty values for each row. Each row corresponds to one CV job.
 #'
-#' @param cv_gridsize Integer; number of candidate values for each penalty (\code{lambda_alpha} and \code{lambda_theta}).
-#' @param nfold Integer; number of folds in cross‐validation.
-#' @param seeds Integer vector. Random seeds (or repeat identifiers) to use for each repetition.
-#' @param alpha_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_alpha}.
-#' @param theta_lambdas Numeric vector of length \code{cv_gridsize}; the candidate values of \code{lambda_theta}.
+#' @param nfold Integer. Number of CV folds.
+#' @param seeds Integer vector of random seeds (or repeat identifiers). One
+#'   row will be created for each seed × fold × penalty-pair combination.
+#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values.
+#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values.
 #'
-#' @return
-#' A numeric matrix with one row per combination (total rows = \code{cv_gridsize^2 * nfold * nrep})
-#' and six columns:
+#' @return A numeric matrix with columns:
 #' \describe{
-#'   \item{\code{alpha_idx}}{Index in \code{alpha_lambdas} (1..\code{cv_gridsize}).}
-#'   \item{\code{theta_idx}}{Index in \code{theta_lambdas} (1..\code{cv_gridsize}).}
-#'   \item{\code{seed_idx}}{The seed or repeat identifier for this run.}
+#'   \item{\code{alpha_idx}}{Index into \code{alpha_lambdas} (1..length).}
+#'   \item{\code{theta_idx}}{Index into \code{theta_lambdas} (1..length).}
+#'   \item{\code{seed_idx}}{Seed used for this run (from \code{seeds}).}
 #'   \item{\code{fold_idx}}{Fold index (1..\code{nfold}).}
-#'   \item{\code{lambda_alpha}}{Value of \code{alpha_lambdas[alpha_idx]}.}
-#'   \item{\code{lambda_theta}}{Value of \code{theta_lambdas[theta_idx]}.}
+#'   \item{\code{lambda_alpha}}{Actual \code{alpha_lambdas[alpha_idx]}.}
+#'   \item{\code{lambda_theta}}{Actual \code{theta_lambdas[theta_idx]}.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # 5 candidate lambdas for each penalty, 4 folds, 3 repetitions
-#' alpha_vals <- seq(0.01, 0.1, length.out = 5)
-#' theta_vals <- seq(0.001, 0.01, length.out = 5)
-#' seeds      <- c(101, 202, 303)  # three repeats
-#' idx_mat <- make_cv_index_matrix(
-#'   cv_gridsize   = 5,
-#'   nfold         = 4,
-#'   seeds         = seeds,
-#'   alpha_lambdas = alpha_vals,
-#'   theta_lambdas = theta_vals
+#' idx <- make_cv_index_matrix(
+#'   nfold         = 5,
+#'   seeds         = c(101, 202, 303),
+#'   alpha_lambdas = c(1e-4, 1e-3, 1e-2),
+#'   theta_lambdas = c(1e-4, 1e-3, 1e-2)
 #' )
-#' head(idx_mat)
+#' head(idx)
 #' }
+#'
 #' @export
 make_cv_index_matrix <- function(
-  cv_gridsize,
   nfold,
   seeds,
   alpha_lambdas,
   theta_lambdas
 ) {
+  alpha_size = length(alpha_lambdas)
+  theta_size = length(theta_lambdas)
   # Create all combinations of fold, repetition, theta‐index, and alpha‐index
   grid <- expand.grid(
     fold_idx   = seq_len(nfold),
     seed_idx   = seeds,
-    theta_idx  = seq_len(cv_gridsize),
-    alpha_idx  = seq_len(cv_gridsize)
+    theta_idx  = seq_len(theta_size),
+    alpha_idx  = seq_len(alpha_size)
   )
   
   # Assemble the index matrix with corresponding lambda values
@@ -2137,84 +2132,102 @@ make_cv_index_matrix <- function(
 
 
 ```{r}
-#' Cross‐validate the LCD mixture‐of‐experts model in parallel
+#' Cross-validate LCDmix over a penalty grid in parallel
 #'
 #' @description
-#' Performs grid‐search cross‐validation over the L1 penalties \code{lambda_alpha}
-#' and \code{lambda_theta} for the log‐concave mixture‐of‐experts model.  Creates
-#' folds (with optional blocking), repeats each fold either by explicit seeds
-#' or by a count of repeats, and evaluates models on held‐out data.  Computations
-#' are dispatched in parallel, and per‐run results are saved.
+#' Runs grid search cross-validation for the LCDmix model across the supplied
+#' \code{alpha_lambdas} and \code{theta_lambdas}. For each combination of
+#' (\code{lambda_alpha}, \code{lambda_theta}), CV fold, and seed, the function
+#' fits the model on the training split, evaluates the held-out split with
+#' \code{evaluate_lcd_model()}, and saves \code{prop_CV} and \code{trimmed_CV}
+#' to \code{save_dir}. Workers load \pkg{flowmix} and \pkg{LCDmix} internally.
 #'
-#' @param Y_bin List of length \eqn{TT}, where each element is an \eqn{M_t \times 1}
-#'   matrix of binned responses per time point.
-#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param bin_mass List of length \eqn{TT}, where each element is a numeric vector of
-#'   biomass weights per bin at time \eqn{t}.
-#' @param K Integer number of mixture components.
-#' @param lambda_alpha_range Numeric vector of length 2 giving the min and max values
-#'   for the \code{lambda_alpha} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#' @param lambda_theta_range Numeric vector of length 2 giving the min and max values
-#'   for the \code{lambda_theta} grid (on a log scale). Default: \code{c(1e-8, 1e-1)}.
-#' @param cv_gridsize Integer number of candidate lambdas per penalty. Default: 5.
-#' @param max_iter Integer maximum number of EM iterations per model fit. Default: 30.
-#' @param iter_eta Numeric convergence threshold (relative change in Q). Default: 1e-3.
-#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed. Default: 1e-3.
-#' @param nfold Integer number of cross‐validation folds. Default: 5.
-#' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
-#'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
-#' @param trim_prob Numeric fraction of lowest‐likelihood observations to trim when averaging. Default: 0.05.
-#' @param save_dir Character; directory in which to save per‐run results. Default: "./result".
-#' @param n_cores Integer or "max"; number of parallel worker processes. "max" uses all physical cores minus one. Default: "max".
-#' @param cv_reps Integer number of repeated CV runs (used when \code{seeds} is \code{NULL}). Default: \code{NULL}.
-#' @param blocksize Integer block size for CV fold creation. Default: 5.
-#' @param maxdev Numeric or \code{NULL}; maximum deviation for LP constraints. Default: \code{NULL}.
-#' @param n_restarts Integer number of random restarts for the initial GMR. Default: 1.
+#' @param Y_bin List of length \eqn{TT}; each element is an \eqn{M_t \times 1}
+#'   matrix of binned responses at time \eqn{t}.
+#' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
+#' @param bin_mass List of length \eqn{TT}; each element is a numeric vector of
+#'   biomass per bin at time \eqn{t}.
+#' @param K Integer; number of mixture components.
+#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values.
+#'   Default: \code{c(1e-4, 1e-3)}.
+#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values.
+#'   Default: \code{c(1e-4, 1e-3)}.
+#' @param max_iter Integer; maximum EM iterations per fit. Default: \code{30}.
+#' @param iter_eta Numeric; convergence threshold on relative change in Q.
+#'   Default: \code{1e-3}.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are set
+#'   to zero for numerical stability. Default: \code{1e-3}.
+#' @param nfold Integer; number of CV folds. Default: \code{5}.
+#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
+#'   you must supply \code{cv_reps}; seeds will be set to \code{1:cv_reps}.
+#'   Default: \code{NULL}.
+#' @param trim_prob Numeric in \[0,1\]; fraction of lowest-likelihood points to
+#'   trim when averaging the held-out log-likelihood. Default: \code{0.05}.
+#' @param save_dir Character; directory where the function writes the CV index
+#'   matrix (\code{index_matrix.Rdata}) and per-run \code{*.Rdata} files of the
+#'   form \code{"<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata"}.
+#'   Default: \code{"./result"}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers.
+#'   \code{"max"} uses all physical cores minus one. Default: \code{"max"}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
+#'   \code{NULL}. Default: \code{NULL}.
+#' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}.
+#'   Default: \code{5}.
+#' @param maxdev Numeric or \code{NULL}; maximum-deviation constraint for the
+#'   LP update in the theta-step. Default: \code{NULL}.
+#' @param n_restarts Integer; number of random restarts for initialization.
+#'   Default: \code{1}.
 #'
-#' @return A list with components:
+#' @details
+#' On each worker the function calls:
+#' \enumerate{
+#' \item \code{library(flowmix); library(LCDmix)} to load dependencies,
+#' \item \code{main()} on the training split for each (\code{lambda_alpha},
+#'       \code{lambda_theta}, seed, fold),
+#' \item \code{evaluate_lcd_model()} on the hold-out split to compute
+#'       \code{prop_CV} and \code{trimmed_CV}.
+#' }
+#' The function prints the sorted penalty vectors and writes the constructed
+#' \code{index_matrix} to \code{save_dir/index_matrix.Rdata}.
+#'
+#' @return A list with:
 #' \describe{
-#'   \item{logs}{Character vector of log messages (one per CV run, plus summary).}
-#'   \item{index_matrix}{Integer matrix with one row per run (fold × seed × penalties),
-#'         showing \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
-#'         and actual \code{lambda_alpha}, \code{lambda_theta} values.}
+#'   \item{\code{logs}}{Character vector of per-run log messages plus a final
+#'         summary line reporting the number and percent of failures.}
+#'   \item{\code{index_matrix}}{Numeric matrix with columns
+#'         \code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
+#'         \code{lambda_alpha}, \code{lambda_theta}, corresponding to all CV jobs.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Four folds, three repeats via explicit seeds
-#' seeds <- c(101, 202, 303)
-#' results <- cv_lcd_parallel(
-#'   Y_bin               = Y_binned,
-#'   X                   = X_mat,
-#'   bin_mass            = counts_list,
-#'   K                   = 2,
-#'   cv_gridsize         = 4,
-#'   nfold               = 4,
-#'   seeds               = seeds,
-#'   n_cores             = "max"
+#' set.seed(1)
+#' # Suppose Y_bin, X, bin_mass already prepared
+#' res <- cv_lcd_parallel(
+#'   Y_bin          = Y_bin,
+#'   X              = X,
+#'   bin_mass       = bin_mass,
+#'   K              = 2,
+#'   alpha_lambdas  = c(1e-4, 1e-3, 1e-2),
+#'   theta_lambdas  = c(1e-4, 1e-3, 1e-2),
+#'   nfold          = 5,
+#'   seeds          = 1:3,
+#'   save_dir       = "cv_out",
+#'   n_cores        = "max"
 #' )
-#'
-#' # Or specify number of repeats instead of seeds
-#' results2 <- cv_lcd_parallel(
-#'   Y_bin               = Y_binned,
-#'   X                   = X_mat,
-#'   bin_mass            = counts_list,
-#'   K                   = 2,
-#'   cv_gridsize         = 4,
-#'   nfold               = 4,
-#'   n_cores             = 2,
-#'   cv_reps             = 3
-#' )
+#' head(res$index_matrix)
+#' tail(res$logs, 1)
 #' }
+#'
 #' @export
+
 cv_lcd_parallel <- function(
   Y_bin,
   X,
   bin_mass,
   K,
-  lambda_alpha_range = c(1e-8, 1e-1),
-  lambda_theta_range = c(1e-8, 1e-1),
-  cv_gridsize        = 5,
+  alpha_lambdas      = c(1e-4, 1e-3),
+  theta_lambdas      = c(1e-4, 1e-3),
   max_iter           = 30,
   iter_eta           = 1e-3,
   resp_threshold     = 1e-3,
@@ -2228,17 +2241,10 @@ cv_lcd_parallel <- function(
   maxdev             = NULL,
   n_restarts         = 1
 ) {
-  #— Create penalty grids —#
-  alpha_lambdas <- flowmix::logspace(
-    min    = lambda_alpha_range[1],
-    max    = lambda_alpha_range[2],
-    length = cv_gridsize
-  ) |> sort()
-  theta_lambdas <- flowmix::logspace(
-    min    = lambda_theta_range[1],
-    max    = lambda_theta_range[2],
-    length = cv_gridsize
-  ) |> sort()
+  if (!dir.exists(save_dir)) dir.create(save_dir)
+  
+  alpha_lambdas = sort(alpha_lambdas)
+  theta_lambdas = sort(theta_lambdas)
   print(alpha_lambdas)
   print(theta_lambdas)
   
@@ -2258,7 +2264,6 @@ cv_lcd_parallel <- function(
     seeds = seq_len(cv_reps)
   }
   index_matrix <- make_cv_index_matrix(
-    cv_gridsize    = cv_gridsize,
     nfold          = nfold,
     seeds          = seeds,
     alpha_lambdas  = alpha_lambdas,
@@ -2272,7 +2277,7 @@ cv_lcd_parallel <- function(
   if (identical(n_cores, "max")) {
     workers <- parallel::detectCores(logical = FALSE) - 1
   } else {
-    workers <- n_cores
+    workers <- as.integer(n_cores)
   }
   cl <- parallel::makeCluster(workers)
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
@@ -2338,7 +2343,7 @@ cv_lcd_parallel <- function(
             return(NA)
           }
         ),
-        type = "message"      # capture both message() and cat()/print()
+        type = "output"     # capture both message() and cat()/print()
       )
 
       # append the captured log to your log_msg
