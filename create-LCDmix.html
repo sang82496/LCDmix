@@ -2515,6 +2515,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha&lt;- index_matrix[ii, "lambda_alpha"]
       lambda_theta&lt;- index_matrix[ii, "lambda_theta"]
       
+      save_path &lt;- file.path(
+        save_dir,
+        sprintf("%d-%d-%d-%d.Rdata",
+                alpha_idx, theta_idx, seed_idx, fold_idx)
+      )
+      if (file.exists(save_path)) {
+        return(paste0("Skip (cached): ", basename(save_path)))
+      }
+      
       log_msg &lt;- paste0(
         "alpha=", lambda_alpha,
         ", theta=", lambda_theta,
