@@ -103,6 +103,19 @@ run_cv_simul <- function(
     sim_file <- file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds"))
     log_msg  <- character(0)
     
+    
+    # Skip if already exists
+    save_path <- file.path(
+      save_dir,
+      sprintf("%d-%d-%d-%d-%d.Rdata",
+              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
+              idx_row["seed_idx"],idx_row["fold_idx"])
+      )
+    if (file.exists(save_path)) {
+      return(paste0("Skip (cached): ", basename(save_path)))
+    }
+
+    
     # 1) load sim
     if (!file.exists(sim_file)) {
       msg <- paste0("Sim file missing: ", sim_file)
@@ -208,12 +221,6 @@ run_cv_simul <- function(
       }
     
     # 5) save result
-    save_path <- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
-              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
-              idx_row["seed_idx"],idx_row["fold_idx"])
-    )
     save(prop_CV, trimmed_CV, log_msg, file = save_path)
     return(log_msg)
   })
