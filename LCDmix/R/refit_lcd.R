@@ -94,6 +94,12 @@ refit_lcd <- function(
       log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")
       set.seed(seed_idx)
       
+      # Skip if already exists
+      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
+      if (file.exists(save_path)) {
+        return(paste0("Skip (cached): ", basename(save_path)))
+      }
+      
       # capture ALL output from main(), including messages
       out_log <- capture.output({
         fit_try <- tryCatch(
@@ -142,7 +148,6 @@ refit_lcd <- function(
     
     # if successful, record final Q and save
       final_Q  <- tail(fit_try$iter$Q, 1)
-      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg <- paste0(log_msg,
                         "✔ Completed seed ", seed_idx,

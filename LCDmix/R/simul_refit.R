@@ -120,6 +120,16 @@ simul_refit <- function(
         ", seed=",  idx_row["seed_idx"], "\n"
       )
     
+    # Skip if already exists
+    save_path <- file.path(
+        save_dir,
+        sprintf("refit-%d-%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+      )
+    
+    if (file.exists(save_path)) {
+      return(paste0("Skip (cached): ", basename(save_path)))
+    }
+    
     set.seed(idx_row["seed_idx"])
     err_msg <- NULL
     out_log <- capture.output(

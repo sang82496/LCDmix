@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-08-27">
+<meta name="date" content="2025-09-02">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-08-27</h4>
+<h4 class="date">2025-09-02</h4>
 
 </div>
 
@@ -2851,6 +2851,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       log_msg &lt;- paste0("▶ Refit seed ", seed_idx, "\n")
       set.seed(seed_idx)
       
+      # Skip if already exists
+      save_path &lt;- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
+      if (file.exists(save_path)) {
+        return(paste0("Skip (cached): ", basename(save_path)))
+      }
+      
       # capture ALL output from <a href="create-LCDmix.html#main">main</a>(), including messages
       out_log &lt;- capture.output({
         fit_try &lt;- tryCatch(
@@ -2899,7 +2905,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     
     # if successful, record final Q and save
       final_Q  &lt;- tail(fit_try$iter$Q, 1)
-      save_path &lt;- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       save(final_Q, fit_try, file = save_path)
       log_msg &lt;- paste0(log_msg,
                         "✔ Completed seed ", seed_idx,
@@ -3511,6 +3516,19 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     sim_file &lt;- file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds"))
     log_msg  &lt;- character(0)
     
+    
+    # Skip if already exists
+    save_path &lt;- file.path(
+      save_dir,
+      sprintf("%d-%d-%d-%d-%d.Rdata",
+              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
+              idx_row["seed_idx"],idx_row["fold_idx"])
+      )
+    if (file.exists(save_path)) {
+      return(paste0("Skip (cached): ", basename(save_path)))
+    }
+
+    
     # 1) load sim
     if (!file.exists(sim_file)) {
       msg &lt;- paste0("Sim file missing: ", sim_file)
@@ -3616,12 +3634,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       }
     
     # 5) save result
-    save_path &lt;- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
-              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
-              idx_row["seed_idx"],idx_row["fold_idx"])
-    )
     save(prop_CV, trimmed_CV, log_msg, file = save_path)
     return(log_msg)
   })
@@ -3802,6 +3814,16 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         ", theta=", idx_row["lambda_theta"], 
         ", seed=",  idx_row["seed_idx"], "\n"
       )
+    
+    # Skip if already exists
+    save_path &lt;- file.path(
+        save_dir,
+        sprintf("refit-%d-%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+      )
+    
+    if (file.exists(save_path)) {
+      return(paste0("Skip (cached): ", basename(save_path)))
+    }
     
     set.seed(idx_row["seed_idx"])
     err_msg &lt;- NULL
