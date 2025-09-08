@@ -97,8 +97,16 @@ refit_lcd <- function(
       # Skip if already exists
       save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
       if (file.exists(save_path)) {
-        return(paste0("Skip (cached): ", basename(save_path)))
+        log_msg <- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
+        load(save_path)
+  
+        return(list(
+          log  = log_msg,
+          Q    = Q,
+          iter = iter
+        ))
       }
+      
       
       # capture ALL output from main(), including messages
       out_log <- capture.output({
@@ -139,7 +147,7 @@ refit_lcd <- function(
       } else if (!is.null(fit_try$iter_partial)) {
         # Error at EM iteration
         return(list(
-          log = paste0("Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+          log = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$error, "\n"),
           Q   = NA,
           iter= NULL
