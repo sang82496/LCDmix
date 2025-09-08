@@ -127,7 +127,9 @@ simul_refit <- function(
       )
     
     if (file.exists(save_path)) {
-      return(paste0("Skip (cached): ", basename(save_path)))
+      print(paste0("Skip (cached): ", basename(save_path)))
+      saved = readRDS(save_path)
+      return(saved)
     }
     
     set.seed(idx_row["seed_idx"])

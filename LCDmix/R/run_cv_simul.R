@@ -112,7 +112,8 @@ run_cv_simul <- function(
               idx_row["seed_idx"],idx_row["fold_idx"])
       )
     if (file.exists(save_path)) {
-      return(paste0("Skip (cached): ", basename(save_path)))
+      log_msg <- paste0(log_msg, paste0("Skip (cached): ", basename(save_path)))
+      return(log_msg)
     }
 
     
@@ -194,7 +195,7 @@ run_cv_simul <- function(
         trimmed_CV <- NA
         
       } else if (is.null(fit_try$iter)) {
-        log_msg <- paste0("Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+        log_msg <- paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
@@ -209,15 +210,15 @@ run_cv_simul <- function(
         )
         prop_CV    <- ev$prop_infinite
         trimmed_CV <- ev$trimmed_avg_loglike
-        log_msg <- paste0(
-        "Success sim=", idx_row["sim_idx"],
-        " fold=", idx_row["fold_idx"],
-        " seed=", idx_row["seed_idx"],
-        " alpha=", round(idx_row["lambda_alpha"],5),
-        " theta=", round(idx_row["lambda_theta"],5),
-        " -> prop=", round(prop_CV,3),
-        ", trimmed=", round(trimmed_CV,3)
-      )
+        log_msg <- paste0(log_msg,
+          "Success sim=", idx_row["sim_idx"],
+          " fold=", idx_row["fold_idx"],
+          " seed=", idx_row["seed_idx"],
+          " alpha=", round(idx_row["lambda_alpha"],5),
+          " theta=", round(idx_row["lambda_theta"],5),
+          " -> prop=", round(prop_CV,3),
+          ", trimmed=", round(trimmed_CV,3)
+        )
       }
     
     # 5) save result
