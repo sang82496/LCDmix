@@ -226,6 +226,6 @@ simul_refit <- function(
   
   # bind into a data.frame
   return(list(res_logs = res_logs,
-              res_table = do.call(rbind, lapply(res_i, as.data.frame)))
+              res_table = as.data.frame(do.call(rbind, res_i)))
         )
 }
