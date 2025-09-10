@@ -78,6 +78,9 @@ simul_refit <- function(
     refit_seeds        = 1:1,
     n_cores            = "max"
     ) {
+  
+  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
+  
   # Use expand.grid to get every combination
   idx <- expand.grid(
     sim_idx        = best_table[, "sim_idx"],
@@ -111,28 +114,40 @@ simul_refit <- function(
   )
   
   res_i <- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
-    idx_row <- best_table[i, ]
-    sim     <- readRDS(file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds")))
+    idx_row       <- best_table[i, ]
+    sim_idx       <- as.integer(idx_row["sim_idx"])
+    seed_idx      <- as.integer(idx_row["seed_idx"])
+    lambda_alpha  <- as.numeric(idx_row["lambda_alpha"])
+    lambda_theta  <- as.numeric(idx_row["lambda_theta"])
+
+    sim     <- readRDS(file.path(sim_dir, paste0("sim_", sim_idx, ".rds")))
     log_msg <- paste0(
-        "sim_idx=", idx_row["sim_idx"],
-        ", alpha=", idx_row["lambda_alpha"],
-        ", theta=", idx_row["lambda_theta"], 
-        ", seed=",  idx_row["seed_idx"], "\n"
+        "sim_idx=", sim_idx,
+        ", alpha=", lambda_alpha,
+        ", theta=", lambda_theta, 
+        ", seed=",  seed_idx, "\n"
       )
     
     # Skip if already exists
     save_path <- file.path(
         save_dir,
-        sprintf("refit-%d-%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
       )
     
     if (file.exists(save_path)) {
       print(paste0("Skip (cached): ", basename(save_path)))
       saved = readRDS(save_path)
-      return(saved)
+      return(c(
+        sim_idx      = sim_idx,
+        lambda_alpha = lambda_alpha,
+        lambda_theta = lambda_theta,
+        seed_idx     = seed_idx,
+        Q_final      = as.numeric(saved$Q_final),
+        metric       = as.numeric(saved$metric)
+      ))
     }
     
-    set.seed(idx_row["seed_idx"])
+    set.seed(seed_idx)
     err_msg <- NULL
     out_log <- capture.output(
       fit_try <- tryCatch({
@@ -143,22 +158,22 @@ simul_refit <- function(
           binned          = TRUE,
           n_bins          = 0,
           K               = K,
-          lambda_alpha    = idx_row["lambda_alpha"],
-          lambda_theta    = idx_row["lambda_theta"],
+          lambda_alpha    = lambda_alpha,
+          lambda_theta    = lambda_theta,
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
           debug           = TRUE
         )
       }, error = function(e) {
-        err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
-                            ", alpha=", idx_row["lambda_alpha"],
-                            ", theta=", idx_row["lambda_theta"], 
-                             ", seed=", idx_row["seed_idx"], ": ",
+        err_msg <<- paste0("Error fitting sim=", sim_idx,
+                            ", alpha=", lambda_alpha,
+                            ", theta=", lambda_theta, 
+                             ", seed=", seed_idx, ": ",
                           e$message)
         return(NULL)
       }),
-        type = "message"      # capture both message() and cat()/print()
+        type = "output"      #<<— capture only stdout (print/cat), not messages
       )
 
       # append the captured log to your log_msg
@@ -189,28 +204,28 @@ simul_refit <- function(
            logs    = log_msg),
       file = file.path(
         save_dir,
-        sprintf("refit-%d-%d.rds", idx_row["sim_idx"], idx_row["seed_idx"])
+        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
       )
     )
     
     # return summary
-    return(list(sim_idx        = idx_row["sim_idx"],
-                lambda_alpha   = idx_row["lambda_alpha"],
-                lambda_theta   = idx_row["lambda_theta"],
-                seed_idx       = idx_row["seed_idx"],
-                Q_final        = Q_final,
-                metric         = metric))
+    return( c(sim_idx        = sim_idx,
+              lambda_alpha   = lambda_alpha,
+              lambda_theta   = lambda_theta,
+              seed_idx       = seed_idx,
+              Q_final        = Q_final,
+              metric         = metric))
   })
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res = unlist(lapply(res_i, function(x) {is.na(x$Q_final)}))
-  res_logs   <- c(sprintf("Failures: %d/%d (%.1f%%)",
+  res = vapply(res_i, function(x) {is.na(as.numeric(x["Q_final"]))}, logical(1))
+
+  res_logs   <- sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
-  )
   
   # bind into a data.frame
   return(list(res_logs = res_logs,
-              res_table = do.call(rbind, res_i))
+              res_table = do.call(rbind, lapply(res_i, as.data.frame)))
         )
 }
