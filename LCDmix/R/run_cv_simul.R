@@ -94,22 +94,34 @@ run_cv_simul <- function(
     cl,
     varlist = c("simul_idx_mat", "sim_dir",
                 "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
-                "nfold", "trim_prob", "blocksize", "save_dir"),
+                "nfold", "trim_prob", "blocksize", "save_dir", "max_iter"),
     envir   = environment()
   )
   
   logs <- parallel::parLapply(cl, seq_len(nrow(simul_idx_mat)), function(i) {
-    idx_row <- simul_idx_mat[i, ]
-    sim_file <- file.path(sim_dir, paste0("sim_", idx_row["sim_idx"], ".rds"))
+    idx_row       <- simul_idx_mat[i, ]
+    sim_idx       <- as.integer(idx_row["sim_idx"])
+    seed_idx      <- as.integer(idx_row["seed_idx"])
+    alpha_idx     <- as.integer(idx_row["alpha_idx"])
+    theta_idx     <- as.integer(idx_row["theta_idx"])
+    fold_idx      <- as.integer(idx_row["fold_idx"])
+    lambda_alpha  <- as.numeric(idx_row["lambda_alpha"])
+    lambda_theta  <- as.numeric(idx_row["lambda_theta"])
+    
     log_msg  <- character(0)
     
+    sim_file <- file.path(sim_dir, paste0("sim_", sim_idx, ".rds"))
+    if (!file.exists(sim_file)) {
+      log_msg <- paste0("Sim file missing: ", sim_file)
+      return(log_msg)
+    }
     
     # Skip if already exists
     save_path <- file.path(
       save_dir,
       sprintf("%d-%d-%d-%d-%d.Rdata",
-              idx_row["sim_idx"], idx_row["alpha_idx"],idx_row["theta_idx"],
-              idx_row["seed_idx"],idx_row["fold_idx"])
+              sim_idx, alpha_idx, theta_idx,
+              seed_idx, fold_idx)
       )
     if (file.exists(save_path)) {
       log_msg <- paste0(log_msg, paste0("Skip (cached): ", basename(save_path)))
@@ -118,18 +130,12 @@ run_cv_simul <- function(
 
     
     # 1) load sim
-    if (!file.exists(sim_file)) {
-      msg <- paste0("Sim file missing: ", sim_file)
-      return(msg)
-    }
     sim <- readRDS(sim_file)
     
     # 2) split into train / test
-    fold_idx   <- idx_row["fold_idx"]
     Y_bin      <- sim$ylist
     X          <- sim$X
     bin_mass   <- sim$countslist
-    TT         <- length(Y_bin)
     
     # Create CV folds
     folds <- flowmix::make_cv_folds(
@@ -145,14 +151,14 @@ run_cv_simul <- function(
     X_tr       <- X[-test_i, , drop = FALSE]
     
     log_msg <- paste0(
-        "alpha=",  idx_row["lambda_alpha"],
-        ", theta=",idx_row["lambda_theta"],
-        ", seed=", idx_row["seed_idx"],
-        ", fold=", idx_row["fold_idx"], "\n"
+        "alpha=",   lambda_alpha,
+        ", theta=", lambda_theta,
+        ", seed=",  seed_idx,
+        ", fold=",  fold_idx, "\n"
       )
     
     # 3) fit main()
-    set.seed(idx_row["seed_idx"])
+    set.seed(seed_idx)
     err_msg <- NULL
     out_log <- capture.output(
       fit_try <- tryCatch({
@@ -163,8 +169,8 @@ run_cv_simul <- function(
           binned          = TRUE,
           n_bins          = 0,
           K               = K,
-          lambda_alpha    = idx_row["lambda_alpha"],
-          lambda_theta    = idx_row["lambda_theta"],
+          lambda_alpha    = lambda_alpha,
+          lambda_theta    = lambda_theta,
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
@@ -173,15 +179,15 @@ run_cv_simul <- function(
           n_restarts      = n_restarts
         )
       }, error = function(e) {
-        err_msg <<- paste0("Error fitting sim=", idx_row["sim_idx"],
-                            ", alpha=", idx_row["lambda_alpha"],
-                            ", theta=", idx_row["lambda_theta"], 
-                              " seed=", idx_row["seed_idx"], 
-                              " fold=", idx_row["fold_idx"],": ",
+        err_msg <<- paste0("Error fitting sim=", sim_idx,
+                            ", alpha=", lambda_alpha,
+                            ", theta=", lambda_theta, 
+                              " seed=", seed_idx, 
+                              " fold=", fold_idx, ": ",
                                e$message)
         return(NULL)
       }),
-        type = "message"      # capture both message() and cat()/print()
+        type = "output"
       )
     
     log_msg <- paste0(log_msg,
@@ -190,7 +196,7 @@ run_cv_simul <- function(
     
     # now fit_try contains either the fit or NA
       if (is.null(fit_try)) {
-        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
+        log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
         
@@ -211,13 +217,13 @@ run_cv_simul <- function(
         prop_CV    <- ev$prop_infinite
         trimmed_CV <- ev$trimmed_avg_loglike
         log_msg <- paste0(log_msg,
-          "Success sim=", idx_row["sim_idx"],
-          " fold=", idx_row["fold_idx"],
-          " seed=", idx_row["seed_idx"],
-          " alpha=", round(idx_row["lambda_alpha"],5),
-          " theta=", round(idx_row["lambda_theta"],5),
-          " -> prop=", round(prop_CV,3),
-          ", trimmed=", round(trimmed_CV,3)
+          "Success sim=", sim_idx,
+          " fold=",       fold_idx,
+          " seed=",       seed_idx,
+          " alpha=",      round(lambda_alpha,5),
+          " theta=",      round(lambda_theta,5),
+          " -> prop=",    round(prop_CV,3),
+          ", trimmed=",   round(trimmed_CV,3)
         )
       }
     

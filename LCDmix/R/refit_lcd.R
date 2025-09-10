@@ -108,7 +108,8 @@ refit_lcd <- function(
       }
       
       
-      # capture ALL output from main(), including messages
+      # capture ALL output from main()
+      err_msg <- NULL
       out_log <- capture.output({
         fit_try <- tryCatch(
           main(
@@ -127,11 +128,11 @@ refit_lcd <- function(
             n_restarts      = n_restarts
           ),
           error = function(e) {
-            message("✖ Error on seed ", seed_idx, ": ", e$message)
-            return(NA)
+            err_msg <<- paste0("✖ Error on seed ", seed_idx, ": ", e$message)
+            return(NULL)
           }
         )
-      }, type = "message")
+      }, type = "output")
       
       # append captured output to our log
       log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
@@ -140,7 +141,7 @@ refit_lcd <- function(
       if (!is.list(fit_try)) {
         # failed
         return(list(
-          log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, "\n"),
+          log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
           Q   = NA,
           iter= NULL
         ))

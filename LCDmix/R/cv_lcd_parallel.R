@@ -179,7 +179,12 @@ cv_lcd_parallel <- function(
                 alpha_idx, theta_idx, seed_idx, fold_idx)
       )
       if (file.exists(save_path)) {
-        return(paste0("Skip (cached): ", basename(save_path)))
+        return(paste0(
+          "Skipping existing: alpha=", lambda_alpha,
+          ", theta=", lambda_theta,
+          ", seed=",  seed_idx,
+          ", fold=",  fold_idx
+        ))
       }
       
       log_msg <- paste0(
@@ -197,6 +202,7 @@ cv_lcd_parallel <- function(
       
       # Fit model
       set.seed(seed_idx)
+      err_msg = NULL
       out_log <- capture.output(
         res_ii <- tryCatch(
           main(
@@ -216,11 +222,11 @@ cv_lcd_parallel <- function(
             n_restarts      = n_restarts
           ),
           error = function(e) {
-            message("▶ Error fitting model: ", e$message)
-            return(NA)
+            err_msg <<- paste0("▶ Error fitting model: ", e$message)
+            return(NULL)
           }
         ),
-        type = "output"     # capture both message() and cat()/print()
+        type = "output"
       )
 
       # append the captured log to your log_msg
@@ -230,7 +236,7 @@ cv_lcd_parallel <- function(
       
       # now res_ii contains either the fit or NA
       if (!is.list(res_ii)) {
-        log_msg    <- paste0(log_msg, "Error: Fit completely failed\n")
+        log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
         
