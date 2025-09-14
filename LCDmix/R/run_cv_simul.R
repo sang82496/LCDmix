@@ -81,13 +81,6 @@ run_cv_simul <- function(
   # ensure output folder
   if (!dir.exists(save_dir)) dir.create(save_dir)
   
-    # Create CV folds
-  folds <- flowmix::make_cv_folds(
-    ylist     = Y_bin,
-    nfold     = nfold,
-    blocksize = blocksize
-  )
-  
   # determine worker count
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
@@ -95,8 +88,8 @@ run_cv_simul <- function(
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", 
-                "maxdev", "resp_threshold", "trim_prob", "folds", "save_dir", "max_iter"),
+    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", "maxdev", 
+                "resp_threshold", "trim_prob", "nfold", "blocksize", "save_dir", "max_iter"),
     envir   = environment()
   )
   
@@ -137,6 +130,13 @@ run_cv_simul <- function(
     Y_bin      <- sim$ylist
     X          <- sim$X
     bin_mass   <- sim$countslist
+    
+    # Create CV folds
+    folds <- flowmix::make_cv_folds(
+      ylist     = Y_bin,
+      nfold     = nfold,
+      blocksize = blocksize
+    )
     
     # fold splits by time‐index
     test_i     <- folds[[fold_idx]]
