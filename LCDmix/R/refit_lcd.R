@@ -86,22 +86,21 @@ refit_lcd <- function(
     function(seed_idx) {
       # start log for this seed
       log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")
-      set.seed(seed_idx)
       
       # Skip if already exists
       save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".rds"))
       if (file.exists(save_path)) {
         log_msg <- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
-        mat = readRDS(save_path)
+        saved = readRDS(save_path)
   
-        return(list(log_msg  = mat$log_msg,
-                     final_Q = mat$final_Q,
-                     fit_try = mat$fit_try
-        ))
+        return(list(log_msg  = saved$log_msg,
+                     final_Q = as.numeric(saved$final_Q),
+                     fit_try = saved$fit_try))
       }
       
       # capture ALL output from main()
       err_msg <- NULL
+      set.seed(seed_idx)
       out_log <- capture.output({
         fit_try <- tryCatch(
           main(
@@ -135,15 +134,16 @@ refit_lcd <- function(
         # failed
         return(list(
           log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
-          Q   = NA,
+          Q   = NA_real_,
           iter= NULL
         ))
+        
       } else if (!is.null(fit_try$iter_partial)) {
         # Error at EM iteration
         return(list(
           log = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$error, "\n"),
-          Q   = NA,
+          Q   = NA_real_,
           iter= NULL
         ))
       }
@@ -157,7 +157,7 @@ refit_lcd <- function(
       
       return(list(
         log_msg = log_msg,
-        final_Q = final_Q,
+        final_Q = as.numeric(final_Q),
         fit_try = fit_try
       ))
     }
