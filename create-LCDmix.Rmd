@@ -2699,18 +2699,18 @@ refit_lcd <- function(
       if (!is.list(fit_try)) {
         # failed
         return(list(
-          log = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
-          Q   = NA_real_,
-          iter= NULL
+          log_msg = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
+          final_Q   = NA_real_,
+          fit_try= NULL
         ))
         
       } else if (!is.null(fit_try$iter_partial)) {
         # Error at EM iteration
         return(list(
-          log = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+          log_msg = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$error, "\n"),
-          Q   = NA_real_,
-          iter= NULL
+          final_Q   = NA_real_,
+          fit_try= NULL
         ))
       }
     
