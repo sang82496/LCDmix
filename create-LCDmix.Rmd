@@ -1965,7 +1965,7 @@ weighted_quantile <- function(
 #' @param Y A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
 #' @param biomass A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).
-#' @param trim_prob Numeric in \[0,0.5\]; proportion of lowest‐likelihood observations to trim when computing the average. Default: \code{0.05}.
+#' @param trim_prob Numeric in \[0,0.5\]; proportion of lowest-likelihood observations to trim when computing the average. Default: \code{0.01}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1985,7 +1985,7 @@ weighted_quantile <- function(
 #'   Y          = Y_test,
 #'   X          = X_test,
 #'   biomass    = biomass_test,
-#'   trim_prob  = 0.05
+#'   trim_prob  = 0.01
 #' )
 #' str(eval_res)
 #' }
@@ -1995,7 +1995,7 @@ evaluate_lcd_model <- function(
   Y,
   X,
   biomass,
-  trim_prob = 0.05
+  trim_prob = 0.01
 ) {
   # Unpack fitted parameters
   densities     <- model$g_new
@@ -2162,7 +2162,7 @@ make_cv_index_matrix <- function(
 #'   you must supply \code{cv_reps}; seeds will be set to \code{1:cv_reps}.
 #'   Default: \code{NULL}.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest-likelihood points to
-#'   trim when averaging the held-out log-likelihood. Default: \code{0.05}.
+#'   trim when averaging the held-out log-likelihood. Default: \code{0.01}.
 #' @param save_dir Character; directory where the function writes the CV index
 #'   matrix (\code{index_matrix.Rdata}) and per-run \code{*.Rdata} files of the
 #'   form \code{"<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata"}.
@@ -2232,7 +2232,7 @@ cv_lcd_parallel <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  trim_prob          = 0.05,
+  trim_prob          = 0.01,
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
@@ -2273,12 +2273,8 @@ cv_lcd_parallel <- function(
   save(index_matrix, file = save_path)
   
   #— Launch parallel cluster —#
-  if (identical(n_cores, "max")) {
-    workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    workers <- as.integer(n_cores)
-  }
-  cl <- parallel::makeCluster(workers)
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
+  cl <- parallel::makeCluster(n_workers)
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
@@ -2304,20 +2300,17 @@ cv_lcd_parallel <- function(
       lambda_alpha<- index_matrix[ii, "lambda_alpha"]
       lambda_theta<- index_matrix[ii, "lambda_theta"]
       
-      # Skip if already exists
       save_path <- file.path(
         save_dir,
-        sprintf("%d-%d-%d-%d.Rdata",
-                alpha_idx, theta_idx, seed_idx, fold_idx)
+        sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
       )
       if (file.exists(save_path)) {
-        return(paste0(
-          "Skipping existing: alpha=", lambda_alpha,
-          ", theta=", lambda_theta,
-          ", seed=",  seed_idx,
-          ", fold=",  fold_idx
-        ))
+        return(paste0("Skipping existing: alpha=", lambda_alpha,
+                      ", theta=", lambda_theta,
+                      ", seed=",  seed_idx,
+                      ", fold=",  fold_idx))
       }
+
       
       log_msg <- paste0(
         "alpha=", lambda_alpha,
@@ -2371,12 +2364,14 @@ cv_lcd_parallel <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else if (is.null(res_ii$iter)) {
         log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
                           ": ", res_ii$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else {
         
@@ -2390,15 +2385,20 @@ cv_lcd_parallel <- function(
         )
         prop_CV    <- eval_res$prop_infinite
         trimmed_CV <- eval_res$trimmed_avg_loglike
+        Q_final    <- tail(res_ii$iter$Q, 1)
       }
       
       # Save results
       save_path <- file.path(
         save_dir,
-        sprintf("%d-%d-%d-%d.Rdata",
+        sprintf("%d-%d-%d-%d.rds",
                 alpha_idx, theta_idx, seed_idx, fold_idx)
       )
-      save(prop_CV, trimmed_CV, log_msg, file = save_path)
+      saveRDS(list(prop_CV    = prop_CV,
+                   trimmed_CV = trimmed_CV,
+                   Q_final    = Q_final,
+                   log_msg    = log_msg), file = save_path)
+
       return(log_msg)
     }
   )
@@ -2475,9 +2475,11 @@ LCD_cv_summary <- function(
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
     index_matrix,
+    Q_final     = rep(NA_real_, n_runs),
     prop_CV     = rep(NA_real_, n_runs),
     trimmed_CV  = rep(NA_real_, n_runs)
   )
+  CVmat <- as.data.frame(CVmat)
   
   # Load each run's results
   for (i in seq_len(n_runs)) {
@@ -2489,12 +2491,12 @@ LCD_cv_summary <- function(
     if (!simul){
       file_name  <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d.Rdata",
+      sprintf("%d-%d-%d-%d.rds",
               alpha_idx, theta_idx, seed_idx, fold_idx))
       } else {
       file_name  <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
+      sprintf("%d-%d-%d-%d-%d.rds",
               sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx))
     }
     
@@ -2504,15 +2506,17 @@ LCD_cv_summary <- function(
       next
     }
     # load
-    load(file_name, envir = environment())
-    CVmat[i, "prop_CV"]    <- prop_CV
-    CVmat[i, "trimmed_CV"] <- trimmed_CV
+    mat = readRDS(file_name)
+    CVmat[i, "Q_final"]    <- mat$Q_final
+    CVmat[i, "prop_CV"]    <- mat$prop_CV
+    CVmat[i, "trimmed_CV"] <- mat$trimmed_CV
   }
   good <- !is.na(CVmat[,"trimmed_CV"])
   if (!any(good)) {
     stop("No successful CV runs found: all trimmed_CV are NA")
   }
   
+
   # 4) Compute per‐seed mean over folds, *only* on those good rows
   rep_means <- aggregate(
     trimmed_CV ~ alpha_idx + theta_idx + seed_idx,
@@ -2551,12 +2555,12 @@ LCD_cv_summary <- function(
   opt_row     <- which.max(reduced_mat$cv_score)
   opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha","lambda_theta")])
   
-  list(
+  return(list(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
     max_NA_prop  = max(CVmat[, "prop_CV"], na.rm = TRUE)
-  )
+  ))
 }
 ```
 
@@ -2584,7 +2588,7 @@ LCD_cv_summary <- function(
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
 #'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
-#' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
+#' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim in evaluation. Default: 0.01.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
 #' @param cv_reps Integer number of repeated fits. Default: \code{NULL}.
@@ -2609,7 +2613,7 @@ refit_lcd <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   seeds          = NULL,
-  trim_prob      = 0.05,
+  trim_prob      = 0.01,
   save_dir       = "./result",
   n_cores        = "max",
   debug          = FALSE,
@@ -2629,22 +2633,16 @@ refit_lcd <- function(
   }
   
   # Determine number of workers
-  workers <- if (identical(n_cores, "max")) {
-    parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_cores
-  }
-  cl <- parallel::makeCluster(workers)
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
+  cl <- parallel::makeCluster(n_workers)
   
   # Export necessary objects and functions
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K",
-      "lambda_alpha", "lambda_theta",
-      "n_restarts", "max_iter", "iter_eta",
-      "maxdev", "resp_threshold", "save_dir"
+      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "n_restarts", 
+      "max_iter", "iter_eta", "maxdev", "resp_threshold", "save_dir", "debug"
     ),
     envir = environment()
   )
@@ -2659,18 +2657,16 @@ refit_lcd <- function(
       set.seed(seed_idx)
       
       # Skip if already exists
-      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
+      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".rds"))
       if (file.exists(save_path)) {
         log_msg <- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
-        load(save_path)
+        mat = readRDS(save_path)
   
-        return(list(
-          log  = log_msg,
-          Q    = Q,
-          iter = iter
+        return(list(log_msg  = mat$log_msg,
+                     final_Q = mat$final_Q,
+                     fit_try = mat$fit_try
         ))
       }
-      
       
       # capture ALL output from main()
       err_msg <- NULL
@@ -2689,7 +2685,8 @@ refit_lcd <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            n_restarts      = n_restarts
+            n_restarts      = n_restarts,
+            debug           = debug
           ),
           error = function(e) {
             err_msg <<- paste0("✖ Error on seed ", seed_idx, ": ", e$message)
@@ -2721,22 +2718,28 @@ refit_lcd <- function(
     
     # if successful, record final Q and save
       final_Q  <- tail(fit_try$iter$Q, 1)
-      save(final_Q, fit_try, file = save_path)
-      log_msg <- paste0(log_msg,
-                        "✔ Completed seed ", seed_idx,
-                        "; final Q = ", round(final_Q, 4), "\n")
+      log_msg  <- paste0(log_msg, "✔ Completed seed ", seed_idx,
+                         "; final Q = ", round(final_Q, 4), "\n")
+      saveRDS(list(log_msg = log_msg, final_Q = final_Q, fit_try = fit_try),
+              file = save_path)
+      
       return(list(
-        log  = log_msg,
-        Q    = final_Q,
-        iter = fit_try
+        log_msg = log_msg,
+        final_Q = final_Q,
+        fit_try = fit_try
       ))
     }
   )
   parallel::stopCluster(cl)
   
   # Aggregate
-  log_msgs     <- sapply(results, `[[`, "log")
-  refit_scores <- sapply(results, `[[`, "Q")
+  log_msgs     <- sapply(results, `[[`, "log_msg")
+  refit_scores <- sapply(results, `[[`, "final_Q")
+  
+  if (all(is.na(refit_scores))) {
+    return(list(logs = c("All refits failed."), refit_scores = refit_scores, best_fit = NULL))
+  }
+  
   best_idx     <- which.max(refit_scores)
   best_fit     <- results[[best_idx]]
   
@@ -3275,8 +3278,8 @@ simul_idx_matrix <- function(
 #'   for numerical stability. Default: 1e-3.
 #' @param nfold Integer number of CV folds (used when rebuilding folds for each simulation).
 #'   Default: 5.
-#' @param trim_prob Numeric in [0,1]; fraction of lowest-likelihood points to trim
-#'   when averaging held-out log-likelihood. Default: 0.05.
+#' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim
+#'   when averaging held-out log-likelihood. Default: 0.01.
 #' @param save_dir Character path to write per-job results (\code{*.Rdata}).
 #'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
 #'   Default: \code{"cv_results"}.
@@ -3322,7 +3325,7 @@ run_cv_simul <- function(
   iter_eta           = 1e-3,
   resp_threshold     = 1e-3,
   nfold              = 5,
-  trim_prob          = 0.05,
+  trim_prob          = 0.01,
   save_dir           = "cv_results",
   n_cores            = "max",
   blocksize          = 5,
@@ -3332,20 +3335,22 @@ run_cv_simul <- function(
   # ensure output folder
   if (!dir.exists(save_dir)) dir.create(save_dir)
   
+    # Create CV folds
+  folds <- flowmix::make_cv_folds(
+    ylist     = Y_bin,
+    nfold     = nfold,
+    blocksize = blocksize
+  )
+  
   # determine worker count
-  if (identical(n_cores, "max")) {
-    n_workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_workers <- as.integer(n_cores)
-  }
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir",
-                "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
-                "nfold", "trim_prob", "blocksize", "save_dir", "max_iter"),
+    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", 
+                "maxdev", "resp_threshold", "trim_prob", "folds", "save_dir", "max_iter"),
     envir   = environment()
   )
   
@@ -3370,9 +3375,8 @@ run_cv_simul <- function(
     # Skip if already exists
     save_path <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
-              sim_idx, alpha_idx, theta_idx,
-              seed_idx, fold_idx)
+      sprintf("%d-%d-%d-%d-%d.rds",
+              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx)
       )
     if (file.exists(save_path)) {
       log_msg <- paste0(log_msg, paste0("Skip (cached): ", basename(save_path)))
@@ -3387,13 +3391,6 @@ run_cv_simul <- function(
     Y_bin      <- sim$ylist
     X          <- sim$X
     bin_mass   <- sim$countslist
-    
-    # Create CV folds
-    folds <- flowmix::make_cv_folds(
-      ylist     = Y_bin,
-      nfold     = nfold,
-      blocksize = blocksize
-    )
     
     # fold splits by time‐index
     test_i     <- folds[[fold_idx]]
@@ -3450,12 +3447,14 @@ run_cv_simul <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else if (is.null(fit_try$iter)) {
         log_msg <- paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else {
         ev <- evaluate_lcd_model(
@@ -3476,10 +3475,14 @@ run_cv_simul <- function(
           " -> prop=",    round(prop_CV,3),
           ", trimmed=",   round(trimmed_CV,3)
         )
+        Q_final    <- tail(fit_try$iter$Q, 1)
       }
     
     # 5) save result
-    save(prop_CV, trimmed_CV, log_msg, file = save_path)
+    saveRDS(list(prop_CV    = prop_CV,
+                 trimmed_CV = trimmed_CV,
+                 Q_final    = Q_final,
+                 log_msg    = log_msg), file = save_path)
     return(log_msg)
   })
   parallel::stopCluster(cl)
@@ -3646,19 +3649,14 @@ simul_refit <- function(
   best_table <- as.matrix(best_table[, c("sim_idx","lambda_alpha","lambda_theta","seed_idx")])
   
   # determine worker count
-  if (identical(n_cores, "max")) {
-    n_workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_workers <- as.integer(n_cores)
-  }
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("best_table", "sim_dir", "save_dir",
-                "K", "max_iter", "iter_eta", "resp_threshold", 
-                "refit_seeds"),
+    varlist = c("best_table", "sim_dir", "save_dir", "K", "max_iter",
+                "iter_eta", "resp_threshold", "refit_seeds"),
     envir   = environment()
   )
   
@@ -3686,7 +3684,7 @@ simul_refit <- function(
     if (file.exists(save_path)) {
       print(paste0("Skip (cached): ", basename(save_path)))
       saved = readRDS(save_path)
-      return(c(
+      return(list(
         sim_idx      = sim_idx,
         lambda_alpha = lambda_alpha,
         lambda_theta = lambda_theta,
@@ -3758,25 +3756,28 @@ simul_refit <- function(
     )
     
     # return summary
-    return( c(sim_idx        = sim_idx,
-              lambda_alpha   = lambda_alpha,
-              lambda_theta   = lambda_theta,
-              seed_idx       = seed_idx,
-              Q_final        = Q_final,
-              metric         = metric))
+   return(list(
+      sim_idx      = sim_idx,
+      lambda_alpha = lambda_alpha,
+      lambda_theta = lambda_theta,
+      seed_idx     = seed_idx,
+      Q_final      = Q_final,
+      metric       = metric))
+
   })
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res = vapply(res_i, function(x) {is.na(as.numeric(x["Q_final"]))}, logical(1))
+  res <- vapply(res_i, function(x) is.na(as.numeric(x$Q_final)), logical(1))
 
   res_logs   <- sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
   
+  res_table <- do.call(rbind, lapply(res_i, function(x) as.data.frame(x, stringsAsFactors = FALSE)))
+  
   # bind into a data.frame
   return(list(res_logs = res_logs,
-              res_table = as.data.frame(do.call(rbind, res_i)))
-        )
+              res_table = res_table))
 }
 ```
 

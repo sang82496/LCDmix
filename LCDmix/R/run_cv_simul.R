@@ -24,8 +24,8 @@
 #'   for numerical stability. Default: 1e-3.
 #' @param nfold Integer number of CV folds (used when rebuilding folds for each simulation).
 #'   Default: 5.
-#' @param trim_prob Numeric in [0,1]; fraction of lowest-likelihood points to trim
-#'   when averaging held-out log-likelihood. Default: 0.05.
+#' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim
+#'   when averaging held-out log-likelihood. Default: 0.01.
 #' @param save_dir Character path to write per-job results (\code{*.Rdata}).
 #'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
 #'   Default: \code{"cv_results"}.
@@ -71,7 +71,7 @@ run_cv_simul <- function(
   iter_eta           = 1e-3,
   resp_threshold     = 1e-3,
   nfold              = 5,
-  trim_prob          = 0.05,
+  trim_prob          = 0.01,
   save_dir           = "cv_results",
   n_cores            = "max",
   blocksize          = 5,
@@ -81,20 +81,22 @@ run_cv_simul <- function(
   # ensure output folder
   if (!dir.exists(save_dir)) dir.create(save_dir)
   
+    # Create CV folds
+  folds <- flowmix::make_cv_folds(
+    ylist     = Y_bin,
+    nfold     = nfold,
+    blocksize = blocksize
+  )
+  
   # determine worker count
-  if (identical(n_cores, "max")) {
-    n_workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_workers <- as.integer(n_cores)
-  }
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir",
-                "K", "n_restarts", "iter_eta", "maxdev", "resp_threshold", 
-                "nfold", "trim_prob", "blocksize", "save_dir", "max_iter"),
+    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", 
+                "maxdev", "resp_threshold", "trim_prob", "folds", "save_dir", "max_iter"),
     envir   = environment()
   )
   
@@ -119,9 +121,8 @@ run_cv_simul <- function(
     # Skip if already exists
     save_path <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
-              sim_idx, alpha_idx, theta_idx,
-              seed_idx, fold_idx)
+      sprintf("%d-%d-%d-%d-%d.rds",
+              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx)
       )
     if (file.exists(save_path)) {
       log_msg <- paste0(log_msg, paste0("Skip (cached): ", basename(save_path)))
@@ -136,13 +137,6 @@ run_cv_simul <- function(
     Y_bin      <- sim$ylist
     X          <- sim$X
     bin_mass   <- sim$countslist
-    
-    # Create CV folds
-    folds <- flowmix::make_cv_folds(
-      ylist     = Y_bin,
-      nfold     = nfold,
-      blocksize = blocksize
-    )
     
     # fold splits by time‐index
     test_i     <- folds[[fold_idx]]
@@ -199,12 +193,14 @@ run_cv_simul <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else if (is.null(fit_try$iter)) {
         log_msg <- paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else {
         ev <- evaluate_lcd_model(
@@ -225,10 +221,14 @@ run_cv_simul <- function(
           " -> prop=",    round(prop_CV,3),
           ", trimmed=",   round(trimmed_CV,3)
         )
+        Q_final    <- tail(fit_try$iter$Q, 1)
       }
     
     # 5) save result
-    save(prop_CV, trimmed_CV, log_msg, file = save_path)
+    saveRDS(list(prop_CV    = prop_CV,
+                 trimmed_CV = trimmed_CV,
+                 Q_final    = Q_final,
+                 log_msg    = log_msg), file = save_path)
     return(log_msg)
   })
   parallel::stopCluster(cl)

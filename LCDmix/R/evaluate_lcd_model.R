@@ -18,7 +18,7 @@
 #' @param Y A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
 #' @param biomass A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).
-#' @param trim_prob Numeric in \[0,0.5\]; proportion of lowest‐likelihood observations to trim when computing the average. Default: \code{0.05}.
+#' @param trim_prob Numeric in \[0,0.5\]; proportion of lowest-likelihood observations to trim when computing the average. Default: \code{0.01}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -38,7 +38,7 @@
 #'   Y          = Y_test,
 #'   X          = X_test,
 #'   biomass    = biomass_test,
-#'   trim_prob  = 0.05
+#'   trim_prob  = 0.01
 #' )
 #' str(eval_res)
 #' }
@@ -48,7 +48,7 @@ evaluate_lcd_model <- function(
   Y,
   X,
   biomass,
-  trim_prob = 0.05
+  trim_prob = 0.01
 ) {
   # Unpack fitted parameters
   densities     <- model$g_new

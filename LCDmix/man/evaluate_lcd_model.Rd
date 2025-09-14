@@ -4,7 +4,7 @@
 \alias{evaluate_lcd_model}
 \title{Evaluate fitted LCD mixture model on new data}
 \usage{
-evaluate_lcd_model(model, Y, X, biomass, trim_prob = 0.05)
+evaluate_lcd_model(model, Y, X, biomass, trim_prob = 0.01)
 }
 \arguments{
 \item{model}{A list returned by \code{main()} or \code{iteration()}, containing:
@@ -23,7 +23,7 @@ evaluate_lcd_model(model, Y, X, biomass, trim_prob = 0.05)
 
 \item{biomass}{A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).}
 
-\item{trim_prob}{Numeric in [0,0.5]; proportion of lowest‐likelihood observations to trim when computing the average. Default: \code{0.05}.}
+\item{trim_prob}{Numeric in [0,0.5]; proportion of lowest-likelihood observations to trim when computing the average. Default: \code{0.01}.}
 }
 \value{
 A list with components:
@@ -48,7 +48,7 @@ eval_res <- evaluate_lcd_model(
   Y          = Y_test,
   X          = X_test,
   biomass    = biomass_test,
-  trim_prob  = 0.05
+  trim_prob  = 0.01
 )
 str(eval_res)
 }

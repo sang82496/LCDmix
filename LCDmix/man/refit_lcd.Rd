@@ -14,7 +14,7 @@ refit_lcd(
   iter_eta = 0.001,
   resp_threshold = 0.001,
   seeds = NULL,
-  trim_prob = 0.05,
+  trim_prob = 0.01,
   save_dir = "./result",
   n_cores = "max",
   debug = FALSE,
@@ -46,7 +46,7 @@ of biomass weights per bin at time \(t\).}
 \item{seeds}{Integer vector of random seeds (one per repeat).  Must supply either
 \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.}
 
-\item{trim_prob}{Numeric in \link{0,0.5}; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.}
+\item{trim_prob}{Numeric in \link{0,0.5}; fraction of lowest-likelihood points to trim in evaluation. Default: 0.01.}
 
 \item{save_dir}{Character; directory in which to save per‐repeat results. Default: "./result".}
 

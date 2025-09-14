@@ -12,7 +12,7 @@ run_cv_simul(
   iter_eta = 0.001,
   resp_threshold = 0.001,
   nfold = 5,
-  trim_prob = 0.05,
+  trim_prob = 0.01,
   save_dir = "cv_results",
   n_cores = "max",
   blocksize = 5,
@@ -41,8 +41,8 @@ for numerical stability. Default: 1e-3.}
 \item{nfold}{Integer number of CV folds (used when rebuilding folds for each simulation).
 Default: 5.}
 
-\item{trim_prob}{Numeric in \link{0,1}; fraction of lowest-likelihood points to trim
-when averaging held-out log-likelihood. Default: 0.05.}
+\item{trim_prob}{Numeric in \link{0,0.5}; fraction of lowest-likelihood points to trim
+when averaging held-out log-likelihood. Default: 0.01.}
 
 \item{save_dir}{Character path to write per-job results (\code{*.Rdata}).
 Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.

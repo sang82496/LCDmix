@@ -16,7 +16,7 @@ cv_lcd_parallel(
   resp_threshold = 0.001,
   nfold = 5,
   seeds = NULL,
-  trim_prob = 0.05,
+  trim_prob = 0.01,
   save_dir = "./result",
   n_cores = "max",
   cv_reps = NULL,
@@ -57,7 +57,7 @@ you must supply \code{cv_reps}; seeds will be set to \code{1:cv_reps}.
 Default: \code{NULL}.}
 
 \item{trim_prob}{Numeric in [0,1]; fraction of lowest-likelihood points to
-trim when averaging the held-out log-likelihood. Default: \code{0.05}.}
+trim when averaging the held-out log-likelihood. Default: \code{0.01}.}
 
 \item{save_dir}{Character; directory where the function writes the CV index
 matrix (\code{index_matrix.Rdata}) and per-run \code{*.Rdata} files of the
