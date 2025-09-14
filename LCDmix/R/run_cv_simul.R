@@ -28,7 +28,7 @@
 #'   when averaging held-out log-likelihood. Default: 0.01.
 #' @param save_dir Character path to write per-job results (\code{*.Rdata}).
 #'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
-#'   Default: \code{"cv_results"}.
+#'   Default: \code{"cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
 #'   uses all physical cores minus one. Default: \code{"max"}.
 #' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
@@ -51,12 +51,12 @@
 #'   seeds         = 1:2,
 #'   nfold         = 3
 #' )
-#' # Run CV jobs and save results under "cv_results/"
+#' # Run CV jobs and save results under "cv_saves/"
 #' logs <- run_cv_simul(
 #'   simul_idx_mat = idx,
 #'   sim_dir       = "sim_data",
 #'   K             = 2,
-#'   save_dir      = "cv_results",
+#'   save_dir      = "cv_saves",
 #'   n_cores       = "max"
 #' )
 #' cat(tail(logs), sep = "\n")
@@ -72,7 +72,7 @@ run_cv_simul <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   trim_prob          = 0.01,
-  save_dir           = "cv_results",
+  save_dir           = "cv_saves",
   n_cores            = "max",
   blocksize          = 5,
   maxdev             = NULL,

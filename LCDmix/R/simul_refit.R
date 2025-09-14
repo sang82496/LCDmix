@@ -58,7 +58,7 @@
 #' out <- simul_refit(
 #'   best_table  = best_tbl,
 #'   sim_dir     = "sim_data",
-#'   save_dir    = "cv_results",
+#'   save_dir    = "cv_saves",
 #'   K           = 2,
 #'   refit_seeds = 1:3,
 #'   n_cores     = "max"
@@ -70,7 +70,7 @@
 simul_refit <- function(
     best_table, 
     sim_dir = "sim_data", 
-    save_dir = "cv_results",
+    save_dir = "cv_saves",
     K,
     max_iter           = 30,
     iter_eta           = 1e-3,

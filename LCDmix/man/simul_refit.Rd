@@ -7,7 +7,7 @@
 simul_refit(
   best_table,
   sim_dir = "sim_data",
-  save_dir = "cv_results",
+  save_dir = "cv_saves",
   K,
   max_iter = 30,
   iter_eta = 0.001,
@@ -79,7 +79,7 @@ and log/error text.
 out <- simul_refit(
   best_table  = best_tbl,
   sim_dir     = "sim_data",
-  save_dir    = "cv_results",
+  save_dir    = "cv_saves",
   K           = 2,
   refit_seeds = 1:3,
   n_cores     = "max"

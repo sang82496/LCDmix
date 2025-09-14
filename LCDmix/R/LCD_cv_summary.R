@@ -88,47 +88,45 @@ LCD_cv_summary <- function(
     CVmat[i, "prop_CV"]    <- mat$prop_CV
     CVmat[i, "trimmed_CV"] <- mat$trimmed_CV
   }
-  good <- !is.na(CVmat[,"trimmed_CV"])
-  if (!any(good)) {
-    stop("No successful CV runs found: all trimmed_CV are NA")
+  
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest Q_final
+  # Order so that within each (alpha,theta,fold) the first row has max Q_final (NAs go last)
+  ord <- with(CVmat,
+    order(alpha_idx, theta_idx, fold_idx, -Q_final, na.last = TRUE)  # NA Q go last
+  )
+  selected <- CVmat[ord, ]
+  selected <- selected[!duplicated(selected[c("alpha_idx","theta_idx","fold_idx")]), ]
+  
+  ## Warn if any selected rows have NA trimmed_CV
+  if (any(is.na(selected$trimmed_CV))) {
+    warning("Selected rows contain NA trimmed_CV values; they will be ignored when averaging.")
   }
   
-
-  # 4) Compute per‐seed mean over folds, *only* on those good rows
-  rep_means <- aggregate(
-    trimmed_CV ~ alpha_idx + theta_idx + seed_idx,
-    data    = CVmat,
-    subset  = good,
-    FUN     = mean  # no need for na.rm=TRUE since we filtered out NA
-  )
-  
-  # 5) Take max across seeds → cv_score
+  ## 5) Average the selected trimmed_CV across folds -> cv_score per (alpha,theta)
   best_by_combo <- aggregate(
     trimmed_CV ~ alpha_idx + theta_idx,
-    data   = rep_means,
-    FUN    = max
+    data = selected,
+    FUN  = function(x) mean(x, na.rm = TRUE)
   )
   names(best_by_combo)[3] <- "cv_score"
   
-  # 6) Unique lambda values per combo
-  unique_lams <- unique(
-    CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")]
-  )
-  
-  # 7) Count non‐NA original runs per combo
+  ## 6) Unique lambda values per combo (from the original matrix)
+  unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
+
+  ## 7) Count rows in CVmat with non-NA Q_final per (alpha_idx, theta_idx)
   counts_df <- aggregate(
-    I(!is.na(trimmed_CV)) ~ alpha_idx + theta_idx,
+    I(!is.na(Q_final)) ~ alpha_idx + theta_idx,
     data = CVmat,
     FUN  = sum
   )
-  names(counts_df)[3] <- "count"
+  names(counts_df)[3] <- "counts"
   
-  # 8) Merge & sort
-  reduced_mat <- merge(unique_lams,  best_by_combo, by = c("alpha_idx","theta_idx"))
-  reduced_mat <- merge(reduced_mat, counts_df,     by = c("alpha_idx","theta_idx"))
+  ## 8) Merge & sort  (unchanged except for the new column name)
+  reduced_mat <- merge(unique_lams, best_by_combo, by = c("alpha_idx","theta_idx"), all.x = TRUE)
+  reduced_mat <- merge(reduced_mat, counts_df, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat <- reduced_mat[order(reduced_mat$alpha_idx, reduced_mat$theta_idx), ]
   
-  # 9) Pick optimal lambdas
+  ## 9) Pick optimal lambdas (same as before)
   opt_row     <- which.max(reduced_mat$cv_score)
   opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha","lambda_theta")])
   

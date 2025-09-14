@@ -33,11 +33,11 @@ per simulation.
 \examples{
 \dontrun{
 # Suppose you already ran:
-# logs <- run_cv_simul(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_results")
+# logs <- run_cv_simul(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_saves")
 
 best_tbl <- summarize_simul_cv(
   simul_idx_mat = idx_mat,
-  save_dir      = "cv_results"
+  save_dir      = "cv_saves"
 )
 head(best_tbl)
 }
