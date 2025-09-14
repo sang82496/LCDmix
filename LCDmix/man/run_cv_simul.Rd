@@ -44,8 +44,8 @@ Default: 5.}
 \item{trim_prob}{Numeric in \link{0,0.5}; fraction of lowest-likelihood points to trim
 when averaging held-out log-likelihood. Default: 0.01.}
 
-\item{save_dir}{Character path to write per-job results (\code{*.Rdata}).
-Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
+\item{save_dir}{Character path to write per-job results (\code{*.rds}).
+Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.rds}.
 Default: \code{"cv_saves"}.}
 
 \item{n_cores}{Integer or \code{"max"}; number of parallel workers. \code{"max"}

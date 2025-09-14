@@ -26,8 +26,8 @@
 #'   Default: 5.
 #' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim
 #'   when averaging held-out log-likelihood. Default: 0.01.
-#' @param save_dir Character path to write per-job results (\code{*.Rdata}).
-#'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata}.
+#' @param save_dir Character path to write per-job results (\code{*.rds}).
+#'   Files are saved as \code{<sim_idx>-<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.rds}.
 #'   Default: \code{"cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
 #'   uses all physical cores minus one. Default: \code{"max"}.

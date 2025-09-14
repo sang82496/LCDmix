@@ -165,8 +165,9 @@ refit_lcd <- function(
   parallel::stopCluster(cl)
   
   # Aggregate
-  log_msgs     <- sapply(results, `[[`, "log_msg")
-  refit_scores <- sapply(results, `[[`, "final_Q")
+  log_msgs     <- vapply(results, function(x) x$log, character(1))
+  refit_scores <- vapply(results, function(x) x$Q,   numeric(1))
+
   
   if (all(is.na(refit_scores))) {
     return(list(logs = c("All refits failed."), refit_scores = refit_scores, best_fit = NULL))
