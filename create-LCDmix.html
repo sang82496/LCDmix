@@ -2930,8 +2930,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::stopCluster(cl)
   
   # Aggregate
-  log_msgs     &lt;- vapply(results, function(x) x$log, character(1))
-  refit_scores &lt;- vapply(results, function(x) x$Q,   numeric(1))
+  log_msgs     &lt;- vapply(results, function(x) x$log_msg, character(1))
+  refit_scores &lt;- vapply(results, function(x) x$final_Q,   numeric(1))
 
   
   if (all(is.na(refit_scores))) {
