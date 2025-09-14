@@ -52,9 +52,11 @@ LCD_cv_summary <- function(
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
     index_matrix,
+    Q_final     = rep(NA_real_, n_runs),
     prop_CV     = rep(NA_real_, n_runs),
     trimmed_CV  = rep(NA_real_, n_runs)
   )
+  CVmat <- as.data.frame(CVmat)
   
   # Load each run's results
   for (i in seq_len(n_runs)) {
@@ -66,12 +68,12 @@ LCD_cv_summary <- function(
     if (!simul){
       file_name  <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d.Rdata",
+      sprintf("%d-%d-%d-%d.rds",
               alpha_idx, theta_idx, seed_idx, fold_idx))
       } else {
       file_name  <- file.path(
       save_dir,
-      sprintf("%d-%d-%d-%d-%d.Rdata",
+      sprintf("%d-%d-%d-%d-%d.rds",
               sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx))
     }
     
@@ -81,15 +83,17 @@ LCD_cv_summary <- function(
       next
     }
     # load
-    load(file_name, envir = environment())
-    CVmat[i, "prop_CV"]    <- prop_CV
-    CVmat[i, "trimmed_CV"] <- trimmed_CV
+    mat = readRDS(file_name)
+    CVmat[i, "Q_final"]    <- mat$Q_final
+    CVmat[i, "prop_CV"]    <- mat$prop_CV
+    CVmat[i, "trimmed_CV"] <- mat$trimmed_CV
   }
   good <- !is.na(CVmat[,"trimmed_CV"])
   if (!any(good)) {
     stop("No successful CV runs found: all trimmed_CV are NA")
   }
   
+
   # 4) Compute per‐seed mean over folds, *only* on those good rows
   rep_means <- aggregate(
     trimmed_CV ~ alpha_idx + theta_idx + seed_idx,
@@ -128,10 +132,10 @@ LCD_cv_summary <- function(
   opt_row     <- which.max(reduced_mat$cv_score)
   opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha","lambda_theta")])
   
-  list(
+  return(list(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
     max_NA_prop  = max(CVmat[, "prop_CV"], na.rm = TRUE)
-  )
+  ))
 }

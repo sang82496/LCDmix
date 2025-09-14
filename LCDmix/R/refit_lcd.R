@@ -20,7 +20,7 @@
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed. Default: 1e-3.
 #' @param seeds Integer vector of random seeds (one per repeat).  Must supply either
 #'   \code{seeds} or \code{cv_reps}, not both. Default: \code{NULL}.
-#' @param trim_prob Numeric in [0,0.5]; fraction of lowest‐likelihood points to trim in evaluation. Default: 0.05.
+#' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim in evaluation. Default: 0.01.
 #' @param save_dir Character; directory in which to save per‐repeat results. Default: "./result".
 #' @param n_cores Integer or "max"; number of parallel workers. "max" uses all physical cores minus one. Default: "max".
 #' @param cv_reps Integer number of repeated fits. Default: \code{NULL}.
@@ -45,7 +45,7 @@ refit_lcd <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   seeds          = NULL,
-  trim_prob      = 0.05,
+  trim_prob      = 0.01,
   save_dir       = "./result",
   n_cores        = "max",
   debug          = FALSE,
@@ -65,22 +65,16 @@ refit_lcd <- function(
   }
   
   # Determine number of workers
-  workers <- if (identical(n_cores, "max")) {
-    parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_cores
-  }
-  cl <- parallel::makeCluster(workers)
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
+  cl <- parallel::makeCluster(n_workers)
   
   # Export necessary objects and functions
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K",
-      "lambda_alpha", "lambda_theta",
-      "n_restarts", "max_iter", "iter_eta",
-      "maxdev", "resp_threshold", "save_dir"
+      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "n_restarts", 
+      "max_iter", "iter_eta", "maxdev", "resp_threshold", "save_dir", "debug"
     ),
     envir = environment()
   )
@@ -95,18 +89,16 @@ refit_lcd <- function(
       set.seed(seed_idx)
       
       # Skip if already exists
-      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".Rdata"))
+      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".rds"))
       if (file.exists(save_path)) {
         log_msg <- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
-        load(save_path)
+        mat = readRDS(save_path)
   
-        return(list(
-          log  = log_msg,
-          Q    = Q,
-          iter = iter
+        return(list(log_msg  = mat$log_msg,
+                     final_Q = mat$final_Q,
+                     fit_try = mat$fit_try
         ))
       }
-      
       
       # capture ALL output from main()
       err_msg <- NULL
@@ -125,7 +117,8 @@ refit_lcd <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             maxdev          = maxdev,
-            n_restarts      = n_restarts
+            n_restarts      = n_restarts,
+            debug           = debug
           ),
           error = function(e) {
             err_msg <<- paste0("✖ Error on seed ", seed_idx, ": ", e$message)
@@ -157,22 +150,28 @@ refit_lcd <- function(
     
     # if successful, record final Q and save
       final_Q  <- tail(fit_try$iter$Q, 1)
-      save(final_Q, fit_try, file = save_path)
-      log_msg <- paste0(log_msg,
-                        "✔ Completed seed ", seed_idx,
-                        "; final Q = ", round(final_Q, 4), "\n")
+      log_msg  <- paste0(log_msg, "✔ Completed seed ", seed_idx,
+                         "; final Q = ", round(final_Q, 4), "\n")
+      saveRDS(list(log_msg = log_msg, final_Q = final_Q, fit_try = fit_try),
+              file = save_path)
+      
       return(list(
-        log  = log_msg,
-        Q    = final_Q,
-        iter = fit_try
+        log_msg = log_msg,
+        final_Q = final_Q,
+        fit_try = fit_try
       ))
     }
   )
   parallel::stopCluster(cl)
   
   # Aggregate
-  log_msgs     <- sapply(results, `[[`, "log")
-  refit_scores <- sapply(results, `[[`, "Q")
+  log_msgs     <- sapply(results, `[[`, "log_msg")
+  refit_scores <- sapply(results, `[[`, "final_Q")
+  
+  if (all(is.na(refit_scores))) {
+    return(list(logs = c("All refits failed."), refit_scores = refit_scores, best_fit = NULL))
+  }
+  
   best_idx     <- which.max(refit_scores)
   best_fit     <- results[[best_idx]]
   

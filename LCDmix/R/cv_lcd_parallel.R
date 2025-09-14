@@ -30,7 +30,7 @@
 #'   you must supply \code{cv_reps}; seeds will be set to \code{1:cv_reps}.
 #'   Default: \code{NULL}.
 #' @param trim_prob Numeric in \[0,1\]; fraction of lowest-likelihood points to
-#'   trim when averaging the held-out log-likelihood. Default: \code{0.05}.
+#'   trim when averaging the held-out log-likelihood. Default: \code{0.01}.
 #' @param save_dir Character; directory where the function writes the CV index
 #'   matrix (\code{index_matrix.Rdata}) and per-run \code{*.Rdata} files of the
 #'   form \code{"<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata"}.
@@ -100,7 +100,7 @@ cv_lcd_parallel <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  trim_prob          = 0.05,
+  trim_prob          = 0.01,
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
@@ -141,12 +141,8 @@ cv_lcd_parallel <- function(
   save(index_matrix, file = save_path)
   
   #— Launch parallel cluster —#
-  if (identical(n_cores, "max")) {
-    workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    workers <- as.integer(n_cores)
-  }
-  cl <- parallel::makeCluster(workers)
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
+  cl <- parallel::makeCluster(n_workers)
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
@@ -172,20 +168,17 @@ cv_lcd_parallel <- function(
       lambda_alpha<- index_matrix[ii, "lambda_alpha"]
       lambda_theta<- index_matrix[ii, "lambda_theta"]
       
-      # Skip if already exists
       save_path <- file.path(
         save_dir,
-        sprintf("%d-%d-%d-%d.Rdata",
-                alpha_idx, theta_idx, seed_idx, fold_idx)
+        sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
       )
       if (file.exists(save_path)) {
-        return(paste0(
-          "Skipping existing: alpha=", lambda_alpha,
-          ", theta=", lambda_theta,
-          ", seed=",  seed_idx,
-          ", fold=",  fold_idx
-        ))
+        return(paste0("Skipping existing: alpha=", lambda_alpha,
+                      ", theta=", lambda_theta,
+                      ", seed=",  seed_idx,
+                      ", fold=",  fold_idx))
       }
+
       
       log_msg <- paste0(
         "alpha=", lambda_alpha,
@@ -239,12 +232,14 @@ cv_lcd_parallel <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else if (is.null(res_ii$iter)) {
         log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
                           ": ", res_ii$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
+        Q_final    <- NA
         
       } else {
         
@@ -258,15 +253,20 @@ cv_lcd_parallel <- function(
         )
         prop_CV    <- eval_res$prop_infinite
         trimmed_CV <- eval_res$trimmed_avg_loglike
+        Q_final    <- tail(res_ii$iter$Q, 1)
       }
       
       # Save results
       save_path <- file.path(
         save_dir,
-        sprintf("%d-%d-%d-%d.Rdata",
+        sprintf("%d-%d-%d-%d.rds",
                 alpha_idx, theta_idx, seed_idx, fold_idx)
       )
-      save(prop_CV, trimmed_CV, log_msg, file = save_path)
+      saveRDS(list(prop_CV    = prop_CV,
+                   trimmed_CV = trimmed_CV,
+                   Q_final    = Q_final,
+                   log_msg    = log_msg), file = save_path)
+
       return(log_msg)
     }
   )

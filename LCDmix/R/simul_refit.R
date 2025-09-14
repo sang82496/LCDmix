@@ -97,19 +97,14 @@ simul_refit <- function(
   best_table <- as.matrix(best_table[, c("sim_idx","lambda_alpha","lambda_theta","seed_idx")])
   
   # determine worker count
-  if (identical(n_cores, "max")) {
-    n_workers <- parallel::detectCores(logical = FALSE) - 1
-  } else {
-    n_workers <- as.integer(n_cores)
-  }
+  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
   # export functions and data that workers need
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("best_table", "sim_dir", "save_dir",
-                "K", "max_iter", "iter_eta", "resp_threshold", 
-                "refit_seeds"),
+    varlist = c("best_table", "sim_dir", "save_dir", "K", "max_iter",
+                "iter_eta", "resp_threshold", "refit_seeds"),
     envir   = environment()
   )
   
@@ -137,7 +132,7 @@ simul_refit <- function(
     if (file.exists(save_path)) {
       print(paste0("Skip (cached): ", basename(save_path)))
       saved = readRDS(save_path)
-      return(c(
+      return(list(
         sim_idx      = sim_idx,
         lambda_alpha = lambda_alpha,
         lambda_theta = lambda_theta,
@@ -209,23 +204,26 @@ simul_refit <- function(
     )
     
     # return summary
-    return( c(sim_idx        = sim_idx,
-              lambda_alpha   = lambda_alpha,
-              lambda_theta   = lambda_theta,
-              seed_idx       = seed_idx,
-              Q_final        = Q_final,
-              metric         = metric))
+   return(list(
+      sim_idx      = sim_idx,
+      lambda_alpha = lambda_alpha,
+      lambda_theta = lambda_theta,
+      seed_idx     = seed_idx,
+      Q_final      = Q_final,
+      metric       = metric))
+
   })
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res = vapply(res_i, function(x) {is.na(as.numeric(x["Q_final"]))}, logical(1))
+  res <- vapply(res_i, function(x) is.na(as.numeric(x$Q_final)), logical(1))
 
   res_logs   <- sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
   
+  res_table <- do.call(rbind, lapply(res_i, function(x) as.data.frame(x, stringsAsFactors = FALSE)))
+  
   # bind into a data.frame
   return(list(res_logs = res_logs,
-              res_table = as.data.frame(do.call(rbind, res_i)))
-        )
+              res_table = res_table))
 }
