@@ -701,6 +701,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   
   # 2) Extract initial parameters
   alpha_init  &lt;- flow_res$alpha
+  alpha_init  &lt;- sweep(alpha_init, 2, alpha_init[1, ], FUN = "-")
+  
   theta0_init &lt;- lapply(flow_res$beta, `[[`, 1)
   theta_init  &lt;- lapply(flow_res$beta, function(b) b[-1])
   
@@ -1709,6 +1711,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # Extract coefficients at the requested lambda
   coefs_list &lt;- glmnet::coef.glmnet(fit, s = lambda_alpha)
   alpha_mat  &lt;- t(as.matrix(do.call(cbind, coefs_list)))
+  alpha_mat  &lt;- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
   
   # Return K x (p+1) matrix: rows = components, cols = intercept + slopes
   return(alpha_mat)
