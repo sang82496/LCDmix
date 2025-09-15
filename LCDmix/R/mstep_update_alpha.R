@@ -61,6 +61,7 @@ mstep_update_alpha <- function(
   # Extract coefficients at the requested lambda
   coefs_list <- glmnet::coef.glmnet(fit, s = lambda_alpha)
   alpha_mat  <- t(as.matrix(do.call(cbind, coefs_list)))
+  alpha_mat  <- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
   
   # Return K x (p+1) matrix: rows = components, cols = intercept + slopes
   return(alpha_mat)

@@ -80,6 +80,8 @@ initialize_model <- function(
   
   # 2) Extract initial parameters
   alpha_init  <- flow_res$alpha
+  alpha_init  <- sweep(alpha_init, 2, alpha_init[1, ], FUN = "-")
+  
   theta0_init <- lapply(flow_res$beta, `[[`, 1)
   theta_init  <- lapply(flow_res$beta, function(b) b[-1])
   
