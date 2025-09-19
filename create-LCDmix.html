@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-09-14">
+<meta name="date" content="2025-09-19">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-09-14</h4>
+<h4 class="date">2025-09-19</h4>
 
 </div>
 
@@ -2385,7 +2385,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default: \code{NULL}.
 #' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}.
-#'   Default: \code{5}.
+#'   Default: \code{20}.
 #' @param maxdev Numeric or \code{NULL}; maximum-deviation constraint for the
 #'   LP update in the theta-step. Default: \code{NULL}.
 #' @param n_restarts Integer; number of random restarts for initialization.
@@ -2449,7 +2449,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 5,
+  blocksize          = 20,
   maxdev             = NULL,
   n_restarts         = 1
 ) {
@@ -2457,8 +2457,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   
   alpha_lambdas = sort(alpha_lambdas)
   theta_lambdas = sort(theta_lambdas)
-  print(alpha_lambdas)
-  print(theta_lambdas)
+#  print(alpha_lambdas)
+#  print(theta_lambdas)
   
   #— Create CV folds —#
   folds &lt;- flowmix::make_cv_folds(
@@ -2481,7 +2481,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     alpha_lambdas  = alpha_lambdas,
     theta_lambdas  = theta_lambdas
   )
-  print(index_matrix)
+#  print(index_matrix)
   save_path &lt;- file.path(save_dir, "index_matrix.Rdata")
   save(index_matrix, file = save_path)
   
@@ -3465,7 +3465,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
 #'   uses all physical cores minus one. Default: \code{"max"}.
 #' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
-#'   Default: 5.
+#'   Default: 20.
 #' @param maxdev Numeric or \code{NULL}; max-deviation constraint for LP updates
 #'   in theta-step. Default: \code{NULL}.
 #' @param n_restarts Integer; number of random restarts for initialization in \code{<a href="create-LCDmix.html#main">main</a>()}.
@@ -3507,7 +3507,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob          = 0.01,
   save_dir           = "cv_saves",
   n_cores            = "max",
-  blocksize          = 5,
+  blocksize          = 20,
   maxdev             = NULL,
   n_restarts         = 1
 ) {
