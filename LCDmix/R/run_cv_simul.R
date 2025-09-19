@@ -32,7 +32,7 @@
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
 #'   uses all physical cores minus one. Default: \code{"max"}.
 #' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
-#'   Default: 5.
+#'   Default: 20.
 #' @param maxdev Numeric or \code{NULL}; max-deviation constraint for LP updates
 #'   in theta-step. Default: \code{NULL}.
 #' @param n_restarts Integer; number of random restarts for initialization in \code{main()}.
@@ -74,7 +74,7 @@ run_cv_simul <- function(
   trim_prob          = 0.01,
   save_dir           = "cv_saves",
   n_cores            = "max",
-  blocksize          = 5,
+  blocksize          = 20,
   maxdev             = NULL,
   n_restarts         = 1
 ) {

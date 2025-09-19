@@ -40,7 +40,7 @@
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default: \code{NULL}.
 #' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}.
-#'   Default: \code{5}.
+#'   Default: \code{20}.
 #' @param maxdev Numeric or \code{NULL}; maximum-deviation constraint for the
 #'   LP update in the theta-step. Default: \code{NULL}.
 #' @param n_restarts Integer; number of random restarts for initialization.
@@ -104,7 +104,7 @@ cv_lcd_parallel <- function(
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 5,
+  blocksize          = 20,
   maxdev             = NULL,
   n_restarts         = 1
 ) {
@@ -112,8 +112,8 @@ cv_lcd_parallel <- function(
   
   alpha_lambdas = sort(alpha_lambdas)
   theta_lambdas = sort(theta_lambdas)
-  print(alpha_lambdas)
-  print(theta_lambdas)
+#  print(alpha_lambdas)
+#  print(theta_lambdas)
   
   #— Create CV folds —#
   folds <- flowmix::make_cv_folds(
@@ -136,7 +136,7 @@ cv_lcd_parallel <- function(
     alpha_lambdas  = alpha_lambdas,
     theta_lambdas  = theta_lambdas
   )
-  print(index_matrix)
+#  print(index_matrix)
   save_path <- file.path(save_dir, "index_matrix.Rdata")
   save(index_matrix, file = save_path)
   

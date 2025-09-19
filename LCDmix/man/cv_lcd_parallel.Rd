@@ -20,7 +20,7 @@ cv_lcd_parallel(
   save_dir = "./result",
   n_cores = "max",
   cv_reps = NULL,
-  blocksize = 5,
+  blocksize = 20,
   maxdev = NULL,
   n_restarts = 1
 )
@@ -71,7 +71,7 @@ Default: \code{"./result"}.}
 \code{NULL}. Default: \code{NULL}.}
 
 \item{blocksize}{Integer; block size passed to \code{flowmix::make_cv_folds()}.
-Default: \code{5}.}
+Default: \code{20}.}
 
 \item{maxdev}{Numeric or \code{NULL}; maximum-deviation constraint for the
 LP update in the theta-step. Default: \code{NULL}.}
