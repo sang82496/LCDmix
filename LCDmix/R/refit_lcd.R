@@ -74,7 +74,7 @@ refit_lcd <- function(
     cl,
     varlist = c(
       "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "n_restarts", 
-      "max_iter", "iter_eta", "maxdev", "resp_threshold", "save_dir", "debug"
+      "max_iter", "iter_eta", "maxdev", "resp_threshold", "trim_prob", "save_dir", "debug"
     ),
     envir = environment()
   )
@@ -94,7 +94,7 @@ refit_lcd <- function(
         saved = readRDS(save_path)
   
         return(list(log_msg  = saved$log_msg,
-                     final_Q = as.numeric(saved$final_Q),
+                     L = as.numeric(saved$L),
                      fit_try = saved$fit_try))
       }
       
@@ -115,6 +115,7 @@ refit_lcd <- function(
             max_iter        = max_iter,
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
+            trim_prob       = trim_prob,
             maxdev          = maxdev,
             n_restarts      = n_restarts,
             debug           = debug
@@ -133,31 +134,33 @@ refit_lcd <- function(
       if (!is.list(fit_try)) {
         # failed
         return(list(
-          log_msg = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
-          final_Q   = NA_real_,
-          fit_try= NULL
+          log_msg   = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
+          L         = NA_real_,
+          fit_try   = NULL
         ))
         
       } else if (!is.null(fit_try$iter_partial)) {
         # Error at EM iteration
         return(list(
-          log_msg = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
+          log_msg  = paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$error, "\n"),
-          final_Q   = NA_real_,
-          fit_try= NULL
+          L        = NA_real_,
+          fit_try  = NULL
         ))
       }
     
     # if successful, record final Q and save
-      final_Q  <- tail(fit_try$iter$Q, 1)
+      L        <- fit_try$L$loglik
       log_msg  <- paste0(log_msg, "✔ Completed seed ", seed_idx,
-                         "; final Q = ", round(final_Q, 4), "\n")
-      saveRDS(list(log_msg = log_msg, final_Q = final_Q, fit_try = fit_try),
+                         "; final loglikelihood = ", round(L, 4), "\n")
+      saveRDS(list(log_msg = log_msg, 
+                   L = L, 
+                   fit_try = fit_try),
               file = save_path)
       
       return(list(
         log_msg = log_msg,
-        final_Q = as.numeric(final_Q),
+        L       = L,
         fit_try = fit_try
       ))
     }
@@ -166,7 +169,7 @@ refit_lcd <- function(
   
   # Aggregate
   log_msgs     <- vapply(results, function(x) x$log_msg, character(1))
-  refit_scores <- vapply(results, function(x) x$final_Q,   numeric(1))
+  refit_scores <- vapply(results, function(x) x$L,   numeric(1))
 
   
   if (all(is.na(refit_scores))) {

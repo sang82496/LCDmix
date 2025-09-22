@@ -45,72 +45,94 @@
 #' @export
 evaluate_lcd_model <- function(
   model,
-  Y,
-  X,
+  Y_test,
+  X_test,
   biomass,
   trim_prob = 0.01
 ) {
   # Unpack fitted parameters
   densities     <- model$g_new
-  slopes_list   <- model$theta_new
+  slopes        <- model$theta_new
   intercepts    <- model$theta0_new
-  alpha_mat     <- model$alpha_new
+  alpha         <- model$alpha_new
   lambda_alpha  <- model$lambda_alpha
   lambda_theta  <- model$lambda_theta
   
-  TT     <- nrow(X)
-  K_comp <- length(densities)
+  TT <- nrow(X_test)
+  K  <- nrow(alpha)
   
   # Flatten biomass weights for trimming
-  weights_all <- unlist(biomass)
+  weights <- unlist(biomass)
   
   # Compute mixture probabilities π_{t,k}
-  pi_mat <- pi_k(X, alpha_mat)
+  pi_mat <- pi_k(X_test, alpha)
   
   # Initialize vector for individual log‐likelihoods
-  loglike_vals <- numeric(0)
+  loglikes <- vector("list", TT)
   
   # Loop over time points and observations
   for (t in seq_len(TT)) {
-    y_t   <- as.numeric(Y[[t]])
+    y_t   <- as.numeric(Y_test[[t]])
     n_t   <- length(y_t)
+    lt    <- matrix(NA_real_, n_t, K)
     # Compute component‐wise densities f_k(r_{t,i,k})
-    comp_dens <- matrix(0, nrow = n_t, ncol = K_comp)
-    for (k in seq_len(K_comp)) {
-      # Residuals under component k
-      pred_tk      <- intercepts[[k]] + sum(X[t, ] * slopes_list[[k]])
-      resi_tk_vec  <- y_t - pred_tk
+    for (k in seq_len(K)) {
+      pred_tk      <- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
+      resi_tk      <- y_t - pred_tk
       # Evaluate log‐concave density; column 3 = density
       dens_vals    <- suppressWarnings(
-        logcondens::evaluateLogConDens(resi_tk_vec, densities[[k]])[, 3]
+        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 3]
       )
-      comp_dens[, k] <- dens_vals * pi_mat[t, k]
+      lt[, k] <- dens_vals * pi_mat[t, k]
     }
     # Mixture density and log
-    mix_dens  <- rowSums(comp_dens)
-    loglike_t <- log(mix_dens)
-    loglike_vals <- c(loglike_vals, loglike_t)
+    mix_dens      <- rowSums(lt)
+    loglikes[[t]] <- log(mix_dens)
   }
+  loglikes <- unlist(loglikes)
   
   # Proportion of infinite log‐likelihoods
-  prop_inf <- mean(is.infinite(loglike_vals))
+  finite_mask <- is.finite(loglikes)
+  prop_inf    <- mean(!finite_mask)
   
-  # Determine trimming threshold on loglike
-  threshold <- weighted_quantile(loglike_vals, weights_all, prob = trim_prob)
-  keep_idx  <- loglike_vals > threshold
+  # if all -Inf
+  if (!any(finite_mask)) {
+    return(list(
+      loglikes            = loglikes,
+      weights             = weights,
+      prop_inf            = 1,
+      finite_loglik       = -Inf,
+      trimmed_ll          = -Inf,
+      trimmed_w           = 0,
+      trimmed_loglik      = -Inf
+    ))
+  }
+    
+  # Finite loglikelihood
+  base_ll <- sum(weights[finite_mask] * loglikes[finite_mask]) / sum(weights[finite_mask])
   
-  trimmed_ll     <- loglike_vals[keep_idx]
-  trimmed_w      <- weights_all[keep_idx]
-  avg_trim_ll    <- sum(trimmed_ll * trimmed_w) / sum(trimmed_w) -
-                    lambda_alpha * sum(abs(alpha_mat[, -1])) -
-                    lambda_theta * sum(abs(unlist(slopes_list)))
+  # Trimmed loglikelihood
+  threshold <- weighted_quantile(loglikes, weights, prob = trim_prob)
+  keep_idx  <- loglikes > threshold
+  trimmed_ll     <- loglikes[keep_idx]
+  trimmed_w      <- weights[keep_idx]
+  base_trimmed   <- sum(trimmed_ll * trimmed_w) / sum(trimmed_w)
+  
+  # Penalty 
+  l1_alpha  <- sum(abs(alpha[, -1]))
+  l1_theta  <- sum(abs(unlist(slopes)))
+  pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+  
+  finite_loglik     <- base_ll - pen_total
+  trimmed_loglik    <- base_trimmed - pen_total
   
   return(list(
-    loglike             = loglike_vals,
-    weights             = weights_all,
-    prop_infinite       = prop_inf,
-    trimmed_loglike     = trimmed_ll,
-    trimmed_weights     = trimmed_w,
-    trimmed_avg_loglike = avg_trim_ll
+    loglikes            = loglikes,
+    weights             = weights,
+    prop_inf            = prop_inf,
+    finite_loglik       = finite_loglik,
+    trimmed_ll          = trimmed_ll,
+    trimmed_w           = trimmed_w,
+    trimmed_loglik      = trimmed_loglik
   ))
 }

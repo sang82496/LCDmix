@@ -12,6 +12,7 @@ simul_refit(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
+  trim_prob = 0.01,
   refit_seeds = 1:1,
   n_cores = "max"
 )
