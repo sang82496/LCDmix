@@ -75,6 +75,7 @@ simul_refit <- function(
     max_iter           = 30,
     iter_eta           = 1e-3,
     resp_threshold     = 1e-3,
+    trim_prob          = 0.01,
     refit_seeds        = 1:1,
     n_cores            = "max"
     ) {
@@ -158,6 +159,7 @@ simul_refit <- function(
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
+          trim_prob       = trim_prob,
           debug           = TRUE
         )
       }, error = function(e) {

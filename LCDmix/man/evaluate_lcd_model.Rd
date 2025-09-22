@@ -4,7 +4,7 @@
 \alias{evaluate_lcd_model}
 \title{Evaluate fitted LCD mixture model on new data}
 \usage{
-evaluate_lcd_model(model, Y, X, biomass, trim_prob = 0.01)
+evaluate_lcd_model(model, Y_test, X_test, biomass, trim_prob = 0.01)
 }
 \arguments{
 \item{model}{A list returned by \code{main()} or \code{iteration()}, containing:
@@ -17,13 +17,13 @@ evaluate_lcd_model(model, Y, X, biomass, trim_prob = 0.01)
 \item{\code{lambda_theta}}{Numeric; L1 penalty used on slope coefficients.}
 }}
 
-\item{Y}{A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).}
-
-\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
-
 \item{biomass}{A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).}
 
 \item{trim_prob}{Numeric in [0,0.5]; proportion of lowest-likelihood observations to trim when computing the average. Default: \code{0.01}.}
+
+\item{Y}{A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).}
+
+\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
 }
 \value{
 A list with components:

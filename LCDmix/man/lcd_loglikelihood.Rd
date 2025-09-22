@@ -2,78 +2,74 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{lcd_loglikelihood}
 \alias{lcd_loglikelihood}
-\title{Penalized (and trimmed) log-likelihood for LCDmix}
+\title{Penalized and trimmed log-likelihood for LCDmix}
 \usage{
-lcd_loglikelihood(model, X, biomass = NULL)
+lcd_loglikelihood(model, X, biomass = NULL, trim_prob = 0.01)
 }
 \arguments{
-\item{model}{A fitted LCDmix model object (typically an iteration/state list)
-containing at least:
+\item{model}{A fitted LCDmix iteration/state object containing:
 \itemize{
-\item \code{g_new}: list of length \eqn{K} with log-concave density fits
-usable by \code{logcondens::evaluateLogConDens()}.
-\item \code{theta_new}: slopes for the mean functions (used for the
-\eqn{L_1} penalty).
-\item \code{alpha_new}: \eqn{K \times (p+1)} matrix of mixture-weight
-coefficients (first column is the intercept; not penalized).
+\item \code{g_new}: list of length \eqn{K} with log-concave fits
+for each component; compatible with
+\code{logcondens::evaluateLogConDens()}.
+\item \code{theta_new}: slopes used for the \eqn{L_1} penalty.
+\item \code{alpha_new}: \eqn{K \times (p+1)} mixture-weight coefficients
+(first column is the intercept; not penalized).
 \item \code{resi_new}: list of length \eqn{TT}; element \eqn{t} is an
-\eqn{n_t \times K} matrix of residuals for time \eqn{t}.
+\eqn{n_t \times K} matrix of residuals at time \eqn{t}.
 \item \code{lambda_alpha}, \code{lambda_theta}: nonnegative penalty
 weights for \eqn{\alpha} and \eqn{\theta}.
 }}
 
 \item{X}{A \eqn{TT \times p} covariate matrix (rows are time points).}
 
-\item{bin_mass}{Optional list of length \eqn{TT}; element \eqn{t} is a numeric
-vector of bin masses (weights) of length \eqn{n_t}. If \code{NULL}, unit
-weights are used.}
+\item{biomass}{List of length \eqn{TT}; element \eqn{t} is a numeric vector
+of bin masses (weights) of length \eqn{n_t}. (Required for weighted
+averaging.)}
+
+\item{trim_prob}{Numeric in [0,1). Fraction of observations (by weight)
+to trim from the lower tail of the per-observation log-likelihoods
+(after log-sum-exp across components). Default: \code{0.01}.}
 }
 \value{
 A list with:
 \describe{
-\item{\code{loglik}}{Penalized average log-likelihood using all rows; \code{-Inf}
-if any row is non-finite (before penalties).}
-\item{\code{trim_ll}}{Penalized average log-likelihood after dropping only
-non-finite rows.}
-\item{\code{prop_inf}}{Proportion of rows with non-finite log-likelihoods.}
+\item{\code{loglik}}{Penalized average log-likelihood using all rows
+(\code{-Inf} if any row is non-finite before penalization).}
+\item{\code{trim_loglik}}{Penalized quantile-trimmed average
+log-likelihood (lower \code{trim_prob} fraction removed).}
+\item{\code{prop_inf}}{Proportion of rows with non-finite per-row
+log-likelihoods.}
 }
 }
 \description{
-Computes the penalized average log-likelihood of the LCDmix model on a
-binned dataset, and also returns a trimmed version that excludes only
-non-finite rows (i.e., \code{-Inf}) from the average. L1 penalties are applied
-to \eqn{\alpha} (excluding the intercept column) and to all slope parameters
+Computes the penalized average log-likelihood for an LCDmix model and a
+quantile-trimmed variant. Quantile trimming removes a user-specified
+fraction of the lowest per-observation log-likelihoods (after the
+log-sum-exp over components) before averaging. L1 penalties are applied to
+\eqn{\alpha} (excluding its intercept column) and to all slope parameters
 \eqn{\theta}.
 }
 \details{
-Let \eqn{\pi_{t,k}} be mixture weights given by \code{pi_k(X, alpha_new)}
-and \eqn{f_k} the component densities given by \code{g_new}. For each
-observation (bin midpoint) the function forms
-\eqn{\log \sum_k \pi_{t,k}, f_k(\text{residual}{t,k})} via a stable
-log-sum-exp.
+For each observation, the function forms
+\deqn{\log \sum_{k=1}^K \pi_{t,k}(X), f_k(\text{residual}{t,k}),}
+computed via a stable rowwise log-sum-exp. The untrimmed average is
+taken over all rows; if any row is \code{-Inf}, the untrimmed average is set
+to \code{-Inf}. The trimmed average discards the lowest
+\code{trim_prob} fraction (by weight) of the per-row log-likelihoods and then
+averages the remainder. Both figures are then reduced by the L1 penalties:
+\deqn{\lambda\alpha |\alpha_{\text{no-int}}|1 +
+\lambda\theta |\theta|_1.}
 
-The actual penalized log-likelihood (\code{loglik}) is the
-weighted average over all rows; if any row is non-finite
-(\code{-Inf}), \code{loglik} is \code{-Inf} before penalization.
-
-The trimmed penalized log-likelihood (\code{trim_ll}) is the same weighted
-average but excluding only the non-finite rows; no additional quantile
-trimming is performed here.
-
-L1 penalty:
-\deqn{\lambda\alpha |\alpha_{\text{no-int}}|1 ;+; \lambda\theta |\theta|_1,}
-where the intercept column of \eqn{\alpha} is excluded from the \eqn{L_1}
-norm.
-
-The function suppresses warnings from \code{logcondens::evaluateLogConDens()}
-when evaluating outside the support (these yield \code{-Inf} log-densities).
+Warnings from \code{logcondens::evaluateLogConDens()} when evaluating outside
+support are suppressed (these yield \code{-Inf} log-densities).
 }
 \examples{
 \dontrun{
-ll <- lcd_loglikelihood(model = fit$iter, X = X, bin_mass = bin_mass)
-ll$loglik
-ll$trim_ll
-ll$prop_inf
+out <- lcd_loglikelihood(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
+out$loglik
+out$trim_loglik
+out$prop_inf
 }
 
 }

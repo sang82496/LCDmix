@@ -147,10 +147,8 @@ cv_lcd_parallel <- function(
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K",
-      "n_restarts", "max_iter", "iter_eta", "maxdev",
-      "resp_threshold", "trim_prob", "save_dir",
-      "folds", "index_matrix"
+      "Y_bin", "X", "bin_mass", "K", "n_restarts", "max_iter", "iter_eta", "maxdev",
+      "resp_threshold", "trim_prob", "save_dir", "folds", "index_matrix"
     ),
     envir = environment()
   )
@@ -210,6 +208,7 @@ cv_lcd_parallel <- function(
             max_iter        = max_iter,
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
+            trim_prob       = trim_prob,
             debug           = TRUE,
             maxdev          = maxdev,
             n_restarts      = n_restarts

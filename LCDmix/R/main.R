@@ -61,6 +61,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
+  trim_prob      = 0.01,
   Q_every        = FALSE,
   debug          = FALSE,
   maxdev         = NULL,
@@ -124,9 +125,10 @@ main <- function(
   #— Step 4: Compute loglikelihood —#
   
   L = lcd_loglikelihood(
-    model   = iter_res,
-    X       = X,
-    biomass = bin_mass
+    model     = iter_res,
+    X         = X,
+    biomass   = bin_mass,
+    trim_prob = 0.01,
   )
   
   

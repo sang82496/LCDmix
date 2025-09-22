@@ -157,9 +157,9 @@ run_cv_simul <- function(
     out_log <- capture.output(
       fit_try <- tryCatch({
         main(
-          Y              = Y_tr,
-          X              = X_tr,
-          biomass        = bin_mass_tr,
+          Y               = Y_tr,
+          X               = X_tr,
+          biomass         = bin_mass_tr,
           binned          = TRUE,
           n_bins          = 0,
           K               = K,
@@ -168,6 +168,7 @@ run_cv_simul <- function(
           max_iter        = max_iter,
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
+          trim_prob       = trim_prob,
           debug           = TRUE,
           maxdev          = maxdev,
           n_restarts      = n_restarts
