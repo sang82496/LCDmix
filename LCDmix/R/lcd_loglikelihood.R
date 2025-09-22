@@ -68,7 +68,7 @@
 lcd_loglikelihood <- function(
   model,
   X,
-  biomass = NULL,
+  biomass,
   trim_prob = 0.01
 ) {
   densities    <- model$g_new             # list length K (log-concave fits)
@@ -128,7 +128,7 @@ lcd_loglikelihood <- function(
   ## trimmed:
   if (any(finite_mask)) {
     threshold  <- weighted_quantile(loglikes, weights, prob = trim_prob)
-    keep_idx   <- loglikes > threshold
+    keep_idx   <- loglikes >= threshold
     trimmed_ll <- loglikes[keep_idx]
     trimmed_w  <- weights[keep_idx]
     
