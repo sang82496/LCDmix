@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{cv_lcd_parallel}
 \alias{cv_lcd_parallel}
-\title{Cross-validate LCDmix over a penalty grid in parallel}
+\title{Cross-validate LCDmix over a penalty grid (parallel)}
 \usage{
 cv_lcd_parallel(
   Y_bin,
@@ -26,107 +26,80 @@ cv_lcd_parallel(
 )
 }
 \arguments{
-\item{Y_bin}{List of length \eqn{TT}; each element is an \eqn{M_t \times 1}
-matrix of binned responses at time \eqn{t}.}
+\item{Y_bin}{List of length \eqn{TT}; element \eqn{t} is a numeric vector of length \eqn{n_t}
+containing binned responses at time \eqn{t}.}
 
-\item{X}{Numeric \eqn{TT \times p} covariate matrix (rows = time points).}
+\item{X}{Numeric matrix \eqn{TT \times p}; covariates aligned by time.}
 
-\item{bin_mass}{List of length \eqn{TT}; each element is a numeric vector of
-biomass per bin at time \eqn{t}.}
+\item{bin_mass}{List of length \eqn{TT}; per-time weights for each observation/bin.}
 
 \item{K}{Integer; number of mixture components.}
 
-\item{alpha_lambdas}{Numeric vector of candidate \code{lambda_alpha} values.
-Default: \code{c(1e-4, 1e-3)}.}
+\item{alpha_lambdas}{Numeric vector of candidate \code{lambda_alpha} values. Default \code{c(1e-4, 1e-3)}.}
 
-\item{theta_lambdas}{Numeric vector of candidate \code{lambda_theta} values.
-Default: \code{c(1e-4, 1e-3)}.}
+\item{theta_lambdas}{Numeric vector of candidate \code{lambda_theta} values. Default \code{c(1e-4, 1e-3)}.}
 
-\item{max_iter}{Integer; maximum EM iterations per fit. Default: \code{30}.}
+\item{max_iter}{Integer; maximum EM iterations per fit. Default \code{30}.}
 
-\item{iter_eta}{Numeric; convergence threshold on relative change in Q.
-Default: \code{1e-3}.}
+\item{iter_eta}{Numeric; convergence threshold on relative change in the surrogate objective. Default \code{1e-3}.}
 
-\item{resp_threshold}{Numeric in [0,1]; responsibilities below this are set
-to zero for numerical stability. Default: \code{1e-3}.}
+\item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are zeroed. Default \code{1e-3}.}
 
-\item{nfold}{Integer; number of CV folds. Default: \code{5}.}
+\item{nfold}{Integer; number of CV folds. Default \code{5}.}
 
-\item{seeds}{Integer vector of random seeds (one per repeat). If \code{NULL},
-you must supply \code{cv_reps}; seeds will be set to \code{1:cv_reps}.
-Default: \code{NULL}.}
+\item{seeds}{Integer vector of random seeds (one per repeat). If \code{NULL}, use \code{cv_reps}. Default \code{NULL}.}
 
-\item{trim_prob}{Numeric in [0,1]; fraction of lowest-likelihood points to
-trim when averaging the held-out log-likelihood. Default: \code{0.01}.}
+\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used inside \code{evaluate_lcd_model()}. Default \code{0.01}.}
 
-\item{save_dir}{Character; directory where the function writes the CV index
-matrix (\code{index_matrix.Rdata}) and per-run \code{*.Rdata} files of the
-form \code{"<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.Rdata"}.
-Default: \code{"./result"}.}
+\item{save_dir}{Character; directory for outputs (\code{index_matrix.Rdata} and per-run \code{*.rds}). Default \code{"./result"}.}
 
-\item{n_cores}{Integer or \code{"max"}; number of parallel workers.
-\code{"max"} uses all physical cores minus one. Default: \code{"max"}.}
+\item{n_cores}{Integer or \code{"max"}; number of parallel workers. \code{"max"} uses all physical cores minus one. Default \code{"max"}.}
 
-\item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
-\code{NULL}. Default: \code{NULL}.}
+\item{cv_reps}{Integer; number of repeats, used only when \code{seeds} is \code{NULL}. Default \code{NULL}.}
 
-\item{blocksize}{Integer; block size passed to \code{flowmix::make_cv_folds()}.
-Default: \code{20}.}
+\item{blocksize}{Integer; block size passed to \code{flowmix::make_cv_folds()}. Default \code{20}.}
 
-\item{maxdev}{Numeric or \code{NULL}; maximum-deviation constraint for the
-LP update in the theta-step. Default: \code{NULL}.}
+\item{maxdev}{Numeric or \code{NULL}; optional max-deviation constraint for the LP theta-step. Default \code{NULL}.}
 
-\item{n_restarts}{Integer; number of random restarts for initialization.
-Default: \code{1}.}
+\item{n_restarts}{Integer; random restarts for initialization. Default \code{1}.}
 }
 \value{
 A list with:
 \describe{
-\item{\code{logs}}{Character vector of per-run log messages plus a final
-summary line reporting the number and percent of failures.}
-\item{\code{index_matrix}}{Numeric matrix with columns
-\code{alpha_idx}, \code{theta_idx}, \code{seed_idx}, \code{fold_idx},
-\code{lambda_alpha}, \code{lambda_theta}, corresponding to all CV jobs.}
+\item{\code{logs}}{Character vector of per-run logs plus a final failure summary line.}
+\item{\code{index_matrix}}{Numeric matrix with columns \code{alpha_idx}, \code{theta_idx},
+\code{seed_idx}, \code{fold_idx}, \code{lambda_alpha}, \code{lambda_theta}.}
 }
 }
 \description{
-Runs grid search cross-validation for the LCDmix model across the supplied
-\code{alpha_lambdas} and \code{theta_lambdas}. For each combination of
-(\code{lambda_alpha}, \code{lambda_theta}), CV fold, and seed, the function
-fits the model on the training split, evaluates the held-out split with
-\code{evaluate_lcd_model()}, and saves \code{prop_CV} and \code{trimmed_CV}
-to \code{save_dir}. Workers load \pkg{flowmix} and \pkg{LCDmix} internally.
+Runs grid-search cross-validation across \code{alpha_lambdas} × \code{theta_lambdas}.
+For each (\code{lambda_alpha}, \code{lambda_theta}) × (seed, fold), fits the training split
+with \code{main()} and evaluates the held-out split via \code{evaluate_lcd_model()},
+saving per-run results to disk. Existing result files are skipped on re-runs.
 }
 \details{
-On each worker the function calls:
-\enumerate{
-\item \code{library(flowmix); library(LCDmix)} to load dependencies,
-\item \code{main()} on the training split for each (\code{lambda_alpha},
-\code{lambda_theta}, seed, fold),
-\item \code{evaluate_lcd_model()} on the hold-out split to compute
-\code{prop_CV} and \code{trimmed_CV}.
-}
-The function prints the sorted penalty vectors and writes the constructed
-\code{index_matrix} to \code{save_dir/index_matrix.Rdata}.
+Folds are constructed with \code{flowmix::make_cv_folds()}, preserving temporal blocks.
+Each worker loads \pkg{flowmix} and \pkg{LCDmix}. Results are cached per setting in
+files named \code{"<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.rds"} under \code{save_dir}.
 }
 \examples{
 \dontrun{
-set.seed(1)
-# Suppose Y_bin, X, bin_mass already prepared
-res <- cv_lcd_parallel(
+out <- cv_lcd_parallel(
   Y_bin          = Y_bin,
   X              = X,
   bin_mass       = bin_mass,
   K              = 2,
-  alpha_lambdas  = c(1e-4, 1e-3, 1e-2),
-  theta_lambdas  = c(1e-4, 1e-3, 1e-2),
+  alpha_lambdas  = 10^seq(-4, -2, length.out = 3),
+  theta_lambdas  = 10^seq(-4, -2, length.out = 3),
   nfold          = 5,
   seeds          = 1:3,
-  save_dir       = "cv_out",
-  n_cores        = "max"
+  save_dir       = "cv_runs"
 )
-head(res$index_matrix)
-tail(res$logs, 1)
+str(out$index_matrix)
 }
 
+}
+\seealso{
+\code{\link{make_cv_index_matrix}}, \code{\link{evaluate_lcd_model}},
+\code{\link[flowmix]{make_cv_folds}}
 }

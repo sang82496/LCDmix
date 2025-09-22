@@ -2,54 +2,71 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{evaluate_lcd_model}
 \alias{evaluate_lcd_model}
-\title{Evaluate fitted LCD mixture model on new data}
+\title{Evaluate held-out (penalized) log-likelihood for LCDmix}
 \usage{
-evaluate_lcd_model(model, Y_test, X_test, biomass, trim_prob = 0.01)
+evaluate_lcd_model(model, Y_test, X_test, biomass_test, trim_prob = 0.01)
 }
 \arguments{
-\item{model}{A list returned by \code{main()} or \code{iteration()}, containing:
-\describe{
-\item{\code{g_new}}{List of length \eqn{K} of log‐concave density objects.}
-\item{\code{theta_new}}{List of length \eqn{K} of slope vectors \(\theta_k\).}
-\item{\code{theta0_new}}{List of length \eqn{K} of intercepts \(\theta_{0k}\).}
-\item{\code{alpha_new}}{Numeric \eqn{K \times (p+1)} matrix of mixture parameters.}
-\item{\code{lambda_alpha}}{Numeric; L1 penalty used on mixture‐weight coefficients.}
-\item{\code{lambda_theta}}{Numeric; L1 penalty used on slope coefficients.}
-}}
+\item{model}{List; fitted LCDmix object containing at least:
+\code{g_new} (list of K log-concave density fits),
+\code{theta_new} (list/array of slopes),
+\code{theta0_new} (list of intercepts),
+\code{alpha_new} (K × (p+1) gating coefficients),
+\code{lambda_alpha}, \code{lambda_theta} (penalties).}
 
-\item{biomass}{A list of length \code{TT}, where each element is a numeric vector of biomass weights for each observation at time \(t\).}
+\item{Y_test}{List of length \eqn{TT}; test responses for each time point
+(\eqn{t = 1,\dots,TT}). Element \eqn{t} is a numeric vector of length
+\eqn{n_t}.}
 
-\item{trim_prob}{Numeric in [0,0.5]; proportion of lowest-likelihood observations to trim when computing the average. Default: \code{0.01}.}
+\item{X_test}{Numeric matrix \eqn{TT \times p}; covariates aligned by time.
+Row \eqn{t} is used with \code{Y_test[[t]]}.}
 
-\item{Y}{A list of length \code{TT}, where each element is an \eqn{n_t}-row vector or single‐column matrix of observed responses at time \(t\).}
+\item{biomass_test}{List of length \eqn{TT}; per-time weights (flattened to
+a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).}
 
-\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{trim_prob}{Numeric in \eqn{[0,1)}; fraction of weight to trim based on
+the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).}
 }
 \value{
-A list with components:
+A list with:
 \describe{
-\item{\code{loglike}}{Numeric vector of individual log‐likelihoods \(\log\bigl(\sum_{k} \pi_{t,k} f_k(r_{t,i,k})\bigr)\).}
-\item{\code{weights}}{Numeric vector of biomass weights corresponding to each loglike entry.}
-\item{\code{prop_infinite}}{Proportion of \code{loglike} values that are \code{Inf}.}
-\item{\code{trimmed_loglike}}{Numeric vector of log‐likelihoods above the trimming threshold.}
-\item{\code{trimmed_weights}}{Numeric vector of weights corresponding to \code{trimmed_loglike}.}
-\item{\code{trimmed_avg_loglike}}{Numeric scalar; weighted average of \code{trimmed_loglike} minus L1 penalties.}
+\item{\code{prop_inf}}{Proportion of rows where the per-row log-likelihood is not finite.}
+\item{\code{finite_loglik}}{Untrimmed \emph{penalized} weighted mean over finite rows; \code{-Inf} if any \code{-Inf} present.}
+\item{\code{trimmed_loglik}}{Trimmed \emph{penalized} weighted mean (trim over all rows, ties kept with \code{>=}).}
 }
 }
 \description{
-Computes individual log‐likelihoods and a trimmed weighted average log‐likelihood
-for a fitted log‐concave mixture‐of‐experts model on new observations.
+Computes per-observation held-out log-likelihoods for a fitted LCDmix
+\code{model} on test data \code{(Y_test, X_test)} and returns the untrimmed
+and trimmed \strong{penalized} weighted means. Trimming is performed over
+\emph{all rows, including \code{-Inf} rows}, so that models with different
+proportions of finite rows remain comparable. The trimmed threshold is a
+weighted quantile of the log-likelihoods using \code{weighted_quantile()}.
+}
+\details{
+For each time \eqn{t} and component \eqn{k}, residuals are
+\eqn{r_{t,i,k} = y_{t,i} - (\theta_{0k} + x_t^\top \theta_k)}.
+Densities are evaluated via
+\code{logcondens::evaluateLogConDens(r_{t,i,k}, g_k)[,3]} (density column).
+Mixture densities are \eqn{\sum_k \pi_{t,k} f_k(r_{t,i,k})}, with
+\eqn{\pi_{t,k}} from \code{pi_k(X_test, alpha)}; per-row log-likelihoods are
+the \eqn{\log} of those mixture densities. Penalization subtracts
+\eqn{\lambda_\alpha \lVert \alpha_{\cdot,-1}\rVert_1 + \lambda_\theta \sum_k \lVert \theta_k\rVert_1}.
 }
 \examples{
 \dontrun{
-# Assume `fit` is returned by main()
-eval_res <- evaluate_lcd_model(
-  model      = fit,
-  Y          = Y_test,
-  X          = X_test,
-  biomass    = biomass_test,
-  trim_prob  = 0.01
+res <- evaluate_lcd_model(
+  model        = fit$iter,
+  Y_test       = Y_bin[test_idx],
+  X_test       = X[test_idx, , drop = FALSE],
+  biomass_test = bin_mass[test_idx],
+  trim_prob    = 0.01
 )
-str(eval_res)
+res$trimmed_loglik
 }
+
+}
+\seealso{
+\code{\link{pi_k}}, \code{\link{weighted_quantile}},
+\code{\link[logcondens]{evaluateLogConDens}}
 }
