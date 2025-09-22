@@ -193,14 +193,14 @@ run_cv_simul <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-        Q_final    <- NA
+        L          <- NA
         
       } else if (is.null(fit_try$iter)) {
         log_msg <- paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
                           ": ", fit_try$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-        Q_final    <- NA
+        L          <- NA
         
       } else {
         ev <- evaluate_lcd_model(
@@ -221,13 +221,13 @@ run_cv_simul <- function(
           " -> prop=",    round(prop_CV,3),
           ", trimmed=",   round(trimmed_CV,3)
         )
-        Q_final    <- tail(fit_try$iter$Q, 1)
+        L    <- fit_try$L$loglik
       }
     
     # 5) save result
     saveRDS(list(prop_CV    = prop_CV,
                  trimmed_CV = trimmed_CV,
-                 Q_final    = Q_final,
+                 L          = L,
                  log_msg    = log_msg), file = save_path)
     return(log_msg)
   })

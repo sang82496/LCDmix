@@ -52,7 +52,7 @@ LCD_cv_summary <- function(
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
     index_matrix,
-    Q_final     = rep(NA_real_, n_runs),
+    L           = rep(NA_real_, n_runs),
     prop_CV     = rep(NA_real_, n_runs),
     trimmed_CV  = rep(NA_real_, n_runs)
   )
@@ -84,15 +84,15 @@ LCD_cv_summary <- function(
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "Q_final"]    <- mat$Q_final
+    CVmat[i, "L"]          <- mat$L
     CVmat[i, "prop_CV"]    <- mat$prop_CV
     CVmat[i, "trimmed_CV"] <- mat$trimmed_CV
   }
   
-  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest Q_final
-  # Order so that within each (alpha,theta,fold) the first row has max Q_final (NAs go last)
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest L
+  # Order so that within each (alpha,theta,fold) the first row has max L (NAs go last)
   ord <- with(CVmat,
-    order(alpha_idx, theta_idx, fold_idx, -Q_final, na.last = TRUE)  # NA Q go last
+    order(alpha_idx, theta_idx, fold_idx, -L, na.last = TRUE)  # NA Q go last
   )
   selected <- CVmat[ord, ]
   selected <- selected[!duplicated(selected[c("alpha_idx","theta_idx","fold_idx")]), ]
@@ -113,9 +113,9 @@ LCD_cv_summary <- function(
   ## 6) Unique lambda values per combo (from the original matrix)
   unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
 
-  ## 7) Count rows in CVmat with non-NA Q_final per (alpha_idx, theta_idx)
+  ## 7) Count rows in CVmat with non-NA L per (alpha_idx, theta_idx)
   counts_df <- aggregate(
-    I(!is.na(Q_final)) ~ alpha_idx + theta_idx,
+    I(!is.na(L)) ~ alpha_idx + theta_idx,
     data = CVmat,
     FUN  = sum
   )

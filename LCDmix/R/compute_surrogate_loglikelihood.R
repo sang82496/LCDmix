@@ -101,9 +101,11 @@ compute_surrogate_loglikelihood <- function(
   }
 
   # Normalize and subtract L1 penalties
-  Q_val <- total_ll / N_total -
-    lambda_alpha * sum(abs(alpha[, -1])) -
-    lambda_theta * sum(abs(unlist(slopes)))
+  l1_alpha  <- sum(abs(alpha[, -1]))
+  l1_theta  <- sum(abs(unlist(slopes)))
+  pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+
+  Q_val <- total_ll / N_total - pen_total
 
   return(Q_val)
 }

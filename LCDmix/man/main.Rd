@@ -16,6 +16,7 @@ main(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
+  Q_every = FALSE,
   debug = FALSE,
   maxdev = NULL,
   n_restarts = 1

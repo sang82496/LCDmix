@@ -49,7 +49,7 @@ A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
 \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
 \item{\code{lambda_theta}}{Penalty used for component parameters.}
 \item{\code{seed_idx}}{Refit seed.}
-\item{\code{Q_final}}{Final surrogate objective value (NA on failure).}
+\item{\code{L}}{Final loglikelihood objective value (NA on failure).}
 \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
 }
 }
@@ -69,7 +69,7 @@ Each job:
 \item Calls \code{main()} with the best \code{lambda_alpha/theta} and the
 given seed.
 \item Computes the weighted L1 mixture distance via \code{mixture_metric()}.
-\item Saves an \code{.rds} with \code{metric}, \code{Q_final}, \code{fit_try},
+\item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
 and log/error text.
 }
 }

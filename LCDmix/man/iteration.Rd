@@ -14,6 +14,7 @@ iteration(
   iter_eta = 1e-06,
   max_iter = 30,
   resp_threshold = 0.001,
+  Q_every = FALSE,
   debug = FALSE,
   maxdev = NULL
 )

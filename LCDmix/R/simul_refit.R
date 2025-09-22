@@ -35,7 +35,7 @@
 #'   \item Calls \code{main()} with the best \code{lambda_alpha/theta} and the
 #'         given seed.
 #'   \item Computes the weighted L1 mixture distance via \code{mixture_metric()}.
-#'   \item Saves an \code{.rds} with \code{metric}, \code{Q_final}, \code{fit_try},
+#'   \item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
 #'         and log/error text.
 #' }
 #'
@@ -45,7 +45,7 @@
 #'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
 #'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
 #'   \item{\code{seed_idx}}{Refit seed.}
-#'   \item{\code{Q_final}}{Final surrogate objective value (NA on failure).}
+#'   \item{\code{L}}{Final loglikelihood objective value (NA on failure).}
 #'   \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
 #' }
 #'
@@ -137,7 +137,7 @@ simul_refit <- function(
         lambda_alpha = lambda_alpha,
         lambda_theta = lambda_theta,
         seed_idx     = seed_idx,
-        Q_final      = as.numeric(saved$Q_final),
+        L            = as.numeric(saved$L),
         metric       = as.numeric(saved$metric)
       ))
     }
@@ -178,11 +178,11 @@ simul_refit <- function(
     
       if (is.null(fit_try) || !is.list(fit_try$iter)) {
         log_msg    <- paste0(log_msg, "✖ Error: ", err_msg, "\n")
-        Q_final    <- NA
+        L          <- NA
         metric     <- NA
       } else {
         log_msg    <- paste0(log_msg, "Fit succeeded\n")
-        Q_final    <- tail(fit_try$iter$Q, 1)
+        L          <- fit_try$L$loglike
         metric     <- mixture_metric(
                         sim$ylist, sim$X, sim$countslist,
                         est_res  = fit_try$iter,
@@ -193,7 +193,7 @@ simul_refit <- function(
     # save RDS
     saveRDS(
       list(metric  = metric,
-           Q_final = Q_final,
+           L       = L,
            fit_try = fit_try,
            error   = err_msg,
            logs    = log_msg),
@@ -209,14 +209,14 @@ simul_refit <- function(
       lambda_alpha = lambda_alpha,
       lambda_theta = lambda_theta,
       seed_idx     = seed_idx,
-      Q_final      = Q_final,
+      L            = L,
       metric       = metric))
 
   })
   parallel::stopCluster(cl)
   
    #— Summarize failures —#
-  res <- vapply(res_i, function(x) is.na(as.numeric(x$Q_final)), logical(1))
+  res <- vapply(res_i, function(x) is.na(as.numeric(x$L)), logical(1))
 
   res_logs   <- sprintf("Failures: %d/%d (%.1f%%)",
             sum(res), length(res), 100 * sum(res) / length(res))
