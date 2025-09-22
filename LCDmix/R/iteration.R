@@ -51,7 +51,7 @@ iteration <- function(
   iter_eta       = 1e-6,
   max_iter       = 30,
   resp_threshold = 1e-3,
-  Q_every        = FALSE,
+  calc_Q_every   = FALSE,
   debug          = FALSE,
   maxdev         = NULL
 ) {
@@ -99,7 +99,7 @@ iteration <- function(
     idx_new    <- Estep$idx
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    <- compute_surrogate_loglikelihood(
         X                    = X,
         densities            = g_old,
@@ -122,7 +122,7 @@ iteration <- function(
       responsibility_mask  = idx_new,
       lambda_alpha         = lambda_alpha
     )
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    <- compute_surrogate_loglikelihood(
         X                    = X,
         densities            = g_old,
@@ -153,7 +153,7 @@ iteration <- function(
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    <- compute_surrogate_loglikelihood(
         X                    = X,
         densities            = g_old,
@@ -183,7 +183,7 @@ iteration <- function(
       intercepts = theta0_new,
       slopes     = theta_new
     )
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    <- compute_surrogate_loglikelihood(
         X                    = X,
         densities            = g_old,

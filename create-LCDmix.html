@@ -1471,7 +1471,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta       = 1e-6,
   max_iter       = 30,
   resp_threshold = 1e-3,
-  Q_every        = FALSE,
+  calc_Q_every   = FALSE,
   debug          = FALSE,
   maxdev         = NULL
 ) {
@@ -1519,7 +1519,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     idx_new    &lt;- Estep$idx
     resp_new   &lt;- Estep$resp
     weight_new &lt;- Estep$weight
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
         X                    = X,
         densities            = g_old,
@@ -1542,7 +1542,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       responsibility_mask  = idx_new,
       lambda_alpha         = lambda_alpha
     )
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
         X                    = X,
         densities            = g_old,
@@ -1573,7 +1573,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     )
     theta0_new &lt;- theta_lp$theta0
     theta_new  &lt;- theta_lp$theta
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
         X                    = X,
         densities            = g_old,
@@ -1603,7 +1603,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       intercepts = theta0_new,
       slopes     = theta_new
     )
-    if (Q_every) {
+    if (calc_Q_every) {
       Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
         X                    = X,
         densities            = g_old,
