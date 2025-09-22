@@ -3131,7 +3131,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     env &lt;- new.env(parent = emptyenv())
     f &lt;- sim_files[s]
     if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj &lt;- readRDS(f); if (is.list(obj)) utils::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
+      obj &lt;- readRDS(f); if (is.list(obj)) list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
     } else {
       load(f, envir = env)
     }

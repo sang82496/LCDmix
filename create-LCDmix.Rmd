@@ -2937,7 +2937,7 @@ run_cv_simul2 <- function(
     env <- new.env(parent = emptyenv())
     f <- sim_files[s]
     if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj <- readRDS(f); if (is.list(obj)) utils::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
+      obj <- readRDS(f); if (is.list(obj)) list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
     } else {
       load(f, envir = env)
     }
