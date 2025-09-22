@@ -1069,7 +1069,7 @@ compute_surrogate_loglikelihood <- function(
 lcd_loglikelihood <- function(
   model,
   X,
-  bin_mass = NULL
+  biomass = NULL
 ) {
   densities    <- model$g_new             # list length K (log-concave fits)
   slopes       <- model$theta_new         # penalized slopes (any shape)
@@ -1103,7 +1103,7 @@ lcd_loglikelihood <- function(
   log_terms <- do.call(rbind, log_terms_list)   # N × K
 
   # 3) Weights
-  weights <- unlist(bin_mass)
+  weights <- unlist(biomass)
 
   # 4) Stable rowwise log-sum-exp
   any_finite_comp <- rowSums(is.finite(log_terms)) > 0
