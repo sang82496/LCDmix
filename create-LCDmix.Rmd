@@ -2951,7 +2951,7 @@ run_cv_simul2 <- function(
     # Persist per-sim index for later summary
     sim_dir <- file.path(save_dir, sprintf("sim_%d", s))
     if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
-    save(env$index_matrix, file = file.path(sim_dir, "index_matrix.Rdata"))
+    saveRDS(env$index_matrix, file = file.path(sim_dir, "index_matrix.rds"))
     sims[[s]] <- env
   }
 
