@@ -61,6 +61,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
+  Q_every        = FALSE,
   debug          = FALSE,
   maxdev         = NULL,
   n_restarts     = 1
@@ -101,6 +102,7 @@ main <- function(
     iter_eta,
     max_iter,
     resp_threshold,
+    Q_every,
     debug
   )
   
@@ -117,8 +119,16 @@ main <- function(
             iter         = NULL,
           ))
   }
-
   message("✔ Iterations complete")
+  
+  #— Step 4: Compute loglikelihood —#
+  
+  L = lcd_loglikelihood(
+    model   = iter_res,
+    X       = X,
+    biomass = bin_mass
+  )
+  
   
   #— Return all key results —#
   return(list(
@@ -126,6 +136,7 @@ main <- function(
     X        = X,
     bin_mass = bin_mass,
     initial  = init_res,
-    iter     = iter_res
+    iter     = iter_res,
+    L        = L
   ))
 }

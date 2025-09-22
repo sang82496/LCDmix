@@ -232,14 +232,14 @@ cv_lcd_parallel <- function(
         log_msg    <- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-        Q_final    <- NA
+        L          <- NA
         
       } else if (is.null(res_ii$iter)) {
         log_msg <- paste0("Error at EM iteration ", res_ii$iter_partial$failed_iter, 
                           ": ", res_ii$iter_partial$error, "\n")
         prop_CV    <- NA
         trimmed_CV <- NA
-        Q_final    <- NA
+        L          <- NA
         
       } else {
         
@@ -253,7 +253,7 @@ cv_lcd_parallel <- function(
         )
         prop_CV    <- eval_res$prop_infinite
         trimmed_CV <- eval_res$trimmed_avg_loglike
-        Q_final    <- tail(res_ii$iter$Q, 1)
+        L          <- res_ii$L$loglik
       }
       
       # Save results
@@ -264,7 +264,7 @@ cv_lcd_parallel <- function(
       )
       saveRDS(list(prop_CV    = prop_CV,
                    trimmed_CV = trimmed_CV,
-                   Q_final    = Q_final,
+                   L          = L,
                    log_msg    = log_msg), file = save_path)
 
       return(log_msg)
