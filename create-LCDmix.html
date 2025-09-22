@@ -1342,7 +1342,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <span id="lcd_loglikelihood">lcd_loglikelihood</span> &lt;- function(
   model,
   X,
-  bin_mass = NULL
+  biomass = NULL
 ) {
   densities    &lt;- model$g_new             # list length K (log-concave fits)
   slopes       &lt;- model$theta_new         # penalized slopes (any shape)
@@ -1376,7 +1376,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   log_terms &lt;- do.call(rbind, log_terms_list)   # N × K
 
   # 3) Weights
-  weights &lt;- unlist(bin_mass)
+  weights &lt;- unlist(biomass)
 
   # 4) Stable rowwise log-sum-exp
   any_finite_comp &lt;- rowSums(is.finite(log_terms)) &gt; 0

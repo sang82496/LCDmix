@@ -4,7 +4,7 @@
 \alias{lcd_loglikelihood}
 \title{Penalized (and trimmed) log-likelihood for LCDmix}
 \usage{
-lcd_loglikelihood(model, X, bin_mass = NULL)
+lcd_loglikelihood(model, X, biomass = NULL)
 }
 \arguments{
 \item{model}{A fitted LCDmix model object (typically an iteration/state list)
