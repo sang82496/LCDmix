@@ -1,6 +1,69 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
 #' Refit LCDmix multiple times and select the best training fit
+#'
+#' Given optimal penalties from CV, repeatedly refits \code{main()} on the
+#' full (binned) dataset using different random seeds, records the final
+#' training objective \code{L$loglik} for each repeat, caches results to disk,
+#' and returns logs, per-repeat scores, and the best fit.
+#'
+#' @param Y_bin List of length \eqn{TT}; binned responses for each time point.
+#'   Element \eqn{t} is a numeric vector of length \eqn{n_t}.
+#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
+#' @param bin_mass List of length \eqn{TT}; per-time weights for each bin/observation.
+#' @param K Integer; number of mixture components.
+#' @param opt_lambdas Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
+#'   chosen from cross-validation.
+#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
+#' @param iter_eta Numeric; convergence threshold on relative change in the
+#'   surrogate objective. Default \code{1e-3}.
+#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
+#'   zeroed for stability. Default \code{1e-3}.
+#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
+#'   provide \code{cv_reps} to derive \code{seeds <- 1:cv_reps}. Default \code{NULL}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction passed to
+#'   \code{main()} for any internal diagnostics (not used in the training
+#'   objective). Default \code{0.01}.
+#' @param save_dir Character; directory to cache per-repeat results as
+#'   \code{"refit_<seed>.rds"}. Default \code{"./result"}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers for
+#'   \pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
+#' @param debug Logical; forwarded to \code{main()} to print extra diagnostics.
+#'   Default \code{FALSE}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
+#'   \code{NULL}. Default \code{NULL}.
+#'
+#' @details
+#' Each repeat runs a full fit with \code{main()} and extracts the final training
+#' objective \code{L$loglik}. Results are cached to enable resuming; cached runs
+#' are skipped on subsequent calls. Parallelization uses a socket cluster and is
+#' cleaned up on exit.
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
+#'   \item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
+#'     (\code{L$loglik}) across repeats (one per seed).}
+#'   \item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
+#'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
+#' }
+#'
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
+#'
+#' @examples
+#' \dontrun{
+#' best <- refit_lcd(
+#'   Y_bin        = Y_bin,
+#'   X            = X,
+#'   bin_mass     = bin_mass,
+#'   K            = 2,
+#'   opt_lambdas  = c(1e-3, 1e-3),
+#'   seeds        = 1:5,
+#'   save_dir     = "refits"
+#' )
+#' best$refit_scores
+#' }
+#'
 #' @export
 refit_lcd <- function(
   Y_bin, 

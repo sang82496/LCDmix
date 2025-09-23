@@ -2922,6 +2922,70 @@ cv_lcd_summary_simul <- function(base_dir, num_sims) {
 
 
 
+
+
+```{r}
+#' @title Internal: run one LCDmix refit (single seed) and cache
+#' @keywords internal
+#' @export
+refit_onejob <- function(
+  Y_bin, X, bin_mass, K,
+  lambda_alpha, lambda_theta,
+  seed, max_iter, iter_eta, resp_threshold, trim_prob,
+  save_dir, debug = FALSE
+) {
+  # cache file for this seed
+  out_path <- file.path(save_dir, sprintf("refit_%d.rds", as.integer(seed)))
+  if (file.exists(out_path)) {
+    saved <- readRDS(out_path)
+    return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit = saved$fit))
+  }
+
+  log_msg <- paste0("▶ Refit seed ", seed, " | λa=", lambda_alpha, ", λθ=", lambda_theta, "\n")
+
+  set.seed(seed)
+  err_msg <- NULL
+  out_log <- utils::capture.output(
+    fit <- tryCatch(
+      main(
+        Y               = Y_bin,
+        X               = X,
+        biomass         = bin_mass,
+        binned          = TRUE,
+        n_bins          = 0,
+        K               = K,
+        lambda_alpha    = lambda_alpha,
+        lambda_theta    = lambda_theta,
+        max_iter        = max_iter,
+        iter_eta        = iter_eta,
+        resp_threshold  = resp_threshold,
+        trim_prob       = trim_prob,
+        debug           = debug
+      ),
+      error = function(e) { err_msg <<- e$message; NULL }
+    ),
+    type = "output"
+  )
+  log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
+
+  if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
+    log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
+    saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
+    return(list(log_msg = log_msg, L = NA_real_, fit = NULL))
+  }
+
+  L <- fit$L$loglik
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed, "; final L = ", round(L, 6), "\n")
+  saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
+
+  return(list(log_msg = log_msg, L = L, fit = fit))
+}
+```
+
+
+
+
+
 ```{r}
 #' Refit LCDmix multiple times and select the best training fit
 #'
@@ -2989,156 +3053,66 @@ cv_lcd_summary_simul <- function(base_dir, num_sims) {
 #'
 #' @export
 refit_lcd <- function(
-  Y_bin,
-  X,
-  bin_mass,
-  K,
+  Y_bin, 
+  X, 
+  bin_mass, 
+  K, 
   opt_lambdas,
-  max_iter       = 30,
-  iter_eta       = 1e-3,
-  resp_threshold = 1e-3,
-  seeds          = NULL,
-  trim_prob      = 0.01,
-  save_dir       = "./result",
-  n_cores        = "max",
-  debug          = FALSE,
-  cv_reps        = NULL
+  seeds = NULL, 
+  cv_reps = NULL,
+  max_iter = 30, 
+  iter_eta = 1e-3, 
+  resp_threshold = 1e-3, 
+  trim_prob = 0.01,
+  save_dir = "./refits", 
+  n_cores = "max", 
+  debug = FALSE
 ) {
-  # Unpack optimal penalties
+  if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
+  if (is.null(seeds)) seeds <- seq_len(cv_reps)
+  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
+
   lambda_alpha <- opt_lambdas[1]
   lambda_theta <- opt_lambdas[2]
 
-  # Seeds vs repeats
-  if (is.null(seeds) && is.null(cv_reps)) {
-    stop("`seeds` and `cv_reps` cannot be both NULL")
-  }
-  if (is.null(seeds)) {
-    seeds <- seq_len(cv_reps)
-  }
-
-  # Ensure output directory exists
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  # Cluster
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
   on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
 
-  parallel::clusterEvalQ(cl, { library(flowmix); library(LCDmix); NULL })
+  parallel::clusterEvalQ(cl, {library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", 
-      "max_iter", "iter_eta", "resp_threshold", "trim_prob", "save_dir", "debug"
-    ),
+    varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir","debug"),
     envir = environment()
   )
 
-  # Perform repeated fits in parallel
-  results <- parallel::parLapply(
-    cl,
-    seeds,
-    function(seed_idx) {
-      # Start log for this seed
-      log_msg <- paste0("▶ Refit seed ", seed_idx, "\n")
+  res_list <- parallel::parLapply(cl, seeds, function(sd) {
+    refit_onejob(
+      Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
+      lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
+      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
+      resp_threshold = resp_threshold, trim_prob = trim_prob,
+      save_dir = save_dir, debug = debug
+    )
+  })
 
-      # Skip if cached
-      save_path <- file.path(save_dir, paste0("refit_", seed_idx, ".rds"))
-      if (file.exists(save_path)) {
-        log_msg <- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
-        saved   <- readRDS(save_path)
-        return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit_try = saved$fit_try))
-      }
+  logs <- vapply(res_list, `[[`, character(1), "log_msg")
+  scores <- vapply(res_list, function(x) x$L, numeric(1))
 
-      # Capture output from main()
-      err_msg <- NULL
-      set.seed(seed_idx)
-      out_log <- utils::capture.output({
-        fit_try <- tryCatch(
-          main(
-            Y               = Y_bin,
-            X               = X,
-            biomass         = bin_mass,
-            binned          = TRUE,
-            n_bins          = 0,
-            K               = K,
-            lambda_alpha    = lambda_alpha,
-            lambda_theta    = lambda_theta,
-            max_iter        = max_iter,
-            iter_eta        = iter_eta,
-            resp_threshold  = resp_threshold,
-            trim_prob       = trim_prob,
-            debug           = debug
-          ),
-          error = function(e) {
-            err_msg <<- paste0("✖ Error on seed ", seed_idx, ": ", e$message)
-            NULL
-          }
-        )
-      }, type = "output")
-
-      # Append captured output to our log
-      log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
-
-      # Check success / failure
-      if (!is.list(fit_try)) {
-        return(list(
-          log_msg = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
-          L       = NA_real_,
-          fit_try = NULL
-        ))
-
-      } else if (!is.null(fit_try$iter_partial)) {
-        return(list(
-          log_msg = paste0(
-            log_msg,
-            "Error at EM iteration ",
-            fit_try$iter_partial$failed_iter, ": ",
-            fit_try$iter_partial$error, "\n"
-          ),
-          L       = NA_real_,
-          fit_try = NULL
-        ))
-      }
-
-      # Successful: record final training objective and cache
-      L <- fit_try$L$loglik
-      log_msg <- paste0(
-        log_msg,
-        "✔ Completed seed ", seed_idx,
-        "; final loglikelihood = ", round(L, 4), "\n"
-      )
-      saveRDS(list(log_msg = log_msg, L = L, fit_try = fit_try), file = save_path)
-
-      return(list(log_msg = log_msg, L = L, fit_try = fit_try))
-    }
-  )
-
-  # Aggregate
-  log_msgs     <- vapply(results, function(x) x$log_msg, character(1))
-  refit_scores <- vapply(results, function(x) x$L, numeric(1))
-
-  if (all(is.na(refit_scores))) {
-    return(list(logs = c("All refits failed."), refit_scores = refit_scores, best_fit = NULL))
+  if (all(is.na(scores))) {
+    logs <- c(logs, "All refits failed.")
+    return(list(logs = logs, refit_scores = scores, best_fit = NULL))
   }
 
-  best_idx <- which.max(refit_scores)
-  best_fit <- results[[best_idx]]
-
-  # Summary
-  summary_msg <- paste0(
+  best_idx <- which.max(scores)
+  logs <- c(logs, paste0(
     "Completed ", length(seeds), " repeats; ",
-    sum(is.na(refit_scores)), " failures; ",
-    "best L = ", round(refit_scores[best_idx], 4),
-    " on repeat ", best_idx, "\n"
-  )
-  log_msgs <- c(log_msgs, summary_msg)
-
-  return(list(
-    logs         = log_msgs,
-    refit_scores = refit_scores,
-    best_fit     = best_fit
+    sum(is.na(scores)), " failures; best L = ", round(scores[best_idx], 6),
+    " (seed index ", best_idx, ").\n"
   ))
+
+  return(list(logs = logs, refit_scores = scores, best_fit = res_list[[best_idx]]))
 }
 ```
 
@@ -3212,302 +3186,6 @@ refit_lcd <- function(
 #' head(out)
 #' }
 #'
-#' @export
-simul_refit <- function(
-    best_table, 
-    sim_dir = "sim_data", 
-    save_dir = "cv_saves",
-    K,
-    max_iter           = 30,
-    iter_eta           = 1e-3,
-    resp_threshold     = 1e-3,
-    trim_prob          = 0.01,
-    refit_seeds        = 1:1,
-    n_cores            = "max"
-    ) {
-  
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-  
-  # Use expand.grid to get every combination
-  idx <- expand.grid(
-    sim_idx        = best_table[, "sim_idx"],
-    seed_idx       = refit_seeds
-  )
-  # join in the penalty columns
-  best_table <- merge(
-    idx,
-    as.data.frame(best_table)[, c("sim_idx","lambda_alpha","lambda_theta")],
-    by = "sim_idx",
-    sort = FALSE
-  )
-  # ensure columns in desired order
-  best_table <- as.matrix(best_table[, c("sim_idx","lambda_alpha","lambda_theta","seed_idx")])
-  
-  # determine worker count
-  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl <- parallel::makeCluster(n_workers)
-  # export functions and data that workers need
-  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c("best_table", "sim_dir", "save_dir", "K", "max_iter",
-                "iter_eta", "resp_threshold", "refit_seeds"),
-    envir   = environment()
-  )
-  
-  res_i <- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
-    idx_row       <- best_table[i, ]
-    sim_idx       <- as.integer(idx_row["sim_idx"])
-    seed_idx      <- as.integer(idx_row["seed_idx"])
-    lambda_alpha  <- as.numeric(idx_row["lambda_alpha"])
-    lambda_theta  <- as.numeric(idx_row["lambda_theta"])
-
-    sim     <- readRDS(file.path(sim_dir, paste0("sim_", sim_idx, ".rds")))
-    log_msg <- paste0(
-        "sim_idx=", sim_idx,
-        ", alpha=", lambda_alpha,
-        ", theta=", lambda_theta, 
-        ", seed=",  seed_idx, "\n"
-      )
-    
-    # Skip if already exists
-    save_path <- file.path(
-        save_dir,
-        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
-      )
-    
-    if (file.exists(save_path)) {
-      print(paste0("Skip (cached): ", basename(save_path)))
-      saved = readRDS(save_path)
-      return(list(
-        sim_idx      = sim_idx,
-        lambda_alpha = lambda_alpha,
-        lambda_theta = lambda_theta,
-        seed_idx     = seed_idx,
-        L            = as.numeric(saved$L),
-        metric       = as.numeric(saved$metric)
-      ))
-    }
-    
-    set.seed(seed_idx)
-    err_msg <- NULL
-    out_log <- capture.output(
-      fit_try <- tryCatch({
-        main(
-          Y               = sim$ylist,
-          X               = sim$X,
-          biomass         = sim$countslist,
-          binned          = TRUE,
-          n_bins          = 0,
-          K               = K,
-          lambda_alpha    = lambda_alpha,
-          lambda_theta    = lambda_theta,
-          max_iter        = max_iter,
-          iter_eta        = iter_eta,
-          resp_threshold  = resp_threshold,
-          trim_prob       = trim_prob,
-          debug           = TRUE
-        )
-      }, error = function(e) {
-        err_msg <<- paste0("Error fitting sim=", sim_idx,
-                            ", alpha=", lambda_alpha,
-                            ", theta=", lambda_theta, 
-                             ", seed=", seed_idx, ": ",
-                          e$message)
-        return(NULL)
-      }),
-        type = "output"      #<<— capture only stdout (print/cat), not messages
-      )
-
-      # append the captured log to your log_msg
-      log_msg <- paste0(log_msg,
-                        paste0(out_log, collapse = "\n"),
-                        "\n")
-    
-      if (is.null(fit_try) || !is.list(fit_try$iter)) {
-        log_msg    <- paste0(log_msg, "✖ Error: ", err_msg, "\n")
-        L          <- NA
-        metric     <- NA
-      } else {
-        log_msg    <- paste0(log_msg, "Fit succeeded\n")
-        L          <- fit_try$L$loglike
-        metric     <- mixture_metric(
-                        sim$ylist, sim$X, sim$countslist,
-                        est_res  = fit_try$iter,
-                        true_res = list(prob=sim$prob, dens_true=sim$dens_true)
-                      )$weighted
-      }
-    
-    # save RDS
-    saveRDS(
-      list(metric  = metric,
-           L       = L,
-           fit_try = fit_try,
-           error   = err_msg,
-           logs    = log_msg),
-      file = file.path(
-        save_dir,
-        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
-      )
-    )
-    
-    # return summary
-   return(list(
-      sim_idx      = sim_idx,
-      lambda_alpha = lambda_alpha,
-      lambda_theta = lambda_theta,
-      seed_idx     = seed_idx,
-      L            = L,
-      metric       = metric))
-
-  })
-  parallel::stopCluster(cl)
-  
-   #— Summarize failures —#
-  res <- vapply(res_i, function(x) is.na(as.numeric(x$L)), logical(1))
-
-  res_logs   <- sprintf("Failures: %d/%d (%.1f%%)",
-            sum(res), length(res), 100 * sum(res) / length(res))
-  
-  res_table <- do.call(rbind, lapply(res_i, function(x) as.data.frame(x, stringsAsFactors = FALSE)))
-  
-  # bind into a data.frame
-  return(list(res_logs = res_logs,
-              res_table = res_table))
-}
-```
-
-
-```{r}
-#' @title Internal: run one LCDmix refit (single seed) and cache
-#' @keywords internal
-#' @export
-refit_onejob <- function(
-  Y_bin, X, bin_mass, K,
-  lambda_alpha, lambda_theta,
-  seed, max_iter, iter_eta, resp_threshold, trim_prob,
-  save_dir, debug = FALSE
-) {
-  # cache file for this seed
-  out_path <- file.path(save_dir, sprintf("refit_%d.rds", as.integer(seed)))
-  if (file.exists(out_path)) {
-    saved <- readRDS(out_path)
-    return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit = saved$fit))
-  }
-
-  log_msg <- paste0("▶ Refit seed ", seed, " | λa=", lambda_alpha, ", λθ=", lambda_theta, "\n")
-
-  set.seed(seed)
-  err_msg <- NULL
-  out_log <- utils::capture.output(
-    fit <- tryCatch(
-      main(
-        Y               = Y_bin,
-        X               = X,
-        biomass         = bin_mass,
-        binned          = TRUE,
-        n_bins          = 0,
-        K               = K,
-        lambda_alpha    = lambda_alpha,
-        lambda_theta    = lambda_theta,
-        max_iter        = max_iter,
-        iter_eta        = iter_eta,
-        resp_threshold  = resp_threshold,
-        trim_prob       = trim_prob,
-        debug           = debug
-      ),
-      error = function(e) { err_msg <<- e$message; NULL }
-    ),
-    type = "output"
-  )
-  log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
-
-  if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
-    log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
-    saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
-    return(list(log_msg = log_msg, L = NA_real_, fit = NULL))
-  }
-
-  L <- fit$L$loglik
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed, "; final L = ", round(L, 6), "\n")
-  saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
-
-  return(list(log_msg = log_msg, L = L, fit = fit))
-}
-```
-
-
-
-
-```{r}
-#' Refit LCDmix multiple times and select the best training fit
-#' @export
-refit_lcd <- function(
-  Y_bin, 
-  X, 
-  bin_mass, 
-  K, 
-  opt_lambdas,
-  seeds = NULL, 
-  cv_reps = NULL,
-  max_iter = 30, 
-  iter_eta = 1e-3, 
-  resp_threshold = 1e-3, 
-  trim_prob = 0.01,
-  save_dir = "./refits", 
-  n_cores = "max", 
-  debug = FALSE
-) {
-  if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
-  if (is.null(seeds)) seeds <- seq_len(cv_reps)
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  lambda_alpha <- opt_lambdas[1]
-  lambda_theta <- opt_lambdas[2]
-
-  n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl <- parallel::makeCluster(n_workers)
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
-
-  parallel::clusterEvalQ(cl, {library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir","debug"),
-    envir = environment()
-  )
-
-  res_list <- parallel::parLapply(cl, seeds, function(sd) {
-    refit_onejob(
-      Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
-      lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
-      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
-      resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, debug = debug
-    )
-  })
-
-  logs <- vapply(res_list, `[[`, character(1), "log_msg")
-  scores <- vapply(res_list, function(x) x$L, numeric(1))
-
-  if (all(is.na(scores))) {
-    logs <- c(logs, "All refits failed.")
-    return(list(logs = logs, refit_scores = scores, best_fit = NULL))
-  }
-
-  best_idx <- which.max(scores)
-  logs <- c(logs, paste0(
-    "Completed ", length(seeds), " repeats; ",
-    sum(is.na(scores)), " failures; best L = ", round(scores[best_idx], 6),
-    " (seed index ", best_idx, ").\n"
-  ))
-
-  return(list(logs = logs, refit_scores = scores, best_fit = res_list[[best_idx]]))
-}
-```
-
-```{r}
-#' Refit LCDmix across many simulations (outer-parallel)
 #' @export
 simul_refit <- function(
   sim_files,
@@ -3598,6 +3276,9 @@ simul_refit <- function(
   ))
 }
 ```
+
+
+
 
 
 ```{r}
