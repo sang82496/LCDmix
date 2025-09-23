@@ -1,6 +1,71 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Refit LCDmix across many simulations (outer-parallel)
+#' Refit LCDmix per simulation (with best lambdas) and score via \code{mixture_metric}
+#'
+#' @description
+#' For each simulation in \code{best_table}, this function refits the LCD
+#' mixture-of-experts model using the provided optimal penalty pair
+#' \code{(lambda_alpha, lambda_theta)} and multiple random seeds. Each fit is
+#' evaluated with \code{mixture_metric()} against the simulation ground truth,
+#' and a per-run result is written to \code{save_dir} as
+#' \code{refit_sim<sim_idx>_seed<seed>.rds}. Results are computed in parallel.
+#'
+#' @param best_table A two- or three-column matrix/data.frame with at least
+#'   columns \code{sim_idx}, \code{lambda_alpha}, \code{lambda_theta}. Typically
+#'   the output of \code{summarize_simul_cv()}.
+#' @param sim_dir Directory containing simulation files named
+#'   \code{"sim_<sim_idx>.rds"} produced by \code{simulate_and_save()}.
+#' @param save_dir Directory to write per-refit result files
+#'   \code{"refit_sim<sim_idx>_seed<seed>.rds"}.
+#' @param K Integer; number of mixture components.
+#' @param max_iter Integer; maximum EM iterations in \code{main()}. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance (relative change in Q). Default \code{1e-3}.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed
+#'   for numerical stability. Default \code{1e-3}.
+#' @param refit_seeds Integer vector of RNG seeds for repeated refits per
+#'   simulation. Default \code{1:1}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
+#'   uses all physical cores minus one. Default \code{"max"}.
+#'
+#' @details
+#' Each job:
+#' \enumerate{
+#'   \item Loads \code{sim_<sim_idx>.rds} (which contains \code{ylist}, \code{X},
+#'         \code{countslist}, \code{prob}, and \code{dens_true}).
+#'   \item Calls \code{main()} with the best \code{lambda_alpha/theta} and the
+#'         given seed.
+#'   \item Computes the weighted L1 mixture distance via \code{mixture_metric()}.
+#'   \item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
+#'         and log/error text.
+#' }
+#'
+#' @return A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
+#' \describe{
+#'   \item{\code{sim_idx}}{Simulation ID.}
+#'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
+#'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
+#'   \item{\code{seed_idx}}{Refit seed.}
+#'   \item{\code{L}}{Final loglikelihood objective value (NA on failure).}
+#'   \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
+#' }
+#'
+#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
+#'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose 'best_tbl' came from summarize_simul_cv()
+#' out <- simul_refit(
+#'   best_table  = best_tbl,
+#'   sim_dir     = "sim_data",
+#'   save_dir    = "cv_saves",
+#'   K           = 2,
+#'   refit_seeds = 1:3,
+#'   n_cores     = "max"
+#' )
+#' head(out)
+#' }
+#'
 #' @export
 simul_refit <- function(
   sim_files,

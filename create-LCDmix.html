@@ -3095,452 +3095,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   return(out)
 }</code></pre>
-<pre class="r"><code>#' Refit LCDmix multiple times and select the best training fit
-#'
-#' Given optimal penalties from CV, repeatedly refits \code{<a href="create-LCDmix.html#main">main</a>()} on the
-#' full (binned) dataset using different random seeds, records the final
-#' training objective \code{L$loglik} for each repeat, caches results to disk,
-#' and returns logs, per-repeat scores, and the best fit.
-#'
-#' @param Y_bin List of length \eqn{TT}; binned responses for each time point.
-#'   Element \eqn{t} is a numeric vector of length \eqn{n_t}.
-#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#' @param bin_mass List of length \eqn{TT}; per-time weights for each bin/observation.
-#' @param K Integer; number of mixture components.
-#' @param opt_lambdas Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
-#'   chosen from cross-validation.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
-#' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-3}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
-#'   provide \code{cv_reps} to derive \code{seeds &lt;- 1:cv_reps}. Default \code{NULL}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction passed to
-#'   \code{<a href="create-LCDmix.html#main">main</a>()} for any internal diagnostics (not used in the training
-#'   objective). Default \code{0.01}.
-#' @param save_dir Character; directory to cache per-repeat results as
-#'   \code{"refit_&lt;seed&gt;.rds"}. Default \code{"./result"}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers for
-#'   \pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} to print extra diagnostics.
-#'   Default \code{FALSE}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL}. Default \code{NULL}.
-#'
-#' @details
-#' Each repeat runs a full fit with \code{<a href="create-LCDmix.html#main">main</a>()} and extracts the final training
-#' objective \code{L$loglik}. Results are cached to enable resuming; cached runs
-#' are skipped on subsequent calls. Parallelization uses a socket cluster and is
-#' cleaned up on exit.
-#'
-#' @return A list with:
-#' \describe{
-#'   \item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
-#'   \item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
-#'     (\code{L$loglik}) across repeats (one per seed).}
-#'   \item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
-#'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
-#' }
-#'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
-#'
-#' @examples
-#' \dontrun{
-#' best &lt;- refit_lcd(
-#'   Y_bin        = Y_bin,
-#'   X            = X,
-#'   bin_mass     = bin_mass,
-#'   K            = 2,
-#'   opt_lambdas  = c(1e-3, 1e-3),
-#'   seeds        = 1:5,
-#'   save_dir     = "refits"
-#' )
-#' best$refit_scores
-#' }
-#'
-#' @export
-<span id="refit_lcd">refit_lcd</span> &lt;- function(
-  Y_bin,
-  X,
-  bin_mass,
-  K,
-  opt_lambdas,
-  max_iter       = 30,
-  iter_eta       = 1e-3,
-  resp_threshold = 1e-3,
-  seeds          = NULL,
-  trim_prob      = 0.01,
-  save_dir       = "./result",
-  n_cores        = "max",
-  debug          = FALSE,
-  cv_reps        = NULL
-) {
-  # Unpack optimal penalties
-  lambda_alpha &lt;- opt_lambdas[1]
-  lambda_theta &lt;- opt_lambdas[2]
-
-  # Seeds vs repeats
-  if (is.null(seeds) &amp;&amp; is.null(cv_reps)) {
-    stop("`seeds` and `cv_reps` cannot be both NULL")
-  }
-  if (is.null(seeds)) {
-    seeds &lt;- seq_len(cv_reps)
-  }
-
-  # Ensure output directory exists
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  # Cluster
-  n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl &lt;- parallel::makeCluster(n_workers)
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
-
-  parallel::clusterEvalQ(cl, { library(flowmix); library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", 
-      "max_iter", "iter_eta", "resp_threshold", "trim_prob", "save_dir", "debug"
-    ),
-    envir = environment()
-  )
-
-  # Perform repeated fits in parallel
-  results &lt;- parallel::parLapply(
-    cl,
-    seeds,
-    function(seed_idx) {
-      # Start log for this seed
-      log_msg &lt;- paste0("▶ Refit seed ", seed_idx, "\n")
-
-      # Skip if cached
-      save_path &lt;- file.path(save_dir, paste0("refit_", seed_idx, ".rds"))
-      if (file.exists(save_path)) {
-        log_msg &lt;- paste0(log_msg, "Skip (cached): ", basename(save_path), "\n")
-        saved   &lt;- readRDS(save_path)
-        return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit_try = saved$fit_try))
-      }
-
-      # Capture output from <a href="create-LCDmix.html#main">main</a>()
-      err_msg &lt;- NULL
-      set.seed(seed_idx)
-      out_log &lt;- utils::capture.output({
-        fit_try &lt;- tryCatch(
-          <a href="create-LCDmix.html#main">main</a>(
-            Y               = Y_bin,
-            X               = X,
-            biomass         = bin_mass,
-            binned          = TRUE,
-            n_bins          = 0,
-            K               = K,
-            lambda_alpha    = lambda_alpha,
-            lambda_theta    = lambda_theta,
-            max_iter        = max_iter,
-            iter_eta        = iter_eta,
-            resp_threshold  = resp_threshold,
-            trim_prob       = trim_prob,
-            debug           = debug
-          ),
-          error = function(e) {
-            err_msg &lt;&lt;- paste0("✖ Error on seed ", seed_idx, ": ", e$message)
-            NULL
-          }
-        )
-      }, type = "output")
-
-      # Append captured output to our log
-      log_msg &lt;- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
-
-      # Check success / failure
-      if (!is.list(fit_try)) {
-        return(list(
-          log_msg = paste0(log_msg, "✖ Fit failed on seed ", seed_idx, ": ", err_msg, "\n"),
-          L       = NA_real_,
-          fit_try = NULL
-        ))
-
-      } else if (!is.null(fit_try$iter_partial)) {
-        return(list(
-          log_msg = paste0(
-            log_msg,
-            "Error at EM iteration ",
-            fit_try$iter_partial$failed_iter, ": ",
-            fit_try$iter_partial$error, "\n"
-          ),
-          L       = NA_real_,
-          fit_try = NULL
-        ))
-      }
-
-      # Successful: record final training objective and cache
-      L &lt;- fit_try$L$loglik
-      log_msg &lt;- paste0(
-        log_msg,
-        "✔ Completed seed ", seed_idx,
-        "; final loglikelihood = ", round(L, 4), "\n"
-      )
-      saveRDS(list(log_msg = log_msg, L = L, fit_try = fit_try), file = save_path)
-
-      return(list(log_msg = log_msg, L = L, fit_try = fit_try))
-    }
-  )
-
-  # Aggregate
-  log_msgs     &lt;- vapply(results, function(x) x$log_msg, character(1))
-  refit_scores &lt;- vapply(results, function(x) x$L, numeric(1))
-
-  if (all(is.na(refit_scores))) {
-    return(list(logs = c("All refits failed."), refit_scores = refit_scores, best_fit = NULL))
-  }
-
-  best_idx &lt;- which.max(refit_scores)
-  best_fit &lt;- results[[best_idx]]
-
-  # Summary
-  summary_msg &lt;- paste0(
-    "Completed ", length(seeds), " repeats; ",
-    sum(is.na(refit_scores)), " failures; ",
-    "best L = ", round(refit_scores[best_idx], 4),
-    " on repeat ", best_idx, "\n"
-  )
-  log_msgs &lt;- c(log_msgs, summary_msg)
-
-  return(list(
-    logs         = log_msgs,
-    refit_scores = refit_scores,
-    best_fit     = best_fit
-  ))
-}</code></pre>
-<pre class="r"><code>#' Refit LCDmix per simulation (with best lambdas) and score via \code{mixture_metric}
-#'
-#' @description
-#' For each simulation in \code{best_table}, this function refits the LCD
-#' mixture-of-experts model using the provided optimal penalty pair
-#' \code{(lambda_alpha, lambda_theta)} and multiple random seeds. Each fit is
-#' evaluated with \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()} against the simulation ground truth,
-#' and a per-run result is written to \code{save_dir} as
-#' \code{refit_sim&lt;sim_idx&gt;_seed&lt;seed&gt;.rds}. Results are computed in parallel.
-#'
-#' @param best_table A two- or three-column matrix/data.frame with at least
-#'   columns \code{sim_idx}, \code{lambda_alpha}, \code{lambda_theta}. Typically
-#'   the output of \code{<a href="create-LCDmix.html#summarize_simul_cv">summarize_simul_cv</a>()}.
-#' @param sim_dir Directory containing simulation files named
-#'   \code{"sim_&lt;sim_idx&gt;.rds"} produced by \code{<a href="create-LCDmix.html#simulate_and_save">simulate_and_save</a>()}.
-#' @param save_dir Directory to write per-refit result files
-#'   \code{"refit_sim&lt;sim_idx&gt;_seed&lt;seed&gt;.rds"}.
-#' @param K Integer; number of mixture components.
-#' @param max_iter Integer; maximum EM iterations in \code{<a href="create-LCDmix.html#main">main</a>()}. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance (relative change in Q). Default \code{1e-3}.
-#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed
-#'   for numerical stability. Default \code{1e-3}.
-#' @param refit_seeds Integer vector of RNG seeds for repeated refits per
-#'   simulation. Default \code{1:1}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
-#'   uses all physical cores minus one. Default \code{"max"}.
-#'
-#' @details
-#' Each job:
-#' \enumerate{
-#'   \item Loads \code{sim_&lt;sim_idx&gt;.rds} (which contains \code{ylist}, \code{X},
-#'         \code{countslist}, \code{prob}, and \code{dens_true}).
-#'   \item Calls \code{<a href="create-LCDmix.html#main">main</a>()} with the best \code{lambda_alpha/theta} and the
-#'         given seed.
-#'   \item Computes the weighted L1 mixture distance via \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()}.
-#'   \item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
-#'         and log/error text.
-#' }
-#'
-#' @return A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
-#' \describe{
-#'   \item{\code{sim_idx}}{Simulation ID.}
-#'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
-#'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
-#'   \item{\code{seed_idx}}{Refit seed.}
-#'   \item{\code{L}}{Final loglikelihood objective value (NA on failure).}
-#'   \item{\code{metric}}{Weighted L1 distance to truth from \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()} (NA on failure).}
-#' }
-#'
-#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
-#'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
-#'
-#' @examples
-#' \dontrun{
-#' # Suppose 'best_tbl' came from <a href="create-LCDmix.html#summarize_simul_cv">summarize_simul_cv</a>()
-#' out &lt;- simul_refit(
-#'   best_table  = best_tbl,
-#'   sim_dir     = "sim_data",
-#'   save_dir    = "cv_saves",
-#'   K           = 2,
-#'   refit_seeds = 1:3,
-#'   n_cores     = "max"
-#' )
-#' head(out)
-#' }
-#'
-#' @export
-<span id="simul_refit">simul_refit</span> &lt;- function(
-    best_table, 
-    sim_dir = "sim_data", 
-    save_dir = "cv_saves",
-    K,
-    max_iter           = 30,
-    iter_eta           = 1e-3,
-    resp_threshold     = 1e-3,
-    trim_prob          = 0.01,
-    refit_seeds        = 1:1,
-    n_cores            = "max"
-    ) {
-  
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-  
-  # Use expand.grid to get every combination
-  idx &lt;- expand.grid(
-    sim_idx        = best_table[, "sim_idx"],
-    seed_idx       = refit_seeds
-  )
-  # join in the penalty columns
-  best_table &lt;- merge(
-    idx,
-    as.data.frame(best_table)[, c("sim_idx","lambda_alpha","lambda_theta")],
-    by = "sim_idx",
-    sort = FALSE
-  )
-  # ensure columns in desired order
-  best_table &lt;- as.matrix(best_table[, c("sim_idx","lambda_alpha","lambda_theta","seed_idx")])
-  
-  # determine worker count
-  n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl &lt;- parallel::makeCluster(n_workers)
-  # export functions and data that workers need
-  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c("best_table", "sim_dir", "save_dir", "K", "max_iter",
-                "iter_eta", "resp_threshold", "refit_seeds"),
-    envir   = environment()
-  )
-  
-  res_i &lt;- parallel::parLapply(cl, seq_len(nrow(best_table)), function(i) {
-    idx_row       &lt;- best_table[i, ]
-    sim_idx       &lt;- as.integer(idx_row["sim_idx"])
-    seed_idx      &lt;- as.integer(idx_row["seed_idx"])
-    lambda_alpha  &lt;- as.numeric(idx_row["lambda_alpha"])
-    lambda_theta  &lt;- as.numeric(idx_row["lambda_theta"])
-
-    sim     &lt;- readRDS(file.path(sim_dir, paste0("sim_", sim_idx, ".rds")))
-    log_msg &lt;- paste0(
-        "sim_idx=", sim_idx,
-        ", alpha=", lambda_alpha,
-        ", theta=", lambda_theta, 
-        ", seed=",  seed_idx, "\n"
-      )
-    
-    # Skip if already exists
-    save_path &lt;- file.path(
-        save_dir,
-        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
-      )
-    
-    if (file.exists(save_path)) {
-      print(paste0("Skip (cached): ", basename(save_path)))
-      saved = readRDS(save_path)
-      return(list(
-        sim_idx      = sim_idx,
-        lambda_alpha = lambda_alpha,
-        lambda_theta = lambda_theta,
-        seed_idx     = seed_idx,
-        L            = as.numeric(saved$L),
-        metric       = as.numeric(saved$metric)
-      ))
-    }
-    
-    set.seed(seed_idx)
-    err_msg &lt;- NULL
-    out_log &lt;- capture.output(
-      fit_try &lt;- tryCatch({
-        <a href="create-LCDmix.html#main">main</a>(
-          Y               = sim$ylist,
-          X               = sim$X,
-          biomass         = sim$countslist,
-          binned          = TRUE,
-          n_bins          = 0,
-          K               = K,
-          lambda_alpha    = lambda_alpha,
-          lambda_theta    = lambda_theta,
-          max_iter        = max_iter,
-          iter_eta        = iter_eta,
-          resp_threshold  = resp_threshold,
-          trim_prob       = trim_prob,
-          debug           = TRUE
-        )
-      }, error = function(e) {
-        err_msg &lt;&lt;- paste0("Error fitting sim=", sim_idx,
-                            ", alpha=", lambda_alpha,
-                            ", theta=", lambda_theta, 
-                             ", seed=", seed_idx, ": ",
-                          e$message)
-        return(NULL)
-      }),
-        type = "output"      #&lt;&lt;— capture only stdout (print/cat), not messages
-      )
-
-      # append the captured log to your log_msg
-      log_msg &lt;- paste0(log_msg,
-                        paste0(out_log, collapse = "\n"),
-                        "\n")
-    
-      if (is.null(fit_try) || !is.list(fit_try$iter)) {
-        log_msg    &lt;- paste0(log_msg, "✖ Error: ", err_msg, "\n")
-        L          &lt;- NA
-        metric     &lt;- NA
-      } else {
-        log_msg    &lt;- paste0(log_msg, "Fit succeeded\n")
-        L          &lt;- fit_try$L$loglike
-        metric     &lt;- <a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(
-                        sim$ylist, sim$X, sim$countslist,
-                        est_res  = fit_try$iter,
-                        true_res = list(prob=sim$prob, dens_true=sim$dens_true)
-                      )$weighted
-      }
-    
-    # save RDS
-    saveRDS(
-      list(metric  = metric,
-           L       = L,
-           fit_try = fit_try,
-           error   = err_msg,
-           logs    = log_msg),
-      file = file.path(
-        save_dir,
-        sprintf("refit-%d-%d.rds", sim_idx, seed_idx)
-      )
-    )
-    
-    # return summary
-   return(list(
-      sim_idx      = sim_idx,
-      lambda_alpha = lambda_alpha,
-      lambda_theta = lambda_theta,
-      seed_idx     = seed_idx,
-      L            = L,
-      metric       = metric))
-
-  })
-  parallel::stopCluster(cl)
-  
-   #— Summarize failures —#
-  res &lt;- vapply(res_i, function(x) is.na(as.numeric(x$L)), logical(1))
-
-  res_logs   &lt;- sprintf("Failures: %d/%d (%.1f%%)",
-            sum(res), length(res), 100 * sum(res) / length(res))
-  
-  res_table &lt;- do.call(rbind, lapply(res_i, function(x) as.data.frame(x, stringsAsFactors = FALSE)))
-  
-  # bind into a data.frame
-  return(list(res_logs = res_logs,
-              res_table = res_table))
-}</code></pre>
 <pre class="r"><code>#' @title Internal: run one LCDmix refit (single seed) and cache
 #' @keywords internal
 #' @export
@@ -3597,6 +3151,69 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   return(list(log_msg = log_msg, L = L, fit = fit))
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix multiple times and select the best training fit
+#'
+#' Given optimal penalties from CV, repeatedly refits \code{<a href="create-LCDmix.html#main">main</a>()} on the
+#' full (binned) dataset using different random seeds, records the final
+#' training objective \code{L$loglik} for each repeat, caches results to disk,
+#' and returns logs, per-repeat scores, and the best fit.
+#'
+#' @param Y_bin List of length \eqn{TT}; binned responses for each time point.
+#'   Element \eqn{t} is a numeric vector of length \eqn{n_t}.
+#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
+#' @param bin_mass List of length \eqn{TT}; per-time weights for each bin/observation.
+#' @param K Integer; number of mixture components.
+#' @param opt_lambdas Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
+#'   chosen from cross-validation.
+#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
+#' @param iter_eta Numeric; convergence threshold on relative change in the
+#'   surrogate objective. Default \code{1e-3}.
+#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
+#'   zeroed for stability. Default \code{1e-3}.
+#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
+#'   provide \code{cv_reps} to derive \code{seeds &lt;- 1:cv_reps}. Default \code{NULL}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction passed to
+#'   \code{<a href="create-LCDmix.html#main">main</a>()} for any internal diagnostics (not used in the training
+#'   objective). Default \code{0.01}.
+#' @param save_dir Character; directory to cache per-repeat results as
+#'   \code{"refit_&lt;seed&gt;.rds"}. Default \code{"./result"}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers for
+#'   \pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
+#' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} to print extra diagnostics.
+#'   Default \code{FALSE}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
+#'   \code{NULL}. Default \code{NULL}.
+#'
+#' @details
+#' Each repeat runs a full fit with \code{<a href="create-LCDmix.html#main">main</a>()} and extracts the final training
+#' objective \code{L$loglik}. Results are cached to enable resuming; cached runs
+#' are skipped on subsequent calls. Parallelization uses a socket cluster and is
+#' cleaned up on exit.
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
+#'   \item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
+#'     (\code{L$loglik}) across repeats (one per seed).}
+#'   \item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
+#'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
+#' }
+#'
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
+#'
+#' @examples
+#' \dontrun{
+#' best &lt;- <a href="create-LCDmix.html#refit_lcd">refit_lcd</a>(
+#'   Y_bin        = Y_bin,
+#'   X            = X,
+#'   bin_mass     = bin_mass,
+#'   K            = 2,
+#'   opt_lambdas  = c(1e-3, 1e-3),
+#'   seeds        = 1:5,
+#'   save_dir     = "refits"
+#' )
+#' best$refit_scores
+#' }
+#'
 #' @export
 <span id="refit_lcd">refit_lcd</span> &lt;- function(
   Y_bin, 
@@ -3660,7 +3277,72 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(list(logs = logs, refit_scores = scores, best_fit = res_list[[best_idx]]))
 }</code></pre>
-<pre class="r"><code>#' Refit LCDmix across many simulations (outer-parallel)
+<pre class="r"><code>#' Refit LCDmix per simulation (with best lambdas) and score via \code{mixture_metric}
+#'
+#' @description
+#' For each simulation in \code{best_table}, this function refits the LCD
+#' mixture-of-experts model using the provided optimal penalty pair
+#' \code{(lambda_alpha, lambda_theta)} and multiple random seeds. Each fit is
+#' evaluated with \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()} against the simulation ground truth,
+#' and a per-run result is written to \code{save_dir} as
+#' \code{refit_sim&lt;sim_idx&gt;_seed&lt;seed&gt;.rds}. Results are computed in parallel.
+#'
+#' @param best_table A two- or three-column matrix/data.frame with at least
+#'   columns \code{sim_idx}, \code{lambda_alpha}, \code{lambda_theta}. Typically
+#'   the output of \code{<a href="create-LCDmix.html#summarize_simul_cv">summarize_simul_cv</a>()}.
+#' @param sim_dir Directory containing simulation files named
+#'   \code{"sim_&lt;sim_idx&gt;.rds"} produced by \code{<a href="create-LCDmix.html#simulate_and_save">simulate_and_save</a>()}.
+#' @param save_dir Directory to write per-refit result files
+#'   \code{"refit_sim&lt;sim_idx&gt;_seed&lt;seed&gt;.rds"}.
+#' @param K Integer; number of mixture components.
+#' @param max_iter Integer; maximum EM iterations in \code{<a href="create-LCDmix.html#main">main</a>()}. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance (relative change in Q). Default \code{1e-3}.
+#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed
+#'   for numerical stability. Default \code{1e-3}.
+#' @param refit_seeds Integer vector of RNG seeds for repeated refits per
+#'   simulation. Default \code{1:1}.
+#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
+#'   uses all physical cores minus one. Default \code{"max"}.
+#'
+#' @details
+#' Each job:
+#' \enumerate{
+#'   \item Loads \code{sim_&lt;sim_idx&gt;.rds} (which contains \code{ylist}, \code{X},
+#'         \code{countslist}, \code{prob}, and \code{dens_true}).
+#'   \item Calls \code{<a href="create-LCDmix.html#main">main</a>()} with the best \code{lambda_alpha/theta} and the
+#'         given seed.
+#'   \item Computes the weighted L1 mixture distance via \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()}.
+#'   \item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
+#'         and log/error text.
+#' }
+#'
+#' @return A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
+#' \describe{
+#'   \item{\code{sim_idx}}{Simulation ID.}
+#'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
+#'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
+#'   \item{\code{seed_idx}}{Refit seed.}
+#'   \item{\code{L}}{Final loglikelihood objective value (NA on failure).}
+#'   \item{\code{metric}}{Weighted L1 distance to truth from \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()} (NA on failure).}
+#' }
+#'
+#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
+#'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose 'best_tbl' came from <a href="create-LCDmix.html#summarize_simul_cv">summarize_simul_cv</a>()
+#' out &lt;- <a href="create-LCDmix.html#simul_refit">simul_refit</a>(
+#'   best_table  = best_tbl,
+#'   sim_dir     = "sim_data",
+#'   save_dir    = "cv_saves",
+#'   K           = 2,
+#'   refit_seeds = 1:3,
+#'   n_cores     = "max"
+#' )
+#' head(out)
+#' }
+#'
 #' @export
 <span id="simul_refit">simul_refit</span> &lt;- function(
   sim_files,
