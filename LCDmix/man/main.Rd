@@ -17,7 +17,7 @@ main(
   iter_eta = 0.001,
   resp_threshold = 0.001,
   trim_prob = 0.01,
-  Q_every = FALSE,
+  calc_Q_every = FALSE,
   debug = FALSE,
   maxdev = NULL,
   n_restarts = 1

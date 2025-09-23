@@ -197,6 +197,7 @@ iteration <- function(
       )
       Q_every <- c(Q_every, Q_new)
     }
+    message("✔ Centered the intercepts")
     
     #— M‐step g —#
     g_new <- mstep_estimate_log_concave_densities(
@@ -204,6 +205,7 @@ iteration <- function(
       weights             = weight_new,
       indices             = idx_new
     )
+    message("✔ Updated g")
     
     # Surrogate log‐likelihood
     Q_new    <- compute_surrogate_loglikelihood(
