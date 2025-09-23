@@ -87,9 +87,6 @@ Let's define a function for our R package:
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
-#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
-#' 
 #'
 #' @return A list with components:
 #' \describe{
@@ -131,9 +128,7 @@ main <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   calc_Q_every   = FALSE,
-  debug          = FALSE,
-  maxdev         = NULL,
-  n_restarts     = 1
+  debug          = FALSE
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -154,9 +149,7 @@ main <- function(
     K,
     lambda_alpha,
     lambda_theta,
-    resp_threshold,
-    maxdev,
-    n_restarts
+    resp_threshold
   )
   message("✔ Initialization complete")
   
@@ -339,8 +332,6 @@ binning <- function(
 #' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
 #' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
 #' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.
-#' @param n_restarts Integer; number of random restarts in \code{flowmix::flowmix}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -367,9 +358,7 @@ binning <- function(
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
-#'   resp_threshold = 1e-3,
-#'   maxdev         = NULL,
-#'   n_restarts     = 1
+#'   resp_threshold = 1e-3
 #' )
 #' str(init)
 #' }
@@ -381,9 +370,7 @@ initialize_model <- function(
   K,
   lambda_alpha,
   lambda_theta,
-  resp_threshold,
-  maxdev,
-  n_restarts
+  resp_threshold
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res <- flowmix::flowmix(
@@ -393,8 +380,8 @@ initialize_model <- function(
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
-    maxdev       = maxdev,
-    nrep         = n_restarts
+    maxdev       = NULL,
+    nrep         = 1
   )
   
   message("✔ flowmix initialization complete")
@@ -1177,7 +1164,6 @@ lcd_loglikelihood <- function(
 #' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1207,8 +1193,7 @@ iteration <- function(
   max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
-  debug          = FALSE,
-  maxdev         = NULL
+  debug          = FALSE
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -1303,8 +1288,7 @@ iteration <- function(
       responsibility_mask = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
-      lambda_theta        = lambda_theta,
-      maxdev              = maxdev
+      lambda_theta        = lambda_theta
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
@@ -1657,7 +1641,6 @@ mstep_update_alpha <- function(
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with elements:
 #' \describe{
@@ -1697,8 +1680,7 @@ mstep_update_theta_log_concave <- function(
   responsibility_mask,
   intercepts,
   slopes,
-  lambda_theta,
-  maxdev      = NULL
+  lambda_theta
 ) {
   K <- length(densities)
   theta0_new <- vector("list", K)
@@ -1715,8 +1697,7 @@ mstep_update_theta_log_concave <- function(
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
-      component           = k,
-      maxdev              = maxdev
+      component           = k
     )
     theta0_new[[k]] <- tmp$theta0_k
     theta_new[[k]]  <- tmp$theta_k
@@ -1755,7 +1736,6 @@ mstep_update_theta_log_concave <- function(
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
-#' @param maxdev Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -1774,8 +1754,7 @@ mstep_update_theta_lp <- function(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component,
-  maxdev    = NULL
+  component
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -1849,15 +1828,6 @@ mstep_update_theta_lp <- function(
     }
   }
   const_vec <- c(const_vec, tmp_vec)
-  
-  # Optional max‐deviation constraints
-  if (!is.null(maxdev)) {
-    tmp2   <- cbind(matrix(0, nrow = TT_new, ncol = n + 1), X_new)
-    b1     <- cbind(tmp2, -tmp2)
-    b2     <- cbind(-tmp2, tmp2)
-    const_mat <- rbind(const_mat, b1, b2)
-    const_vec <- c(const_vec, rep(maxdev, 2 * TT_new))
-  }
   
   #–– Debugging: print size and memory usage of constraint matrix ––#
 #  print(dim(const_mat))
@@ -2367,8 +2337,6 @@ make_cv_index_matrix <- function(
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
 #' @param cv_reps Integer; number of repeats, used only when \code{seeds} is \code{NULL}. Default \code{NULL}.
 #' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}. Default \code{20}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for the LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization. Default \code{1}.
 #'
 #' @details
 #' Folds are constructed with \code{flowmix::make_cv_folds()}, preserving temporal blocks.
@@ -2418,9 +2386,7 @@ cv_lcd_parallel <- function(
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 20,
-  maxdev             = NULL,
-  n_restarts         = 1
+  blocksize          = 20
 ) {
   # Ensure output directory exists (nested ok).
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
@@ -2461,7 +2427,7 @@ cv_lcd_parallel <- function(
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "n_restarts", "max_iter", "iter_eta", "maxdev",
+      "Y_bin", "X", "bin_mass", "K", "max_iter", "iter_eta",
       "resp_threshold", "trim_prob", "save_dir", "folds", "index_matrix"
     ),
     envir = environment()
@@ -2522,9 +2488,7 @@ cv_lcd_parallel <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             trim_prob       = trim_prob,
-            debug           = TRUE,
-            maxdev          = maxdev,
-            n_restarts      = n_restarts
+            debug           = TRUE
           ),
           error = function(e) {
             err_msg <<- paste0("▶ Error fitting model: ", e$message)
@@ -2612,7 +2576,7 @@ cv_lcd_parallel <- function(
 #'   alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta
 #' @param Y_bin list of responses; @param X matrix; @param bin_mass list of weights
 #' @param folds list of fold indices as from flowmix::make_cv_folds()
-#' @param K,max_iter,iter_eta,resp_threshold,trim_prob,maxdev,n_restarts standard LCDmix args
+#' @param K,max_iter,iter_eta,resp_threshold,trim_prob standard LCDmix args
 #' @param save_dir directory to write "<alpha>-<theta>-<seed>-<fold>.rds"
 #' @return character (one log line); writes result file as side-effect
 #' @keywords internal
@@ -2629,8 +2593,6 @@ cv_lcd_worker <- function(
   iter_eta, 
   resp_threshold, 
   trim_prob,
-  maxdev, 
-  n_restarts,
   save_dir
 ) {
   alpha_idx     <- job[["alpha_idx"]]
@@ -2682,9 +2644,7 @@ cv_lcd_worker <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE,
-        maxdev          = maxdev,
-        n_restarts      = n_restarts
+        debug           = TRUE
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -2740,6 +2700,9 @@ cv_lcd_worker <- function(
 ```
 
 
+
+
+
 ```{r}
 #' @export
 cv_lcd_parallel2 <- function(
@@ -2758,9 +2721,7 @@ cv_lcd_parallel2 <- function(
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 20,
-  maxdev             = NULL,
-  n_restarts         = 1
+  blocksize          = 20
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -2788,7 +2749,7 @@ cv_lcd_parallel2 <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","maxdev","n_restarts","save_dir","folds","index_matrix"),
+                "trim_prob","save_dir","folds","index_matrix"),
     envir = environment()
   )
 
@@ -2810,8 +2771,6 @@ cv_lcd_parallel2 <- function(
         iter_eta  = iter_eta,
         resp_threshold = resp_threshold,
         trim_prob = trim_prob,
-        maxdev    = maxdev,
-        n_restarts= n_restarts,
         save_dir  = save_dir
       )
     }
@@ -2859,9 +2818,6 @@ cv_lcd_parallel2 <- function(
 #'   \code{evaluate_lcd_model()}. Default \code{0.01}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for the
-#'   LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization. Default \code{1}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
 #'   are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single
@@ -2927,8 +2883,6 @@ run_cv_simul2 <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   blocksize      = 20,
-  maxdev         = NULL,
-  n_restarts     = 1,
   save_dir       = "./result",
   n_cores        = "max",
   chunk_size     = 25
@@ -2985,7 +2939,7 @@ run_cv_simul2 <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","maxdev","n_restarts"),
+                "trim_prob","save_dir"),
     envir = environment()
   )
 
@@ -3020,8 +2974,6 @@ run_cv_simul2 <- function(
         iter_eta   = iter_eta,
         resp_threshold = resp_threshold,
         trim_prob  = trim_prob,
-        maxdev     = maxdev,
-        n_restarts = n_restarts,
         save_dir   = sim_dir
       )
     }
@@ -3242,10 +3194,6 @@ LCD_cv_summary_all <- function(base_dir, S) {
 #'   Default \code{FALSE}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default \code{NULL}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for
-#'   the LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization per fit.
-#'   Default \code{1}.
 #'
 #' @details
 #' Each repeat runs a full fit with \code{main()} and extracts the final training
@@ -3293,9 +3241,7 @@ refit_lcd <- function(
   save_dir       = "./result",
   n_cores        = "max",
   debug          = FALSE,
-  cv_reps        = NULL,
-  maxdev         = NULL,
-  n_restarts     = 1
+  cv_reps        = NULL
 ) {
   # Unpack optimal penalties
   lambda_alpha <- opt_lambdas[1]
@@ -3321,8 +3267,8 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "n_restarts",
-      "max_iter", "iter_eta", "maxdev", "resp_threshold", "trim_prob", "save_dir", "debug"
+      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", 
+      "max_iter", "iter_eta", "resp_threshold", "trim_prob", "save_dir", "debug"
     ),
     envir = environment()
   )
@@ -3361,8 +3307,6 @@ refit_lcd <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             trim_prob       = trim_prob,
-            maxdev          = maxdev,
-            n_restarts      = n_restarts,
             debug           = debug
           ),
           error = function(e) {
@@ -3964,10 +3908,6 @@ simul_idx_matrix <- function(
 #'   uses all physical cores minus one. Default: \code{"max"}.
 #' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
 #'   Default: 20.
-#' @param maxdev Numeric or \code{NULL}; max-deviation constraint for LP updates
-#'   in theta-step. Default: \code{NULL}.
-#' @param n_restarts Integer; number of random restarts for initialization in \code{main()}.
-#'   Default: 1.
 #'
 #' @return A character vector of per-job log messages, followed by a summary line
 #'   reporting the number and fraction of failures (jobs where fitting or evaluation failed).
@@ -4005,9 +3945,7 @@ run_cv_simul <- function(
   trim_prob          = 0.01,
   save_dir           = "cv_saves",
   n_cores            = "max",
-  blocksize          = 20,
-  maxdev             = NULL,
-  n_restarts         = 1
+  blocksize          = 20
 ) {
   # ensure output folder
   if (!dir.exists(save_dir)) dir.create(save_dir)
@@ -4019,7 +3957,7 @@ run_cv_simul <- function(
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", "maxdev", 
+    varlist = c("simul_idx_mat", "sim_dir", "K", "iter_eta",  
                 "resp_threshold", "trim_prob", "nfold", "blocksize", "save_dir", "max_iter"),
     envir   = environment()
   )
@@ -4100,9 +4038,7 @@ run_cv_simul <- function(
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
           trim_prob       = trim_prob,
-          debug           = TRUE,
-          maxdev          = maxdev,
-          n_restarts      = n_restarts
+          debug           = TRUE
         )
       }, error = function(e) {
         err_msg <<- paste0("Error fitting sim=", sim_idx,

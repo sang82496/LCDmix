@@ -32,10 +32,6 @@
 #'   Default \code{FALSE}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default \code{NULL}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for
-#'   the LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization per fit.
-#'   Default \code{1}.
 #'
 #' @details
 #' Each repeat runs a full fit with \code{main()} and extracts the final training
@@ -83,9 +79,7 @@ refit_lcd <- function(
   save_dir       = "./result",
   n_cores        = "max",
   debug          = FALSE,
-  cv_reps        = NULL,
-  maxdev         = NULL,
-  n_restarts     = 1
+  cv_reps        = NULL
 ) {
   # Unpack optimal penalties
   lambda_alpha <- opt_lambdas[1]
@@ -111,8 +105,8 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", "n_restarts",
-      "max_iter", "iter_eta", "maxdev", "resp_threshold", "trim_prob", "save_dir", "debug"
+      "Y_bin", "X", "bin_mass", "K", "lambda_alpha", "lambda_theta", 
+      "max_iter", "iter_eta", "resp_threshold", "trim_prob", "save_dir", "debug"
     ),
     envir = environment()
   )
@@ -151,8 +145,6 @@ refit_lcd <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             trim_prob       = trim_prob,
-            maxdev          = maxdev,
-            n_restarts      = n_restarts,
             debug           = debug
           ),
           error = function(e) {

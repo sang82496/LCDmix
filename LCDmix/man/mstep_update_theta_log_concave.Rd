@@ -13,8 +13,7 @@ mstep_update_theta_log_concave(
   responsibility_mask,
   intercepts,
   slopes,
-  lambda_theta,
-  maxdev = NULL
+  lambda_theta
 )
 }
 \arguments{
@@ -35,8 +34,6 @@ mstep_update_theta_log_concave(
 \item{slopes}{A list of length \code{K} of current slope vectors \(\theta_k\).}
 
 \item{lambda_theta}{Nonnegative numeric L1 penalty on slopes.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.}
 }
 \value{
 A list with elements:

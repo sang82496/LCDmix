@@ -18,8 +18,6 @@
 #' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
 #' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
 #' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix}.
-#' @param n_restarts Integer; number of random restarts in \code{flowmix::flowmix}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -46,9 +44,7 @@
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
-#'   resp_threshold = 1e-3,
-#'   maxdev         = NULL,
-#'   n_restarts     = 1
+#'   resp_threshold = 1e-3
 #' )
 #' str(init)
 #' }
@@ -60,9 +56,7 @@ initialize_model <- function(
   K,
   lambda_alpha,
   lambda_theta,
-  resp_threshold,
-  maxdev,
-  n_restarts
+  resp_threshold
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res <- flowmix::flowmix(
@@ -72,8 +66,8 @@ initialize_model <- function(
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
-    maxdev       = maxdev,
-    nrep         = n_restarts
+    maxdev       = NULL,
+    nrep         = 1
   )
   
   message("✔ flowmix initialization complete")

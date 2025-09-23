@@ -30,9 +30,6 @@
 #'   \code{evaluate_lcd_model()}. Default \code{0.01}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for the
-#'   LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization. Default \code{1}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
 #'   are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single
@@ -98,8 +95,6 @@ run_cv_simul2 <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   blocksize      = 20,
-  maxdev         = NULL,
-  n_restarts     = 1,
   save_dir       = "./result",
   n_cores        = "max",
   chunk_size     = 25
@@ -156,7 +151,7 @@ run_cv_simul2 <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","maxdev","n_restarts"),
+                "trim_prob","save_dir"),
     envir = environment()
   )
 
@@ -191,8 +186,6 @@ run_cv_simul2 <- function(
         iter_eta   = iter_eta,
         resp_threshold = resp_threshold,
         trim_prob  = trim_prob,
-        maxdev     = maxdev,
-        n_restarts = n_restarts,
         save_dir   = sim_dir
       )
     }

@@ -24,8 +24,6 @@
 #' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
 #' @param cv_reps Integer; number of repeats, used only when \code{seeds} is \code{NULL}. Default \code{NULL}.
 #' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}. Default \code{20}.
-#' @param maxdev Numeric or \code{NULL}; optional max-deviation constraint for the LP theta-step. Default \code{NULL}.
-#' @param n_restarts Integer; random restarts for initialization. Default \code{1}.
 #'
 #' @details
 #' Folds are constructed with \code{flowmix::make_cv_folds()}, preserving temporal blocks.
@@ -75,9 +73,7 @@ cv_lcd_parallel <- function(
   save_dir           = "./result",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 20,
-  maxdev             = NULL,
-  n_restarts         = 1
+  blocksize          = 20
 ) {
   # Ensure output directory exists (nested ok).
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
@@ -118,7 +114,7 @@ cv_lcd_parallel <- function(
   parallel::clusterExport(
     cl,
     varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "n_restarts", "max_iter", "iter_eta", "maxdev",
+      "Y_bin", "X", "bin_mass", "K", "max_iter", "iter_eta",
       "resp_threshold", "trim_prob", "save_dir", "folds", "index_matrix"
     ),
     envir = environment()
@@ -179,9 +175,7 @@ cv_lcd_parallel <- function(
             iter_eta        = iter_eta,
             resp_threshold  = resp_threshold,
             trim_prob       = trim_prob,
-            debug           = TRUE,
-            maxdev          = maxdev,
-            n_restarts      = n_restarts
+            debug           = TRUE
           ),
           error = function(e) {
             err_msg <<- paste0("▶ Error fitting model: ", e$message)

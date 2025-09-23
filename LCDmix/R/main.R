@@ -19,9 +19,6 @@
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; maximum deviance threshold for \code{flowmix::flowmix()}. Default: \code{NULL}.
-#' @param n_restarts Integer number of random restarts in \code{flowmix::flowmix()}. Default: \code{1}.
-#' 
 #'
 #' @return A list with components:
 #' \describe{
@@ -63,9 +60,7 @@ main <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   calc_Q_every   = FALSE,
-  debug          = FALSE,
-  maxdev         = NULL,
-  n_restarts     = 1
+  debug          = FALSE
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -86,9 +81,7 @@ main <- function(
     K,
     lambda_alpha,
     lambda_theta,
-    resp_threshold,
-    maxdev,
-    n_restarts
+    resp_threshold
   )
   message("✔ Initialization complete")
   

@@ -33,10 +33,6 @@
 #'   uses all physical cores minus one. Default: \code{"max"}.
 #' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
 #'   Default: 20.
-#' @param maxdev Numeric or \code{NULL}; max-deviation constraint for LP updates
-#'   in theta-step. Default: \code{NULL}.
-#' @param n_restarts Integer; number of random restarts for initialization in \code{main()}.
-#'   Default: 1.
 #'
 #' @return A character vector of per-job log messages, followed by a summary line
 #'   reporting the number and fraction of failures (jobs where fitting or evaluation failed).
@@ -74,9 +70,7 @@ run_cv_simul <- function(
   trim_prob          = 0.01,
   save_dir           = "cv_saves",
   n_cores            = "max",
-  blocksize          = 20,
-  maxdev             = NULL,
-  n_restarts         = 1
+  blocksize          = 20
 ) {
   # ensure output folder
   if (!dir.exists(save_dir)) dir.create(save_dir)
@@ -88,7 +82,7 @@ run_cv_simul <- function(
   parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("simul_idx_mat", "sim_dir", "K", "n_restarts", "iter_eta", "maxdev", 
+    varlist = c("simul_idx_mat", "sim_dir", "K", "iter_eta",  
                 "resp_threshold", "trim_prob", "nfold", "blocksize", "save_dir", "max_iter"),
     envir   = environment()
   )
@@ -169,9 +163,7 @@ run_cv_simul <- function(
           iter_eta        = iter_eta,
           resp_threshold  = resp_threshold,
           trim_prob       = trim_prob,
-          debug           = TRUE,
-          maxdev          = maxdev,
-          n_restarts      = n_restarts
+          debug           = TRUE
         )
       }, error = function(e) {
         err_msg <<- paste0("Error fitting sim=", sim_idx,

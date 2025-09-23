@@ -18,9 +18,7 @@ refit_lcd(
   save_dir = "./result",
   n_cores = "max",
   debug = FALSE,
-  cv_reps = NULL,
-  maxdev = NULL,
-  n_restarts = 1
+  cv_reps = NULL
 )
 }
 \arguments{
@@ -62,12 +60,6 @@ Default \code{FALSE}.}
 
 \item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
 \code{NULL}. Default \code{NULL}.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional max-deviation constraint for
-the LP theta-step. Default \code{NULL}.}
-
-\item{n_restarts}{Integer; random restarts for initialization per fit.
-Default \code{1}.}
 }
 \value{
 A list with:

@@ -16,7 +16,6 @@
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with elements:
 #' \describe{
@@ -56,8 +55,7 @@ mstep_update_theta_log_concave <- function(
   responsibility_mask,
   intercepts,
   slopes,
-  lambda_theta,
-  maxdev      = NULL
+  lambda_theta
 ) {
   K <- length(densities)
   theta0_new <- vector("list", K)
@@ -74,8 +72,7 @@ mstep_update_theta_log_concave <- function(
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
-      component           = k,
-      maxdev              = maxdev
+      component           = k
     )
     theta0_new[[k]] <- tmp$theta0_k
     theta_new[[k]]  <- tmp$theta_k

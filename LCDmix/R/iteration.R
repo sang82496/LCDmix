@@ -22,7 +22,6 @@
 #' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
 #' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
-#' @param maxdev Numeric or \code{NULL}; optional max‐deviation constraint. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -52,8 +51,7 @@ iteration <- function(
   max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
-  debug          = FALSE,
-  maxdev         = NULL
+  debug          = FALSE
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -148,8 +146,7 @@ iteration <- function(
       responsibility_mask = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
-      lambda_theta        = lambda_theta,
-      maxdev              = maxdev
+      lambda_theta        = lambda_theta
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
