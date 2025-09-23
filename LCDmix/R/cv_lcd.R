@@ -14,7 +14,7 @@ cv_lcd <- function(
   nfold              = 5,
   seeds              = NULL,
   trim_prob          = 0.01,
-  save_dir           = "./result",
+  save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
   blocksize          = 20
