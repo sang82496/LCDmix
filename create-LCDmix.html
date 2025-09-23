@@ -3156,9 +3156,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # Grand index with sim_idx + seed offset to decorrelate RNG across sims
   grand_list &lt;- lapply(seq_len(S), function(s) {
     im &lt;- sims[[s]]$index_matrix
-    im2 &lt;- im
-    im2[, "seed_idx"] &lt;- im[, "seed_idx"] + 1000L * s
-    cbind(sim_idx = s, im2)
+    cbind(sim_idx = s, im)
   })
   grand_index &lt;- do.call(rbind, grand_list)
   rownames(grand_index) &lt;- NULL
@@ -3177,7 +3175,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","maxdev","n_restarts","cv_lcd_worker"),
+                "trim_prob","save_dir","maxdev","n_restarts"),
     envir = environment()
   )
 
@@ -3192,7 +3190,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       job &lt;- c(
         alpha_idx    = as.numeric(row[["alpha_idx"]]),
         theta_idx    = as.numeric(row[["theta_idx"]]),
-        seed_idx     = as.numeric(row[["seed_idx"]]),   # already offset
+        seed_idx     = as.numeric(row[["seed_idx"]]),
         fold_idx     = as.numeric(row[["fold_idx"]]),
         lambda_alpha = as.numeric(row[["lambda_alpha"]]),
         lambda_theta = as.numeric(row[["lambda_theta"]])
@@ -3379,10 +3377,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <pre class="r"><code>#' @export
 <span id="LCD_cv_summary_all">LCD_cv_summary_all</span> &lt;- function(base_dir, S) {
   out &lt;- vector("list", S)
+  
   for (s in seq_len(S)) {
     sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
-    load(file.path(sim_dir, "index_matrix.Rdata"))  # loads index_matrix
-    out[[s]] &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(index_matrix, save_dir = sim_dir, simul = FALSE)
+    idx &lt;- readRDS(file.path(sim_dir, "index_matrix.rds"))
+    out[[s]] &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(idx, save_dir = sim_dir, simul = FALSE)
   }
   return(out)
 }</code></pre>
