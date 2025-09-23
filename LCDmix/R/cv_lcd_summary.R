@@ -2,7 +2,7 @@
 
 #' Summarize LCDmix cross-validation runs and choose optimal penalties
 #'
-#' Reads per-run CV results saved by \code{\link{cv_lcd_parallel}} from
+#' Reads per-run CV results saved by \code{\link{cv_lcd}} from
 #' \code{save_dir}, aggregates them into a long CV table, computes a reduced
 #' summary by (\code{alpha_idx}, \code{theta_idx}), and selects the optimal
 #' (\code{lambda_alpha}, \code{lambda_theta}) by maximizing the mean
@@ -41,23 +41,21 @@
 #'   \item{\code{max_inf_prop}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel}}, \code{\link{evaluate_lcd_model}},
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}},
 #'   \code{\link{make_cv_index_matrix}}
 #'
 #' @examples
 #' \dontrun{
-#' # After running cv_lcd_parallel(...):
+#' # After running cv_lcd(...):
 #' load(file.path("cv_runs", "index_matrix.Rdata"))  # loads index_matrix
-#' summ <- LCD_cv_summary(index_matrix, save_dir = "cv_runs")
+#' summ <- cv_lcd_summary(index_matrix, save_dir = "cv_runs")
 #' summ$opt_lambdas
 #' }
 #'
 #' @export
-LCD_cv_summary <- function(
+cv_lcd_summary <- function(
   index_matrix,
-  save_dir = "./result",
-  simul    = FALSE,
-  sim_idx  = NA
+  save_dir = "./cv_saves"
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -65,7 +63,10 @@ LCD_cv_summary <- function(
     index_matrix,
     L              = rep(NA_real_, n_runs),
     prop_inf       = rep(NA_real_, n_runs),
-    trimmed_loglik = rep(NA_real_, n_runs)
+    trimmed_loglik = rep(NA_real_, n_runs),
+    finite_loglik  = rep(NA_real_, n_runs),
+    theta_spars    = rep(NA_real_, n_runs),
+    alpha_spars    = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
@@ -76,17 +77,10 @@ LCD_cv_summary <- function(
     seed_idx   <- index_matrix[i, "seed_idx"]
     fold_idx   <- index_matrix[i, "fold_idx"]
     
-    if (!simul){
-      file_name  <- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d.rds",
-              alpha_idx, theta_idx, seed_idx, fold_idx))
-      } else {
-      file_name  <- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d-%d.rds",
-              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx))
-    }
+    file_name  <- file.path(
+    save_dir,
+    sprintf("%d-%d-%d-%d.rds",
+            alpha_idx, theta_idx, seed_idx, fold_idx))
     
     # skip runs whose file never got written
     if (!file.exists(file_name)) {
@@ -95,15 +89,18 @@ LCD_cv_summary <- function(
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "L"]          <- mat$L
-    CVmat[i, "prop_inf"]    <- mat$prop_inf
+    CVmat[i, "L"]              <- mat$L
+    CVmat[i, "prop_inf"]       <- mat$prop_inf
     CVmat[i, "trimmed_loglik"] <- mat$trimmed_loglik
+    CVmat[i, "finite_loglik"]  <- mat$finite_loglik
+    CVmat[i, "theta_spars"]    <- mat$theta_spars
+    CVmat[i, "alpha_spars"]    <- mat$alpha_spars
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest L
   # Order so that within each (alpha,theta,fold) the first row has max L (NAs go last)
   ord <- with(CVmat,
-    order(alpha_idx, theta_idx, fold_idx, -L, na.last = TRUE)  # NA Q go last
+    order(alpha_idx, theta_idx, fold_idx, -L, na.last = TRUE)  # NAs go last
   )
   selected <- CVmat[ord, ]
   selected <- selected[!duplicated(selected[c("alpha_idx","theta_idx","fold_idx")]), ]
@@ -136,14 +133,13 @@ LCD_cv_summary <- function(
   reduced_mat <- merge(unique_lams, best_by_combo, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat <- merge(reduced_mat, counts_df, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat <- reduced_mat[order(reduced_mat$alpha_idx, reduced_mat$theta_idx), ]
-  
+
   ## 9) Pick optimal lambdas
   score_vec <- reduced_mat$cv_score
-  score_vec[is.na(score_vec)] <- -Inf
+  score_vec[!is.finite(score_vec)] <- -Inf   # handles NA and NaN
   opt_row <- which.max(score_vec)
   opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha", "lambda_theta")])
 
-  
   return(list(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),

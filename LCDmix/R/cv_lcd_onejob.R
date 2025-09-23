@@ -13,7 +13,7 @@
 #' @keywords internal
 #' 
 #' @export
-cv_lcd_worker <- function(
+cv_lcd_onejob <- function(
   job,
   Y_bin, 
   X, 
@@ -24,7 +24,8 @@ cv_lcd_worker <- function(
   iter_eta, 
   resp_threshold, 
   trim_prob,
-  save_dir
+  save_dir,
+  sparsity_eps = 1e-6
 ) {
   alpha_idx     <- job[["alpha_idx"]]
   theta_idx     <- job[["theta_idx"]]
@@ -92,6 +93,8 @@ cv_lcd_worker <- function(
         trimmed_loglik = NA_real_,
         finite_loglik  = NA_real_,
         L              = NA_real_,
+        theta_spars    = NA_real_,
+        alpha_spars    = NA_real_,
         log_msg        = log_msg
       ),
       file = out_path
@@ -112,6 +115,15 @@ cv_lcd_worker <- function(
   trimmed_loglik <- eval_res$trimmed_loglik
   finite_loglik  <- eval_res$finite_loglik
   L              <- fit_try$L$loglik
+  
+  # Coefficient sparsity
+  # θ: use all components (including the first); bind to p × K
+  theta_mat   <- do.call(cbind, fit_try$iter$theta_new)
+  theta_spars <- mean(abs(as.numeric(theta_mat)) < sparsity_eps, na.rm = TRUE)
+
+  # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
+  alpha_core  <- fit_try$iter$alpha_new[-1, -1, drop = FALSE]
+  alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
 
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))
 
@@ -121,6 +133,8 @@ cv_lcd_worker <- function(
       trimmed_loglik = trimmed_loglik,
       finite_loglik  = finite_loglik,
       L              = L,
+      theta_spars    = theta_spars,
+      alpha_spars    = alpha_spars,
       log_msg        = log_msg
     ),
     file = out_path

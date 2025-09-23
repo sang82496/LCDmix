@@ -99,5 +99,5 @@ best$refit_scores
 
 }
 \seealso{
-\code{\link{cv_lcd_parallel}}, \code{\link{evaluate_lcd_model}}
+\code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
 }

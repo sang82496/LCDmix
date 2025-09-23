@@ -49,7 +49,7 @@
 #'   \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
 #' }
 #'
-#' @seealso \code{\link{simulate_and_save}}, \code{\link{run_cv_simul}},
+#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
 #'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
 #'
 #' @examples

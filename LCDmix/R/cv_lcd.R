@@ -1,7 +1,7 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
 #' @export
-cv_lcd_parallel2 <- function(
+cv_lcd <- function(
   Y_bin,
   X,
   bin_mass,
@@ -56,7 +56,7 @@ cv_lcd_parallel2 <- function(
       job <- index_matrix[ii, , drop = FALSE][1, ]
       # ensure names present for worker
       job <- setNames(as.numeric(job), colnames(index_matrix))
-      cv_lcd_worker(
+      cv_lcd_onejob(
         job       = job,
         Y_bin     = Y_bin,
         X         = X,
