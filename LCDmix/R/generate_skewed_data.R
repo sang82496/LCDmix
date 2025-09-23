@@ -236,7 +236,7 @@ generate_skewed_data <- function(
   return(list(
     Y_bin       = ylist,
     X           = X,
-    biomass     = countslist,
+    bin_mass    = countslist,
     mnmat       = mnmat,
     prob        = pi_mat,        # TT × K matrix of true π
     dens_true   = dens_true,     # list of length TT, each n_t × K densities
