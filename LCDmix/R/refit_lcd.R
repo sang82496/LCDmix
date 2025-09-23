@@ -48,7 +48,7 @@
 #'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel}}, \code{\link{evaluate_lcd_model}}
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
 #'
 #' @examples
 #' \dontrun{

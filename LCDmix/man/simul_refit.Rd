@@ -90,6 +90,6 @@ head(out)
 
 }
 \seealso{
-\code{\link{simulate_and_save}}, \code{\link{run_cv_simul}},
+\code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
 \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
 }

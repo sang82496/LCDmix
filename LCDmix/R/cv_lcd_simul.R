@@ -43,7 +43,7 @@
 #' job seeds are offset by the simulation index (\code{seed_idx + 1000 * sim_idx})
 #' before fitting. Each per-job RDS file contains:
 #' \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
-#' and \code{log_msg}. After completion, run \code{\link{LCD_cv_summary}} on each
+#' and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
 #' simulation's subdirectory to obtain per-sim CV scores and optimal penalties.
 #'
 #' @return A list with:
@@ -52,7 +52,7 @@
 #'   \item{\code{logs}}{Character vector of per-chunk log strings.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel2}}, \code{\link{LCD_cv_summary}},
+#' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
 #'   \code{\link{evaluate_lcd_model}}, \code{\link[flowmix]{make_cv_folds}}
 #'
 #' @examples
@@ -60,7 +60,7 @@
 #' # 25 simulations, 5x5 lambda grid, 10 repeats, 5 folds (31,250 jobs total):
 #' sims <- sprintf("sim_data_%02d.rds", 1:25)
 #'
-#' res <- run_cv_simul2(
+#' res <- cv_lcd_simul(
 #'   sim_files     = sims,
 #'   K             = 2,
 #'   alpha_lambdas = 10^seq(-4, -2, length.out = 5),
@@ -76,13 +76,13 @@
 #' for (s in seq_along(sims)) {
 #'   sim_dir <- file.path("cv_runs", sprintf("sim_%d", s))
 #'   load(file.path(sim_dir, "index_matrix.Rdata"))  # loads index_matrix
-#'   summ <- LCD_cv_summary(index_matrix, save_dir = sim_dir)
+#'   summ <- cv_lcd_summary(index_matrix, save_dir = sim_dir)
 #'   print(list(sim = s, opt = summ$opt_lambdas, cv_score = max(summ$reduced_mat[, "cv_score"], na.rm = TRUE)))
 #' }
 #' }
 #'
 #' @export
-run_cv_simul2 <- function(
+cv_lcd_simul <- function(
   sim_files,
   K,
   alpha_lambdas,
@@ -95,23 +95,23 @@ run_cv_simul2 <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   blocksize      = 20,
-  save_dir       = "./result",
+  base_dir       = "./cv_saves",
   n_cores        = "max",
   chunk_size     = 25
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
+  if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
 
-  S <- length(sim_files)
-  sims <- vector("list", S)
+  num_sims <- length(sim_files)
+  sims <- vector("list", num_sims)
 
   # Load sims + build per-sim folds and index matrices
-  for (s in seq_len(S)) {
+  for (s in seq_len(num_sims)) {
     env <- new.env(parent = emptyenv())
     f <- sim_files[s]
     if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj <- readRDS(f); if (is.list(obj)) list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
+      obj <- readRDS(f); if (is.list(obj)) base::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
     } else {
       load(f, envir = env)
     }
@@ -123,14 +123,14 @@ run_cv_simul2 <- function(
       theta_lambdas  = sort(theta_lambdas)
     )
     # Persist per-sim index for later summary
-    sim_dir <- file.path(save_dir, sprintf("sim_%d", s))
+    sim_dir <- file.path(base_dir, sprintf("sim_%d", s))
     if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
     saveRDS(env$index_matrix, file = file.path(sim_dir, "index_matrix.rds"))
     sims[[s]] <- env
   }
 
-  # Grand index with sim_idx + seed offset to decorrelate RNG across sims
-  grand_list <- lapply(seq_len(S), function(s) {
+  # Grand index with sim_idx + seed
+  grand_list <- lapply(seq_len(num_sims), function(s) {
     im <- sims[[s]]$index_matrix
     cbind(sim_idx = s, im)
   })
@@ -151,7 +151,7 @@ run_cv_simul2 <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir"),
+                "trim_prob","base_dir"),
     envir = environment()
   )
 
@@ -171,11 +171,11 @@ run_cv_simul2 <- function(
         lambda_alpha = as.numeric(row[["lambda_alpha"]]),
         lambda_theta = as.numeric(row[["lambda_theta"]])
       )
-
+      
       env      <- sims[[s]]
-      sim_dir  <- file.path(save_dir, sprintf("sim_%d", s))
+      sim_dir  <- file.path(base_dir, sprintf("sim_%d", s))
 
-      out[i] <- cv_lcd_worker(
+      out[i] <- cv_lcd_onejob(
         job        = job,
         Y_bin      = env$Y_bin,
         X          = env$X,

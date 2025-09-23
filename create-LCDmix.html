@@ -2519,254 +2519,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   )
   return(iimat)
 }</code></pre>
-<pre class="r"><code>#' Cross-validate LCDmix over a penalty grid (parallel)
-#'
-#' Runs grid-search cross-validation across \code{alpha_lambdas} × \code{theta_lambdas}.
-#' For each (\code{lambda_alpha}, \code{lambda_theta}) × (seed, fold), fits the training split
-#' with \code{<a href="create-LCDmix.html#main">main</a>()} and evaluates the held-out split via \code{<a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>()},
-#' saving per-run results to disk. Existing result files are skipped on re-runs.
-#'
-#' @param Y_bin List of length \eqn{TT}; element \eqn{t} is a numeric vector of length \eqn{n_t}
-#'   containing binned responses at time \eqn{t}.
-#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#' @param bin_mass List of length \eqn{TT}; per-time weights for each observation/bin.
-#' @param K Integer; number of mixture components.
-#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values. Default \code{c(1e-4, 1e-3)}.
-#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values. Default \code{c(1e-4, 1e-3)}.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
-#' @param iter_eta Numeric; convergence threshold on relative change in the surrogate objective. Default \code{1e-3}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are zeroed. Default \code{1e-3}.
-#' @param nfold Integer; number of CV folds. Default \code{5}.
-#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL}, use \code{cv_reps}. Default \code{NULL}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside \code{<a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>()}. Default \code{0.01}.
-#' @param save_dir Character; directory for outputs (\code{index_matrix.Rdata} and per-run \code{*.rds}). Default \code{"./result"}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param cv_reps Integer; number of repeats, used only when \code{seeds} is \code{NULL}. Default \code{NULL}.
-#' @param blocksize Integer; block size passed to \code{flowmix::make_cv_folds()}. Default \code{20}.
-#'
-#' @details
-#' Folds are constructed with \code{flowmix::make_cv_folds()}, preserving temporal blocks.
-#' Each worker loads \pkg{flowmix} and \pkg{LCDmix}. Results are cached per setting in
-#' files named \code{"&lt;alpha_idx&gt;-&lt;theta_idx&gt;-&lt;seed_idx&gt;-&lt;fold_idx&gt;.rds"} under \code{save_dir}.
-#'
-#' @return A list with:
-#' \describe{
-#'   \item{\code{logs}}{Character vector of per-run logs plus a final failure summary line.}
-#'   \item{\code{index_matrix}}{Numeric matrix with columns \code{alpha_idx}, \code{theta_idx},
-#'         \code{seed_idx}, \code{fold_idx}, \code{lambda_alpha}, \code{lambda_theta}.}
-#' }
-#'
-#' @seealso \code{\link{make_cv_index_matrix}}, \code{\link{evaluate_lcd_model}},
-#'   \code{\link[flowmix]{make_cv_folds}}
-#'
-#' @examples
-#' \dontrun{
-#' out &lt;- <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(
-#'   Y_bin          = Y_bin,
-#'   X              = X,
-#'   bin_mass       = bin_mass,
-#'   K              = 2,
-#'   alpha_lambdas  = 10^seq(-4, -2, length.out = 3),
-#'   theta_lambdas  = 10^seq(-4, -2, length.out = 3),
-#'   nfold          = 5,
-#'   seeds          = 1:3,
-#'   save_dir       = "cv_runs"
-#' )
-#' str(out$index_matrix)
-#' }
-#'
-#' @export
-<span id="cv_lcd_parallel">cv_lcd_parallel</span> &lt;- function(
-  Y_bin,
-  X,
-  bin_mass,
-  K,
-  alpha_lambdas      = c(1e-4, 1e-3),
-  theta_lambdas      = c(1e-4, 1e-3),
-  max_iter           = 30,
-  iter_eta           = 1e-3,
-  resp_threshold     = 1e-3,
-  nfold              = 5,
-  seeds              = NULL,
-  trim_prob          = 0.01,
-  save_dir           = "./result",
-  n_cores            = "max",
-  cv_reps            = NULL,
-  blocksize          = 20
-) {
-  # Ensure output directory exists (nested ok).
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  # Sort penalties for reproducible ordering in filenames/logs.
-  alpha_lambdas &lt;- sort(alpha_lambdas)
-  theta_lambdas &lt;- sort(theta_lambdas)
-
-  # — Create CV folds —
-  folds &lt;- flowmix::make_cv_folds(
-    ylist     = Y_bin,
-    nfold     = nfold,
-    blocksize = blocksize
-  )
-
-  # — Build index matrix of all (fold × rep × penalties) combos —
-  if (is.null(seeds) &amp;&amp; is.null(cv_reps)) {
-    stop("`seeds` and `cv_reps` cannot be both NULL")
-  }
-  if (is.null(seeds)) {
-    seeds &lt;- seq_len(cv_reps)
-  }
-  index_matrix &lt;- <a href="create-LCDmix.html#make_cv_index_matrix">make_cv_index_matrix</a>(
-    nfold          = nfold,
-    seeds          = seeds,
-    alpha_lambdas  = alpha_lambdas,
-    theta_lambdas  = theta_lambdas
-  )
-
-  save(index_matrix, file = file.path(save_dir, "index_matrix.Rdata"))
-
-  # — Launch parallel cluster —
-  n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl &lt;- parallel::makeCluster(n_workers)
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
-
-  parallel::clusterEvalQ(cl, { library(flowmix); library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c(
-      "Y_bin", "X", "bin_mass", "K", "max_iter", "iter_eta",
-      "resp_threshold", "trim_prob", "save_dir", "folds", "index_matrix"
-    ),
-    envir = environment()
-  )
-
-  # — Run CV in parallel —
-  logs &lt;- parallel::parLapply(
-    cl,
-    seq_len(nrow(index_matrix)),
-    function(ii) {
-      # Extract combination parameters
-      alpha_idx     &lt;- index_matrix[ii, "alpha_idx"]
-      theta_idx     &lt;- index_matrix[ii, "theta_idx"]
-      seed_idx      &lt;- index_matrix[ii, "seed_idx"]
-      fold_idx      &lt;- index_matrix[ii, "fold_idx"]
-      lambda_alpha  &lt;- index_matrix[ii, "lambda_alpha"]
-      lambda_theta  &lt;- index_matrix[ii, "lambda_theta"]
-
-      out_path &lt;- file.path(
-        save_dir,
-        sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
-      )
-      if (file.exists(out_path)) {
-        return(paste0("Skipping existing: alpha=", lambda_alpha,
-                      ", theta=", lambda_theta,
-                      ", seed=",  seed_idx,
-                      ", fold=",  fold_idx))
-      }
-
-      log_msg &lt;- paste0(
-        "alpha=", lambda_alpha,
-        ", theta=", lambda_theta,
-        ", seed=", seed_idx,
-        ", fold=", fold_idx, "\n"
-      )
-
-      # Split train/test
-      test_i      &lt;- folds[[fold_idx]]
-      Y_tr        &lt;- Y_bin[-test_i]
-      bin_mass_tr &lt;- bin_mass[-test_i]
-      X_tr        &lt;- X[-test_i, , drop = FALSE]
-
-      # Fit model
-      set.seed(seed_idx)
-      err_msg &lt;- NULL
-      out_log &lt;- capture.output(
-        res_ii &lt;- tryCatch(
-          <a href="create-LCDmix.html#main">main</a>(
-            Y               = Y_tr,
-            X               = X_tr,
-            biomass         = bin_mass_tr,
-            binned          = TRUE,
-            n_bins          = 0,
-            K               = K,
-            lambda_alpha    = lambda_alpha,
-            lambda_theta    = lambda_theta,
-            max_iter        = max_iter,
-            iter_eta        = iter_eta,
-            resp_threshold  = resp_threshold,
-            trim_prob       = trim_prob,
-            debug           = TRUE
-          ),
-          error = function(e) {
-            err_msg &lt;&lt;- paste0("▶ Error fitting model: ", e$message)
-            NULL
-          }
-        ),
-        type = "output"
-      )
-
-      # Append captured logs
-      log_msg &lt;- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
-
-      if (!is.list(res_ii)) {
-        log_msg       &lt;- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
-        prop_inf      &lt;- NA_real_
-        trimmed_loglik&lt;- NA_real_
-        finite_loglik &lt;- NA_real_
-        L             &lt;- NA_real_
-
-      } else if (is.null(res_ii$iter)) {
-        log_msg       &lt;- paste0(log_msg, "Error at EM iteration ",
-                                res_ii$iter_partial$failed_iter, ": ",
-                                res_ii$iter_partial$error, "\n")
-        prop_inf      &lt;- NA_real_
-        trimmed_loglik&lt;- NA_real_
-        finite_loglik &lt;- NA_real_
-        L             &lt;- NA_real_
-
-      } else {
-        log_msg &lt;- paste0(log_msg, "Fit succeeded\n")
-
-        eval_res &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
-          model        = res_ii$iter,
-          Y_test       = Y_bin[test_i],
-          X_test       = X[test_i, , drop = FALSE],
-          biomass_test = bin_mass[test_i],
-          trim_prob    = trim_prob
-        )
-        prop_inf       &lt;- eval_res$prop_inf
-        trimmed_loglik &lt;- eval_res$trimmed_loglik
-        finite_loglik  &lt;- eval_res$finite_loglik
-        L              &lt;- res_ii$L$loglik
-      }
-
-      # Save results
-      saveRDS(
-        list(
-          prop_inf       = prop_inf,
-          trimmed_loglik = trimmed_loglik,
-          finite_loglik  = finite_loglik,
-          L              = L,
-          log_msg        = log_msg
-        ),
-        file = out_path
-      )
-
-      return(log_msg)
-    }
-  )
-
-  # — Summarize failures —
-  num_na &lt;- sum(grepl("Error", logs, fixed = TRUE))
-  logs   &lt;- c(
-    logs,
-    sprintf("Failures: %d/%d (%.1f%%)", num_na, length(logs), 100 * num_na / length(logs))
-  )
-
-  return(list(
-    logs         = logs,
-    index_matrix = index_matrix
-  ))
-}</code></pre>
 <pre class="r"><code>#' @title Internal: run a single CV job (one fold/seed/λ-pair)
 #' @description Executes one CV job: fit on train split, evaluate on hold-out,
 #'   and write a per-job RDS file. Returns a concise log string.
@@ -2780,7 +2532,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @keywords internal
 #' 
 #' @export
-<span id="cv_lcd_worker">cv_lcd_worker</span> &lt;- function(
+<span id="cv_lcd_onejob">cv_lcd_onejob</span> &lt;- function(
   job,
   Y_bin, 
   X, 
@@ -2791,7 +2543,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta, 
   resp_threshold, 
   trim_prob,
-  save_dir
+  save_dir,
+  sparsity_eps = 1e-6
 ) {
   alpha_idx     &lt;- job[["alpha_idx"]]
   theta_idx     &lt;- job[["theta_idx"]]
@@ -2859,6 +2612,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         trimmed_loglik = NA_real_,
         finite_loglik  = NA_real_,
         L              = NA_real_,
+        theta_spars    = NA_real_,
+        alpha_spars    = NA_real_,
         log_msg        = log_msg
       ),
       file = out_path
@@ -2879,6 +2634,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trimmed_loglik &lt;- eval_res$trimmed_loglik
   finite_loglik  &lt;- eval_res$finite_loglik
   L              &lt;- fit_try$L$loglik
+  
+  # Coefficient sparsity
+  # θ: use all components (including the first); bind to p × K
+  theta_mat   &lt;- do.call(cbind, fit_try$iter$theta_new)
+  theta_spars &lt;- mean(abs(as.numeric(theta_mat)) &lt; sparsity_eps, na.rm = TRUE)
+
+  # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
+  alpha_core  &lt;- fit_try$iter$alpha_new[-1, -1, drop = FALSE]
+  alpha_spars &lt;- mean(abs(as.numeric(alpha_core)) &lt; sparsity_eps, na.rm = TRUE)
 
   log_msg &lt;- paste0(log_msg, "✔ Saved: ", basename(out_path))
 
@@ -2888,6 +2652,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       trimmed_loglik = trimmed_loglik,
       finite_loglik  = finite_loglik,
       L              = L,
+      theta_spars    = theta_spars,
+      alpha_spars    = alpha_spars,
       log_msg        = log_msg
     ),
     file = out_path
@@ -2896,7 +2662,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   return(log_msg)
 }</code></pre>
 <pre class="r"><code>#' @export
-<span id="cv_lcd_parallel2">cv_lcd_parallel2</span> &lt;- function(
+<span id="cv_lcd">cv_lcd</span> &lt;- function(
   Y_bin,
   X,
   bin_mass,
@@ -2951,7 +2717,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       job &lt;- index_matrix[ii, , drop = FALSE][1, ]
       # ensure names present for worker
       job &lt;- setNames(as.numeric(job), colnames(index_matrix))
-      <a href="create-LCDmix.html#cv_lcd_worker">cv_lcd_worker</a>(
+      <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
         job       = job,
         Y_bin     = Y_bin,
         X         = X,
@@ -3018,7 +2784,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' job seeds are offset by the simulation index (\code{seed_idx + 1000 * sim_idx})
 #' before fitting. Each per-job RDS file contains:
 #' \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
-#' and \code{log_msg}. After completion, run \code{\link{LCD_cv_summary}} on each
+#' and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
 #' simulation's subdirectory to obtain per-sim CV scores and optimal penalties.
 #'
 #' @return A list with:
@@ -3027,7 +2793,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   \item{\code{logs}}{Character vector of per-chunk log strings.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel2}}, \code{\link{LCD_cv_summary}},
+#' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
 #'   \code{\link{evaluate_lcd_model}}, \code{\link[flowmix]{make_cv_folds}}
 #'
 #' @examples
@@ -3035,7 +2801,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' # 25 simulations, 5x5 lambda grid, 10 repeats, 5 folds (31,250 jobs total):
 #' sims &lt;- sprintf("sim_data_%02d.rds", 1:25)
 #'
-#' res &lt;- <a href="create-LCDmix.html#run_cv_simul2">run_cv_simul2</a>(
+#' res &lt;- <a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>(
 #'   sim_files     = sims,
 #'   K             = 2,
 #'   alpha_lambdas = 10^seq(-4, -2, length.out = 5),
@@ -3051,13 +2817,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' for (s in seq_along(sims)) {
 #'   sim_dir &lt;- file.path("cv_runs", sprintf("sim_%d", s))
 #'   load(file.path(sim_dir, "index_matrix.Rdata"))  # loads index_matrix
-#'   summ &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(index_matrix, save_dir = sim_dir)
+#'   summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(index_matrix, save_dir = sim_dir)
 #'   print(list(sim = s, opt = summ$opt_lambdas, cv_score = max(summ$reduced_mat[, "cv_score"], na.rm = TRUE)))
 #' }
 #' }
 #'
 #' @export
-<span id="run_cv_simul2">run_cv_simul2</span> &lt;- function(
+<span id="cv_lcd_simul">cv_lcd_simul</span> &lt;- function(
   sim_files,
   K,
   alpha_lambdas,
@@ -3070,23 +2836,23 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
   blocksize      = 20,
-  save_dir       = "./result",
+  base_dir       = "./cv_saves",
   n_cores        = "max",
   chunk_size     = 25
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
-  if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
+  if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
 
-  S &lt;- length(sim_files)
-  sims &lt;- vector("list", S)
+  num_sims &lt;- length(sim_files)
+  sims &lt;- vector("list", num_sims)
 
   # Load sims + build per-sim folds and index matrices
-  for (s in seq_len(S)) {
+  for (s in seq_len(num_sims)) {
     env &lt;- new.env(parent = emptyenv())
     f &lt;- sim_files[s]
     if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj &lt;- readRDS(f); if (is.list(obj)) list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
+      obj &lt;- readRDS(f); if (is.list(obj)) base::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
     } else {
       load(f, envir = env)
     }
@@ -3098,14 +2864,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       theta_lambdas  = sort(theta_lambdas)
     )
     # Persist per-sim index for later summary
-    sim_dir &lt;- file.path(save_dir, sprintf("sim_%d", s))
+    sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
     if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
     saveRDS(env$index_matrix, file = file.path(sim_dir, "index_matrix.rds"))
     sims[[s]] &lt;- env
   }
 
-  # Grand index with sim_idx + seed offset to decorrelate RNG across sims
-  grand_list &lt;- lapply(seq_len(S), function(s) {
+  # Grand index with sim_idx + seed
+  grand_list &lt;- lapply(seq_len(num_sims), function(s) {
     im &lt;- sims[[s]]$index_matrix
     cbind(sim_idx = s, im)
   })
@@ -3126,7 +2892,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir"),
+                "trim_prob","base_dir"),
     envir = environment()
   )
 
@@ -3146,11 +2912,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         lambda_alpha = as.numeric(row[["lambda_alpha"]]),
         lambda_theta = as.numeric(row[["lambda_theta"]])
       )
-
+      
       env      &lt;- sims[[s]]
-      sim_dir  &lt;- file.path(save_dir, sprintf("sim_%d", s))
+      sim_dir  &lt;- file.path(base_dir, sprintf("sim_%d", s))
 
-      out[i] &lt;- <a href="create-LCDmix.html#cv_lcd_worker">cv_lcd_worker</a>(
+      out[i] &lt;- <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
         job        = job,
         Y_bin      = env$Y_bin,
         X          = env$X,
@@ -3174,7 +2940,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 }</code></pre>
 <pre class="r"><code>#' Summarize LCDmix cross-validation runs and choose optimal penalties
 #'
-#' Reads per-run CV results saved by \code{\link{cv_lcd_parallel}} from
+#' Reads per-run CV results saved by \code{\link{cv_lcd}} from
 #' \code{save_dir}, aggregates them into a long CV table, computes a reduced
 #' summary by (\code{alpha_idx}, \code{theta_idx}), and selects the optimal
 #' (\code{lambda_alpha}, \code{lambda_theta}) by maximizing the mean
@@ -3213,23 +2979,21 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   \item{\code{max_inf_prop}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel}}, \code{\link{evaluate_lcd_model}},
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}},
 #'   \code{\link{make_cv_index_matrix}}
 #'
 #' @examples
 #' \dontrun{
-#' # After running <a href="create-LCDmix.html#cv_lcd_parallel">cv_lcd_parallel</a>(...):
+#' # After running <a href="create-LCDmix.html#cv_lcd">cv_lcd</a>(...):
 #' load(file.path("cv_runs", "index_matrix.Rdata"))  # loads index_matrix
-#' summ &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(index_matrix, save_dir = "cv_runs")
+#' summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(index_matrix, save_dir = "cv_runs")
 #' summ$opt_lambdas
 #' }
 #'
 #' @export
-<span id="LCD_cv_summary">LCD_cv_summary</span> &lt;- function(
+<span id="cv_lcd_summary">cv_lcd_summary</span> &lt;- function(
   index_matrix,
-  save_dir = "./result",
-  simul    = FALSE,
-  sim_idx  = NA
+  save_dir = "./cv_saves"
 ) {
   n_runs &lt;- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -3237,7 +3001,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     index_matrix,
     L              = rep(NA_real_, n_runs),
     prop_inf       = rep(NA_real_, n_runs),
-    trimmed_loglik = rep(NA_real_, n_runs)
+    trimmed_loglik = rep(NA_real_, n_runs),
+    finite_loglik  = rep(NA_real_, n_runs),
+    theta_spars    = rep(NA_real_, n_runs),
+    alpha_spars    = rep(NA_real_, n_runs)
   )
   CVmat &lt;- as.data.frame(CVmat)
   
@@ -3248,17 +3015,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     seed_idx   &lt;- index_matrix[i, "seed_idx"]
     fold_idx   &lt;- index_matrix[i, "fold_idx"]
     
-    if (!simul){
-      file_name  &lt;- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d.rds",
-              alpha_idx, theta_idx, seed_idx, fold_idx))
-      } else {
-      file_name  &lt;- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d-%d.rds",
-              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx))
-    }
+    file_name  &lt;- file.path(
+    save_dir,
+    sprintf("%d-%d-%d-%d.rds",
+            alpha_idx, theta_idx, seed_idx, fold_idx))
     
     # skip runs whose file never got written
     if (!file.exists(file_name)) {
@@ -3267,15 +3027,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "L"]          &lt;- mat$L
-    CVmat[i, "prop_inf"]    &lt;- mat$prop_inf
+    CVmat[i, "L"]              &lt;- mat$L
+    CVmat[i, "prop_inf"]       &lt;- mat$prop_inf
     CVmat[i, "trimmed_loglik"] &lt;- mat$trimmed_loglik
+    CVmat[i, "finite_loglik"]  &lt;- mat$finite_loglik
+    CVmat[i, "theta_spars"]    &lt;- mat$theta_spars
+    CVmat[i, "alpha_spars"]    &lt;- mat$alpha_spars
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest L
   # Order so that within each (alpha,theta,fold) the first row has max L (NAs go last)
   ord &lt;- with(CVmat,
-    order(alpha_idx, theta_idx, fold_idx, -L, na.last = TRUE)  # NA Q go last
+    order(alpha_idx, theta_idx, fold_idx, -L, na.last = TRUE)  # NAs go last
   )
   selected &lt;- CVmat[ord, ]
   selected &lt;- selected[!duplicated(selected[c("alpha_idx","theta_idx","fold_idx")]), ]
@@ -3308,14 +3071,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   reduced_mat &lt;- merge(unique_lams, best_by_combo, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat &lt;- merge(reduced_mat, counts_df, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat &lt;- reduced_mat[order(reduced_mat$alpha_idx, reduced_mat$theta_idx), ]
-  
+
   ## 9) Pick optimal lambdas
   score_vec &lt;- reduced_mat$cv_score
-  score_vec[is.na(score_vec)] &lt;- -Inf
+  score_vec[!is.finite(score_vec)] &lt;- -Inf   # handles NA and NaN
   opt_row &lt;- which.max(score_vec)
   opt_lambdas &lt;- as.numeric(reduced_mat[opt_row, c("lambda_alpha", "lambda_theta")])
 
-  
   return(list(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
@@ -3324,13 +3086,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   ))
 }</code></pre>
 <pre class="r"><code>#' @export
-<span id="LCD_cv_summary_all">LCD_cv_summary_all</span> &lt;- function(base_dir, S) {
-  out &lt;- vector("list", S)
-  
-  for (s in seq_len(S)) {
+<span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims) {
+  out &lt;- vector("list", num_sims)
+  for (s in seq_len(num_sims)) {
     sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
     idx &lt;- readRDS(file.path(sim_dir, "index_matrix.rds"))
-    out[[s]] &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(idx, save_dir = sim_dir, simul = FALSE)
+    out[[s]] &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx, save_dir = sim_dir)
   }
   return(out)
 }</code></pre>
@@ -3382,7 +3143,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd_parallel}}, \code{\link{evaluate_lcd_model}}
+#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
 #'
 #' @examples
 #' \dontrun{
@@ -3967,314 +3728,21 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   return(combos)
 }</code></pre>
-<pre class="r"><code>#' Build a CV job index matrix across simulations, folds, seeds, and penalties
-#'
-#' @description
-#' Creates the full factorial grid over simulation IDs, CV folds, random seeds,
-#' and the indices of \code{alpha_lambdas} and \code{theta_lambdas}. It also
-#' attaches the actual \code{lambda_alpha} and \code{lambda_theta} values for
-#' each row. Each row corresponds to one cross-validation job.
-#'
-#' @param n_sims Integer number of simulated datasets (files \code{sim_&lt;i&gt;.rds}).
-#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values.
-#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values.
-#' @param seeds Vector of random seeds to use for repeated CV runs.
-#' @param nfold Integer number of CV folds per simulation.
-#'
-#' @return A numeric matrix with columns:
-#' \describe{
-#'   \item{sim_idx}{Simulation index (1..\code{n_sims}).}
-#'   \item{alpha_idx}{Index into \code{alpha_lambdas}.}
-#'   \item{theta_idx}{Index into \code{theta_lambdas}.}
-#'   \item{seed_idx}{Random seed used for that job.}
-#'   \item{fold_idx}{CV fold index (1..\code{nfold}).}
-#'   \item{lambda_alpha}{Actual \code{alpha_lambdas[alpha_idx]}.}
-#'   \item{lambda_theta}{Actual \code{theta_lambdas[theta_idx]}.}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' idx_mat &lt;- <a href="create-LCDmix.html#simul_idx_matrix">simul_idx_matrix</a>(
-#'   n_sims        = 3,
-#'   alpha_lambdas = c(1e-3, 1e-2),
-#'   theta_lambdas = c(1e-3, 1e-2, 1e-1),
-#'   seeds         = 1:2,
-#'   nfold         = 5
-#' )
-#' head(idx_mat)
-#' }
-#'
-#' @export
-<span id="simul_idx_matrix">simul_idx_matrix</span> &lt;- function(
-  n_sims,
-  alpha_lambdas,
-  theta_lambdas,
-  seeds,
-  nfold
-) {
-  grid &lt;- expand.grid(
-    fold_idx   = seq_len(nfold),
-    seed_idx   = seeds,
-    theta_idx  = seq_len(length(theta_lambdas)),
-    alpha_idx  = seq_len(length(alpha_lambdas)),
-    sim_idx    = seq_len(n_sims),
-    stringsAsFactors = FALSE
-  )
-  grid &lt;- grid[, c("sim_idx","alpha_idx","theta_idx","seed_idx","fold_idx")]
-  grid$lambda_alpha &lt;- alpha_lambdas[grid$alpha_idx]
-  grid$lambda_theta &lt;- theta_lambdas[grid$theta_idx]
-  return(as.matrix(grid))
-}</code></pre>
-<pre class="r"><code>#' Run cross-validation jobs across many simulations in parallel
-#'
-#' @description
-#' Executes one CV job per row of \code{simul_idx_mat} in parallel. Each row
-#' identifies a simulation file, a fold, a random seed, and a pair of
-#' penalty indices/values. For each job, the function:
-#' (1) loads the simulation from \code{sim_dir}, (2) rebuilds CV folds,
-#' (3) fits the LCD mixture model on the train split with \code{<a href="create-LCDmix.html#main">main</a>()},
-#' (4) evaluates on the held-out split via \code{<a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>()},
-#' and (5) saves \code{prop_CV}, \code{trimmed_CV}, and a text log to \code{save_dir}.
-#'
-#' @param simul_idx_mat Numeric matrix where each row is one job. Must contain
-#'   columns \code{sim_idx}, \code{alpha_idx}, \code{theta_idx}, \code{seed_idx},
-#'   \code{fold_idx}, and the corresponding \code{lambda_alpha}, \code{lambda_theta}
-#'   values (e.g., as produced by \code{<a href="create-LCDmix.html#simul_idx_matrix">simul_idx_matrix</a>()}).
-#' @param sim_dir Character path to the directory with simulation files named
-#'   \code{sim_&lt;sim_idx&gt;.rds}. Default: \code{"sim_data"}.
-#' @param K Integer number of mixture components.
-#' @param max_iter Integer; maximum EM iterations per fit. Default: 30.
-#' @param iter_eta Numeric; convergence threshold on relative change in Q. Default: 1e-3.
-#' @param resp_threshold Numeric in [0,1]; responsibilities below this are zeroed
-#'   for numerical stability. Default: 1e-3.
-#' @param nfold Integer number of CV folds (used when rebuilding folds for each simulation).
-#'   Default: 5.
-#' @param trim_prob Numeric in [0,0.5]; fraction of lowest-likelihood points to trim
-#'   when averaging held-out log-likelihood. Default: 0.01.
-#' @param save_dir Character path to write per-job results (\code{*.rds}).
-#'   Files are saved as \code{&lt;sim_idx&gt;-&lt;alpha_idx&gt;-&lt;theta_idx&gt;-&lt;seed_idx&gt;-&lt;fold_idx&gt;.rds}.
-#'   Default: \code{"cv_saves"}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
-#'   uses all physical cores minus one. Default: \code{"max"}.
-#' @param blocksize Integer block size passed to \code{flowmix::make_cv_folds()}.
-#'   Default: 20.
-#'
-#' @return A character vector of per-job log messages, followed by a summary line
-#'   reporting the number and fraction of failures (jobs where fitting or evaluation failed).
-#'
-#' @examples
-#' \dontrun{
-#' # Build an index matrix over sims × folds × seeds × penalties
-#' idx &lt;- <a href="create-LCDmix.html#simul_idx_matrix">simul_idx_matrix</a>(
-#'   n_sims        = 2,
-#'   alpha_lambdas = c(1e-3, 1e-2),
-#'   theta_lambdas = c(1e-3, 1e-2),
-#'   seeds         = 1:2,
-#'   nfold         = 3
-#' )
-#' # Run CV jobs and save results under "cv_saves/"
-#' logs &lt;- <a href="create-LCDmix.html#run_cv_simul">run_cv_simul</a>(
-#'   simul_idx_mat = idx,
-#'   sim_dir       = "sim_data",
-#'   K             = 2,
-#'   save_dir      = "cv_saves",
-#'   n_cores       = "max"
-#' )
-#' cat(tail(logs), sep = "\n")
-#' }
-#'
-#' @export
-<span id="run_cv_simul">run_cv_simul</span> &lt;- function(
-  simul_idx_mat,
-  sim_dir  = "sim_data",
-  K,
-  max_iter           = 30,
-  iter_eta           = 1e-3,
-  resp_threshold     = 1e-3,
-  nfold              = 5,
-  trim_prob          = 0.01,
-  save_dir           = "cv_saves",
-  n_cores            = "max",
-  blocksize          = 20
-) {
-  # ensure output folder
-  if (!dir.exists(save_dir)) dir.create(save_dir)
-  
-  # determine worker count
-  n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
-  cl &lt;- parallel::makeCluster(n_workers)
-  # export functions and data that workers need
-  parallel::clusterEvalQ(cl, {library(flowmix); library(LCDmix); NULL })
-  parallel::clusterExport(
-    cl,
-    varlist = c("simul_idx_mat", "sim_dir", "K", "iter_eta",  
-                "resp_threshold", "trim_prob", "nfold", "blocksize", "save_dir", "max_iter"),
-    envir   = environment()
-  )
-  
-  logs &lt;- parallel::parLapply(cl, seq_len(nrow(simul_idx_mat)), function(i) {
-    idx_row       &lt;- simul_idx_mat[i, ]
-    sim_idx       &lt;- as.integer(idx_row["sim_idx"])
-    seed_idx      &lt;- as.integer(idx_row["seed_idx"])
-    alpha_idx     &lt;- as.integer(idx_row["alpha_idx"])
-    theta_idx     &lt;- as.integer(idx_row["theta_idx"])
-    fold_idx      &lt;- as.integer(idx_row["fold_idx"])
-    lambda_alpha  &lt;- as.numeric(idx_row["lambda_alpha"])
-    lambda_theta  &lt;- as.numeric(idx_row["lambda_theta"])
-    
-    log_msg  &lt;- character(0)
-    
-    sim_file &lt;- file.path(sim_dir, paste0("sim_", sim_idx, ".rds"))
-    if (!file.exists(sim_file)) {
-      log_msg &lt;- paste0("Sim file missing: ", sim_file)
-      return(log_msg)
-    }
-    
-    # Skip if already exists
-    save_path &lt;- file.path(
-      save_dir,
-      sprintf("%d-%d-%d-%d-%d.rds",
-              sim_idx, alpha_idx, theta_idx, seed_idx, fold_idx)
-      )
-    if (file.exists(save_path)) {
-      log_msg &lt;- paste0(log_msg, paste0("Skip (cached): ", basename(save_path)))
-      return(log_msg)
-    }
-
-    
-    # 1) load sim
-    sim &lt;- readRDS(sim_file)
-    
-    # 2) split into train / test
-    Y_bin      &lt;- sim$ylist
-    X          &lt;- sim$X
-    bin_mass   &lt;- sim$countslist
-    
-    # Create CV folds
-    folds &lt;- flowmix::make_cv_folds(
-      ylist     = Y_bin,
-      nfold     = nfold,
-      blocksize = blocksize
-    )
-    
-    # fold splits by time‐index
-    test_i     &lt;- folds[[fold_idx]]
-    Y_tr       &lt;- Y_bin[-test_i]
-    bin_mass_tr&lt;- bin_mass[-test_i]
-    X_tr       &lt;- X[-test_i, , drop = FALSE]
-    
-    log_msg &lt;- paste0(
-        "alpha=",   lambda_alpha,
-        ", theta=", lambda_theta,
-        ", seed=",  seed_idx,
-        ", fold=",  fold_idx, "\n"
-      )
-    
-    # 3) fit <a href="create-LCDmix.html#main">main</a>()
-    set.seed(seed_idx)
-    err_msg &lt;- NULL
-    out_log &lt;- capture.output(
-      fit_try &lt;- tryCatch({
-        <a href="create-LCDmix.html#main">main</a>(
-          Y               = Y_tr,
-          X               = X_tr,
-          biomass         = bin_mass_tr,
-          binned          = TRUE,
-          n_bins          = 0,
-          K               = K,
-          lambda_alpha    = lambda_alpha,
-          lambda_theta    = lambda_theta,
-          max_iter        = max_iter,
-          iter_eta        = iter_eta,
-          resp_threshold  = resp_threshold,
-          trim_prob       = trim_prob,
-          debug           = TRUE
-        )
-      }, error = function(e) {
-        err_msg &lt;&lt;- paste0("Error fitting sim=", sim_idx,
-                            ", alpha=", lambda_alpha,
-                            ", theta=", lambda_theta, 
-                              " seed=", seed_idx, 
-                              " fold=", fold_idx, ": ",
-                               e$message)
-        return(NULL)
-      }),
-        type = "output"
-      )
-    
-    log_msg &lt;- paste0(log_msg,
-                        paste0(out_log, collapse = "\n"),
-                        "\n")
-    
-    # now fit_try contains either the fit or NA
-      if (is.null(fit_try)) {
-        log_msg    &lt;- paste0(log_msg, "Error: Fit completely failed: ", err_msg, "\n")
-        prop_CV    &lt;- NA
-        trimmed_CV &lt;- NA
-        L          &lt;- NA
-        
-      } else if (is.null(fit_try$iter)) {
-        log_msg &lt;- paste0(log_msg, "Error at EM iteration ", fit_try$iter_partial$failed_iter, 
-                          ": ", fit_try$iter_partial$error, "\n")
-        prop_CV    &lt;- NA
-        trimmed_CV &lt;- NA
-        L          &lt;- NA
-        
-      } else {
-        ev &lt;- <a href="create-LCDmix.html#evaluate_lcd_model">evaluate_lcd_model</a>(
-          model     = fit_try$iter,
-          Y         = Y_bin[test_i],
-          X         = X[test_i, , drop = FALSE],
-          biomass   = bin_mass[test_i],
-          trim_prob = trim_prob
-        )
-        prop_CV    &lt;- ev$prop_infinite
-        trimmed_CV &lt;- ev$trimmed_avg_loglike
-        log_msg &lt;- paste0(log_msg,
-          "Success sim=", sim_idx,
-          " fold=",       fold_idx,
-          " seed=",       seed_idx,
-          " alpha=",      round(lambda_alpha,5),
-          " theta=",      round(lambda_theta,5),
-          " -&gt; prop=",    round(prop_CV,3),
-          ", trimmed=",   round(trimmed_CV,3)
-        )
-        L    &lt;- fit_try$L$loglik
-      }
-    
-    # 5) save result
-    saveRDS(list(prop_CV    = prop_CV,
-                 trimmed_CV = trimmed_CV,
-                 L          = L,
-                 log_msg    = log_msg), file = save_path)
-    return(log_msg)
-  })
-  parallel::stopCluster(cl)
-  
-  # 7) Summarize failures
-  num_na &lt;- sum(grepl("Error", logs))
-  logs   &lt;- c(
-    logs,
-    sprintf("Failures: %d/%d (%.1f%%)",
-            num_na, length(logs), 100 * num_na / length(logs))
-  )
-  return(logs)
-}</code></pre>
 <pre class="r"><code>#' Summarize CV results across simulations and pick best lambdas
 #'
 #' @description
 #' For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
-#' corresponding rows, calls \code{<a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>()} to aggregate the CV results for
+#' corresponding rows, calls \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} to aggregate the CV results for
 #' that simulation, and extracts the optimal penalty pair
 #' \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
 #' per simulation.
 #'
 #' @param simul_idx_mat Numeric matrix of CV jobs (e.g., from
-#'   \code{<a href="create-LCDmix.html#simul_idx_matrix">simul_idx_matrix</a>()}). Must contain a \code{sim_idx} column; all other
-#'   columns required by your \code{<a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>()} are passed along after removing
+#'   \code{simul_idx_matrix()}). Must contain a \code{sim_idx} column; all other
+#'   columns required by your \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} are passed along after removing
 #'   \code{sim_idx}.
 #' @param save_dir Character path to the directory containing the per–CV-run
-#'   result files produced by \code{<a href="create-LCDmix.html#run_cv_simul">run_cv_simul</a>()}.
+#'   result files produced by \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()}.
 #'
 #' @return A numeric matrix with three columns:
 #' \describe{
@@ -4286,7 +3754,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @examples
 #' \dontrun{
 #' # Suppose you already ran:
-#' # logs &lt;- <a href="create-LCDmix.html#run_cv_simul">run_cv_simul</a>(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_saves")
+#' # logs &lt;- <a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_saves")
 #'
 #' best_tbl &lt;- <a href="create-LCDmix.html#summarize_simul_cv">summarize_simul_cv</a>(
 #'   simul_idx_mat = idx_mat,
@@ -4302,7 +3770,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   colnames(bests) = c("sim_idx", "lambda_alpha", "lambda_theta")
   for (sim in sim_idxs) {
     idx_mat &lt;- simul_idx_mat[simul_idx_mat[,"sim_idx"] == sim, -1]
-    out     &lt;- <a href="create-LCDmix.html#LCD_cv_summary">LCD_cv_summary</a>(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
+    out     &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
     bests[sim,] &lt;- c(sim, out$opt_lambdas[1], out$opt_lambdas[2])
   }
   return(bests)
@@ -4356,7 +3824,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   \item{\code{metric}}{Weighted L1 distance to truth from \code{<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>()} (NA on failure).}
 #' }
 #'
-#' @seealso \code{\link{simulate_and_save}}, \code{\link{run_cv_simul}},
+#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
 #'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
 #'
 #' @examples
@@ -4544,13 +4012,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <pre><code>## ℹ Updating LCDmix documentation
 ## ℹ Loading LCDmix
 ## Writing 'NAMESPACE'
-## Writing 'LCD_cv_summary.Rd'
 ## Writing 'binning.Rd'
 ## Writing 'compute_l1_distance.Rd'
 ## Writing 'compute_residuals.Rd'
 ## Writing 'compute_surrogate_loglikelihood.Rd'
-## Writing 'cv_lcd_parallel.Rd'
-## Writing 'cv_lcd_worker.Rd'
+## Writing 'cv_lcd_onejob.Rd'
+## Writing 'cv_lcd_simul.Rd'
+## Writing 'cv_lcd_summary.Rd'
 ## Writing 'e_step_log_concave.Rd'
 ## Writing 'evaluate_lcd_model.Rd'
 ## Writing 'generate_skewed_data.Rd'
@@ -4569,9 +4037,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 ## Writing 'mstep_update_theta_lp.Rd'
 ## Writing 'pi_k.Rd'
 ## Writing 'refit_lcd.Rd'
-## Writing 'run_cv_simul.Rd'
-## Writing 'run_cv_simul2.Rd'
-## Writing 'simul_idx_matrix.Rd'
 ## Writing 'simul_refit.Rd'
 ## Writing 'simulate_and_save.Rd'
 ## Writing 'summarize_simul_cv.Rd'
