@@ -40,7 +40,7 @@
 #' Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
 #' bin_mass<- lapply(Y_bin, function(y) runif(nrow(y)))
 #' X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' init    <- initialize_model(
+#' init    <- initialization(
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
@@ -49,7 +49,7 @@
 #' str(init)
 #' }
 #' @export
-initialize_model <- function(
+initialization <- function(
   Y_bin,
   X,
   bin_mass,
@@ -80,7 +80,7 @@ initialize_model <- function(
   theta_init  <- lapply(flow_res$beta, function(b) b[-1])
   
   # 3) Compute initial residuals
-  resi_init <- compute_residuals(Y_bin, X, theta0_init, theta_init)
+  resi_init <- comp_resi(Y_bin, X, theta0_init, theta_init)
   
   # 4) Compute initial responsibilities and weights
   TT           <- length(Y_bin)
@@ -99,21 +99,21 @@ initialize_model <- function(
         sd   = sqrt(flow_res$sigma[k])
       ) * pi_mat[t, k]
     }
-    resp_t        <- likeli_t / rowSums(likeli_t)
+    resp_t           <- likeli_t / rowSums(likeli_t)
     resp_init[[t]]   <- resp_t
     idx_init[[t]]    <- resp_t > resp_threshold
     weight_init[[t]] <- resp_t * bin_mass[[t]]
   }
   
   # 5) One M-step update for intercepts
-  theta0_init <- mstep_update_intercepts(Y_bin, X, weight_init, idx_init, theta_init)
-  resi_init   <- compute_residuals(Y_bin, X, theta0_init, theta_init)
+  theta0_init <- mstep_shift(Y_bin, X, weight_init, idx_init, theta_init)
+  resi_init   <- comp_resi(Y_bin, X, theta0_init, theta_init)
   
   # 6) Initial log-concave density estimates
-  g_init <- mstep_estimate_log_concave_densities(resi_init, weight_init, idx_init)
+  g_init <- mstep_g(resi_init, weight_init, idx_init)
   
   # 7) Compute initial surrogate log-likelihood
-  Q_init <- compute_surrogate_loglikelihood(
+  Q_init <- comp_Q(
     X, g_init, resi_init, theta_init,
     alpha_init, idx_init, weight_init,
     lambda_alpha, lambda_theta

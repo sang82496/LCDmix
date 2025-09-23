@@ -27,7 +27,7 @@
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{evaluate_lcd_model()}. Default \code{0.01}.
+#'   \code{eval_lcd()}. Default \code{0.01}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
@@ -40,7 +40,7 @@
 #' @details
 #' This function uses a single outer cluster to process a \emph{grand} index of
 #' all simulation jobs in chunks, avoiding nested parallel. For reproducibility,
-#' job seeds are offset by the simulation index (\code{seed_idx + 1000 * sim_idx})
+#' job seeds are  (\code{seed_idx})
 #' before fitting. Each per-job RDS file contains:
 #' \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
 #' and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
@@ -53,7 +53,7 @@
 #' }
 #'
 #' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
-#'   \code{\link{evaluate_lcd_model}}, \code{\link[flowmix]{make_cv_folds}}
+#'   \code{\link{eval_lcd}}, \code{\link[flowmix]{make_cv_folds}}
 #'
 #' @examples
 #' \dontrun{
@@ -116,7 +116,7 @@ cv_lcd_simul <- function(
       load(f, envir = env)
     }
     env$folds <- flowmix::make_cv_folds(ylist = env$Y_bin, nfold = nfold, blocksize = blocksize)
-    env$index_matrix <- make_cv_index_matrix(
+    env$index_matrix <- cv_idx_mat(
       nfold          = nfold,
       seeds          = seeds,
       alpha_lambdas  = sort(alpha_lambdas),

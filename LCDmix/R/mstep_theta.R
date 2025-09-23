@@ -5,14 +5,14 @@
 #' @description
 #' For each mixture component \(k\), performs the M‐step update of intercept \(\theta_{0k}\)
 #' and slope vector \(\theta_k\) by invoking the LP solver with log‐concave constraints
-#' (\code{mstep_update_theta_lp()}), returning updated lists of intercepts and slopes.
+#' (\code{mstep_theta_lp()}), returning updated lists of intercepts and slopes.
 #'
 #' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses at time \(t\).
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
+#' @param weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
 #' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.
 #' @param densities A list of length \code{K}, each an object returned by \code{modified_logcondens()} for one component.
-#' @param responsibility_mask A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
+#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
@@ -37,7 +37,7 @@
 #' )
 #' intercepts <- replicate(K, 0, simplify = FALSE)
 #' slopes     <- replicate(K, rep(0, p), simplify = FALSE)
-#' result <- mstep_update_theta_log_concave(
+#' result <- mstep_theta(
 #'   Y_bin, X, weights, resi,
 #'   densities, mask,
 #'   intercepts, slopes,
@@ -46,13 +46,13 @@
 #' str(result)
 #' }
 #' @export
-mstep_update_theta_log_concave <- function(
+mstep_theta <- function(
   Y_bin,
   X,
-  posterior_weights,
+  weights,
   residuals,
   densities,
-  responsibility_mask,
+  idx,
   intercepts,
   slopes,
   lambda_theta
@@ -62,13 +62,13 @@ mstep_update_theta_log_concave <- function(
   theta_new  <- vector("list", K)
   
   for (k in seq_len(K)) {
-    tmp <- mstep_update_theta_lp(
+    tmp <- mstep_theta_lp(
       Y_bin               = Y_bin,
       X                   = X,
-      posterior_weights   = posterior_weights,
+      weights             = weights,
       residuals           = residuals,
       density_k           = densities[[k]],
-      responsibility_mask = responsibility_mask,
+      idx                 = idx,
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,

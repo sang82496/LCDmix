@@ -22,82 +22,72 @@ refit_lcd(
 )
 }
 \arguments{
-\item{Y_bin}{List of length \eqn{TT}; binned responses for each time point.
-Element \eqn{t} is a numeric vector of length \eqn{n_t}.}
+\item{Y_bin}{List of responses (one element per time point/bin), as used by \code{main()}.}
 
-\item{X}{Numeric matrix \eqn{TT \times p}; covariates aligned by time.}
+\item{X}{Numeric matrix of covariates with \code{nrow(X) == length(Y_bin)}.}
 
-\item{bin_mass}{List of length \eqn{TT}; per-time weights for each bin/observation.}
+\item{bin_mass}{List of nonnegative weights aligned with \code{Y_bin}.}
 
 \item{K}{Integer; number of mixture components.}
 
-\item{opt_lambdas}{Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
-chosen from cross-validation.}
+\item{opt_lambdas}{Numeric vector of length 2 giving \code{c(lambda_alpha, lambda_theta)}.}
 
-\item{seeds}{Integer vector of random seeds (one per repeat). If \code{NULL},
-provide \code{cv_reps} to derive \code{seeds <- 1:cv_reps}. Default \code{NULL}.}
+\item{seeds}{Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.}
 
-\item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
-\code{NULL}. Default \code{NULL}.}
+\item{cv_reps}{Integer; number of repeats used only when \code{seeds} is \code{NULL}.
+The seeds will be \code{1:cv_reps}.}
 
-\item{max_iter}{Integer; maximum EM iterations per fit. Default \code{30}.}
+\item{max_iter}{Integer; maximum EM iterations. Default \code{30}.}
 
-\item{iter_eta}{Numeric; convergence threshold on relative change in the
-surrogate objective. Default \code{1e-3}.}
+\item{iter_eta}{Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.}
 
-\item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are
-zeroed for stability. Default \code{1e-3}.}
+\item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.}
 
-\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction passed to
-\code{main()} for any internal diagnostics (not used in the training
-objective). Default \code{0.01}.}
+\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.}
 
-\item{save_dir}{Character; directory to cache per-repeat results as
-\code{"refit_<seed>.rds"}. Default \code{"./result"}.}
+\item{save_dir}{Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.}
 
-\item{n_cores}{Integer or \code{"max"}; number of parallel workers for
-\pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.}
+\item{n_cores}{Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.}
 
-\item{debug}{Logical; forwarded to \code{main()} to print extra diagnostics.
-Default \code{FALSE}.}
+\item{debug}{Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.}
 }
 \value{
 A list with:
 \describe{
-\item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
-\item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
-(\code{L$loglik}) across repeats (one per seed).}
-\item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
-containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
+\item{\code{logs}}{Character vector of log messages (one per seed plus a summary line).}
+\item{\code{refit_scores}}{Numeric vector of per-seed training objectives \eqn{L} (may contain \code{NA}).}
+\item{\code{best_fit}}{The list returned by \code{refit_onejob()} for the best seed
+(largest \eqn{L}); \code{NULL} if all refits failed.}
 }
 }
 \description{
-Given optimal penalties from CV, repeatedly refits \code{main()} on the
-full (binned) dataset using different random seeds, records the final
-training objective \code{L$loglik} for each repeat, caches results to disk,
-and returns logs, per-repeat scores, and the best fit.
+Runs multiple refits of an LCDmix model on the full training data using a
+grid of random seeds (one outer parallel cluster; no nested parallel). Each
+refit is cached to \code{save_dir/refit_<seed>.rds} so the procedure is
+fully resumable. The best fit is chosen by the largest training objective
+\eqn{L} among the completed refits.
 }
 \details{
-Each repeat runs a full fit with \code{main()} and extracts the final training
-objective \code{L$loglik}. Results are cached to enable resuming; cached runs
-are skipped on subsequent calls. Parallelization uses a socket cluster and is
-cleaned up on exit.
+Each seed triggers a call to \code{refit_onejob()}, which caches its result to
+disk and returns a log string and the final training objective \eqn{L}.
+Existing cache files are reused and not recomputed.
 }
 \examples{
 \dontrun{
-best <- refit_lcd(
-  Y_bin        = Y_bin,
-  X            = X,
-  bin_mass     = bin_mass,
-  K            = 2,
-  opt_lambdas  = c(1e-3, 1e-3),
-  seeds        = 1:5,
-  save_dir     = "refits"
+# Given Y_bin, X, bin_mass, and chosen penalties:
+opt <- c(lambda_alpha = 1e-3, lambda_theta = 1e-3)
+out <- refit_lcd(
+  Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = 2,
+  opt_lambdas = opt,
+  seeds = 1:10,
+  save_dir = "refits",
+  n_cores = 8
 )
-best$refit_scores
+out$best_fit$L       # best training objective
+out$best_fit$file    # path to the cached best refit
 }
 
 }
 \seealso{
-\code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
+\code{\link{refit_onejob}}
 }

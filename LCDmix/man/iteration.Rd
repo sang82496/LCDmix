@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{iteration}
 \alias{iteration}
-\title{Run EM‐style iterations for log‐concave mixture‐of‐experts model}
+\title{Run EM-style iterations for log-concave mixture-of-experts model}
 \usage{
 iteration(
   Y_bin,
@@ -25,7 +25,7 @@ iteration(
 
 \item{bin_mass}{List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.}
 
-\item{init_res}{List returned by \code{initialize_model()}, containing:\cr
+\item{init_res}{List returned by \code{initialization()}, containing:\cr
 \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
 \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.}
 
@@ -59,12 +59,12 @@ A list with components:
 \description{
 Performs up to \code{max_iter} iterations of the EM algorithm:
 \enumerate{
-\item E‐step via \code{e_step_log_concave()}
-\item M‐steps:
+\item E-step via \code{estep_lcd()}
+\item M-steps:
 \itemize{
-\item Update mixture weights with \code{mstep_update_alpha()}
-\item Update regression slopes/intercepts via \code{mstep_update_theta_log_concave()} and \code{mstep_update_intercepts()}
-\item Update log‐concave component densities with \code{mstep_estimate_log_concave_densities()}
+\item Update mixture weights with \code{mstep_alpha()}
+\item Update regression slopes/intercepts via \code{mstep_theta()} and \code{mstep_shift()}
+\item Update log‐concave component densities with \code{mstep_g()}
 Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
 }
 }

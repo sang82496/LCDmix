@@ -25,7 +25,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' idx <- make_cv_index_matrix(
+#' idx <- cv_idx_mat(
 #'   nfold         = 5,
 #'   seeds         = c(101, 202, 303),
 #'   alpha_lambdas = c(1e-4, 1e-3, 1e-2),
@@ -35,7 +35,7 @@
 #' }
 #'
 #' @export
-make_cv_index_matrix <- function(
+cv_idx_mat <- function(
   nfold,
   seeds,
   alpha_lambdas,

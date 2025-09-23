@@ -44,7 +44,7 @@
 #' # Random mixture parameters
 #' alpha <- matrix(rnorm(K*(p+1)), nrow = K)
 #' # One E‐step
-#' e_res <- e_step_log_concave(
+#' e_res <- estep_lcd(
 #'   X              = matrix(rnorm(TT*p), nrow = TT),
 #'   bin_mass       = bin_mass,
 #'   residuals      = residuals,
@@ -55,7 +55,7 @@
 #' str(e_res)
 #' }
 #' @export
-e_step_log_concave <- function(
+estep_lcd <- function(
   X,
   bin_mass,
   residuals,

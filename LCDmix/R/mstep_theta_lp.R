@@ -10,10 +10,10 @@
 #'
 #' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.
 #' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
+#' @param weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
 #' @param residuals List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.
 #' @param density_k An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
-#' @param responsibility_mask List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
+#' @param idx List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
 #' @param intercept_k Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
@@ -26,13 +26,13 @@
 #' }
 #'
 #' @export
-mstep_update_theta_lp <- function(
+mstep_theta_lp <- function(
   Y_bin,
   X,
-  posterior_weights,
+  weights,
   residuals,
   density_k,
-  responsibility_mask,
+  idx,
   intercept_k,
   slopes_k,
   lambda_theta,
@@ -49,10 +49,10 @@ mstep_update_theta_lp <- function(
   skip_ts <- integer(0)
   
   for (t in seq_len(TT)) {
-    idx_tk <- responsibility_mask[[t]][, component]
+    idx_tk <- idx[[t]][, component]
     if (any(idx_tk)) {
       res_k <- c(res_k, residuals[[t]][idx_tk, component])
-      w_k   <- c(w_k, posterior_weights[[t]][idx_tk, component])
+      w_k   <- c(w_k, weights[[t]][idx_tk, component])
       Y_k   <- c(Y_k, Y_bin[[t]][idx_tk, 1])
       X_k   <- rbind(
                 X_k,
@@ -102,7 +102,7 @@ mstep_update_theta_lp <- function(
   tmp_vec <- numeric(2 * TT_new)
   cnt <- 1
   for (t in seq_len(TT)) {
-    idx_tk <- responsibility_mask[[t]][, component]
+    idx_tk <- idx[[t]][, component]
     if (any(idx_tk)) {
       tmp_vec[cnt]           <- min(Y_bin[[t]][idx_tk]) - L
       tmp_vec[TT_new + cnt]  <- U - max(Y_bin[[t]][idx_tk])
@@ -117,7 +117,7 @@ mstep_update_theta_lp <- function(
 #  print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
-  N_total <- sum(unlist(posterior_weights))
+  N_total <- sum(unlist(weights))
   obj_coef <- c(
     w_k,
     0,

@@ -29,11 +29,11 @@
 #' X          <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
 #' intercepts <- list(0.5, -1.2)
 #' slopes     <- list(c(1.0, 0.5), c(-0.5, 2.0))
-#' res_list   <- compute_residuals(Y_bin, X, intercepts, slopes)
+#' res_list   <- comp_resi(Y_bin, X, intercepts, slopes)
 #' str(res_list)
 #' }
 #' @export
-compute_residuals <- function(
+comp_resi <- function(
   Y_bin,
   X,
   intercepts,

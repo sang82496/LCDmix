@@ -25,7 +25,7 @@
 #'   \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
 #'   \item{X}{Covariate matrix (unchanged).}
 #'   \item{bin_mass}{List of biomass‐per‐bin weights.}
-#'   \item{initial}{List returned by \code{initialize_model()}, containing starting parameters.}
+#'   \item{initial}{List returned by \code{initialization()}, containing starting parameters.}
 #'   \item{iter}{List returned by \code{iteration()}, containing fitted parameters over EM iterations.}
 #' }
 #'
@@ -74,7 +74,7 @@ main <- function(
   message("✔ Binning complete")
   
   #— Step 2: Initialization via GMR —#
-  init_res <- initialize_model(
+  init_res <- initialization(
     Y_bin,
     X,
     bin_mass,

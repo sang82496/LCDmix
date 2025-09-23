@@ -92,8 +92,8 @@ binning <- function(
   }
   
   # Return binned responses and corresponding biomass sums
-  list(
+  return(list(
     Y_bin    = Y_bin,
     bin_mass = bin_mass
-  )
+  ))
 }

@@ -47,7 +47,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' res <- evaluate_lcd_model(
+#' res <- eval_lcd(
 #'   model        = fit$iter,
 #'   Y_test       = Y_bin[test_idx],
 #'   X_test       = X[test_idx, , drop = FALSE],
@@ -58,7 +58,7 @@
 #' }
 #'
 #' @export
-evaluate_lcd_model <- function(
+eval_lcd <- function(
   model,
   Y_test,
   X_test,

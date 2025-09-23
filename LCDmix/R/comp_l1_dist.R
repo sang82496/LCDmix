@@ -23,12 +23,12 @@
 #' # Estimated with potential label swap
 #' est_mat1 <- true_mat + 0.1  # small noise, same ordering
 #' est_mat2 <- true_mat[, 2:1] + 0.2  # swapped + noise
-#' d1 <- compute_l1_distance(true_mat, est_mat1)
-#' d2 <- compute_l1_distance(true_mat, est_mat2)
+#' d1 <- comp_l1_dist(true_mat, est_mat1)
+#' d2 <- comp_l1_dist(true_mat, est_mat2)
 #' stopifnot(d1 < d2)
 #' }
 #' @export
-compute_l1_distance <- function(
+comp_l1_dist <- function(
   true_params,
   est_params
 ) {

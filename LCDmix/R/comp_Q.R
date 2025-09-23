@@ -25,8 +25,8 @@
 #' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.
 #' @param slopes A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.
 #' @param alpha A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).
-#' @param indices A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
-#' @param responsibilities A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
+#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
+#' @param resp A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.
 #' @param lambda_theta Nonnegative numeric L1 penalty on slope parameters \code{slopes}.
 #'
@@ -41,28 +41,28 @@
 #'   simplify = FALSE
 #' )
 #' residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-#' indices   <- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
-#' responsibilities <- lapply(indices,
+#' idx   <- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
+#' resp <- lapply(idx,
 #'   function(idx) matrix(runif(length(idx)), nrow = nrow(idx))
 #' )
 #' slopes <- replicate(K, rnorm(p), simplify = FALSE)
 #' alpha  <- matrix(rnorm(K*(p+1)), nrow = K)
 #'
-#' Q_val <- compute_surrogate_loglikelihood(
+#' Q_val <- comp_Q(
 #'   X, densities, residuals, slopes, alpha,
-#'   indices, responsibilities,
+#'   idx, resp,
 #'   lambda_alpha = 1e-3, lambda_theta = 1e-3
 #' )
 #' }
 #' @export
-compute_surrogate_loglikelihood <- function(
+comp_Q <- function(
   X,
   densities,
   residuals,
   slopes,
   alpha,
-  indices,
-  responsibilities,
+  idx,
+  resp,
   lambda_alpha,
   lambda_theta
 ) {
@@ -71,7 +71,7 @@ compute_surrogate_loglikelihood <- function(
   K_comp <- length(densities)
 
   # Total “effective sample size”
-  N_total <- sum(unlist(responsibilities))
+  N_total <- sum(unlist(resp))
 
   # Mixture probabilities: TT x K matrix
   pi_mat <- pi_k(X, alpha)
@@ -81,8 +81,8 @@ compute_surrogate_loglikelihood <- function(
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
       # Select bins for component k at time t
-      idx_tk    <- indices[[t]][, k]
-      w_tk      <- responsibilities[[t]][idx_tk, k]
+      idx_tk    <- idx[[t]][, k]
+      w_tk      <- resp[[t]][idx_tk, k]
       resi_tk   <- residuals[[t]][idx_tk, k]
 
       if (length(w_tk) == 0) next
