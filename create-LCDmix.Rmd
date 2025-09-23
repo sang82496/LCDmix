@@ -93,7 +93,7 @@ Let's define a function for our R package:
 #'   \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
 #'   \item{X}{Covariate matrix (unchanged).}
 #'   \item{bin_mass}{List of biomass‐per‐bin weights.}
-#'   \item{initial}{List returned by \code{initialize_model()}, containing starting parameters.}
+#'   \item{initial}{List returned by \code{initialization()}, containing starting parameters.}
 #'   \item{iter}{List returned by \code{iteration()}, containing fitted parameters over EM iterations.}
 #' }
 #'
@@ -142,7 +142,7 @@ main <- function(
   message("✔ Binning complete")
   
   #— Step 2: Initialization via GMR —#
-  init_res <- initialize_model(
+  init_res <- initialization(
     Y_bin,
     X,
     bin_mass,
@@ -303,10 +303,10 @@ binning <- function(
   }
   
   # Return binned responses and corresponding biomass sums
-  list(
+  return(list(
     Y_bin    = Y_bin,
     bin_mass = bin_mass
-  )
+  ))
 }
 ```
 
@@ -354,7 +354,7 @@ binning <- function(
 #' Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
 #' bin_mass<- lapply(Y_bin, function(y) runif(nrow(y)))
 #' X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' init    <- initialize_model(
+#' init    <- initialization(
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
@@ -363,7 +363,7 @@ binning <- function(
 #' str(init)
 #' }
 #' @export
-initialize_model <- function(
+initialization <- function(
   Y_bin,
   X,
   bin_mass,
@@ -394,7 +394,7 @@ initialize_model <- function(
   theta_init  <- lapply(flow_res$beta, function(b) b[-1])
   
   # 3) Compute initial residuals
-  resi_init <- compute_residuals(Y_bin, X, theta0_init, theta_init)
+  resi_init <- comp_resi(Y_bin, X, theta0_init, theta_init)
   
   # 4) Compute initial responsibilities and weights
   TT           <- length(Y_bin)
@@ -413,21 +413,21 @@ initialize_model <- function(
         sd   = sqrt(flow_res$sigma[k])
       ) * pi_mat[t, k]
     }
-    resp_t        <- likeli_t / rowSums(likeli_t)
+    resp_t           <- likeli_t / rowSums(likeli_t)
     resp_init[[t]]   <- resp_t
     idx_init[[t]]    <- resp_t > resp_threshold
     weight_init[[t]] <- resp_t * bin_mass[[t]]
   }
   
   # 5) One M-step update for intercepts
-  theta0_init <- mstep_update_intercepts(Y_bin, X, weight_init, idx_init, theta_init)
-  resi_init   <- compute_residuals(Y_bin, X, theta0_init, theta_init)
+  theta0_init <- mstep_shift(Y_bin, X, weight_init, idx_init, theta_init)
+  resi_init   <- comp_resi(Y_bin, X, theta0_init, theta_init)
   
   # 6) Initial log-concave density estimates
-  g_init <- mstep_estimate_log_concave_densities(resi_init, weight_init, idx_init)
+  g_init <- mstep_g(resi_init, weight_init, idx_init)
   
   # 7) Compute initial surrogate log-likelihood
-  Q_init <- compute_surrogate_loglikelihood(
+  Q_init <- comp_Q(
     X, g_init, resi_init, theta_init,
     alpha_init, idx_init, weight_init,
     lambda_alpha, lambda_theta
@@ -532,8 +532,8 @@ pi_k <- function(
 #' @param weights A list of length \code{TT}; each element is a numeric vector of length
 #'   \eqn{M_t} giving the total biomass per bin (i.e.\ the \code{bin_mass} output
 #'   from \code{binning()}, with empty bins removed).
-#' @param indices A list of length \code{TT}; each element is an \eqn{M_t \times K}
-#'   logical or integer matrix where \code{indices[[t]][i, k]} is \code{TRUE} if the
+#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K}
+#'   logical or integer matrix where \code{idx[[t]][i, k]} is \code{TRUE} if the
 #'   \(i\)th bin at time \emph{t} contributes to component \emph{k}.
 #' @param slopes A list of length \code{K}; each element is a numeric vector of length
 #'   \eqn{p} giving the current slope parameters \eqn{\boldsymbol{\theta}_k}.
@@ -547,21 +547,21 @@ pi_k <- function(
 #' # Simulate binned responses and bin_mass
 #' Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
 #' bin_mass<- lapply(Y_bin, function(m) runif(nrow(m)))
-#' # Dummy X and indices
+#' # Dummy X and idx
 #' X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' indices <- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
+#' idx <- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
 #'                       length(m) * K, replace = TRUE),
 #'                       ncol = K))
 #' slopes  <- replicate(K, runif(p), simplify = FALSE)
 #' # Compute updated intercepts
-#' intercepts <- mstep_update_intercepts(Y_bin, X, bin_mass, indices, slopes)
+#' intercepts <- mstep_shift(Y_bin, X, bin_mass, idx, slopes)
 #' }
 #' @export
-mstep_update_intercepts <- function(
+mstep_shift <- function(
   Y_bin,
   X,
   weights,
-  indices,
+  idx,
   slopes
 ) {
   K_comp <- length(slopes)
@@ -573,7 +573,7 @@ mstep_update_intercepts <- function(
     den <- 0
     for (t in seq_len(TT)) {
       # select which bins at time t belong to component k
-      idx_tk <- indices[[t]][, k]
+      idx_tk <- idx[[t]][, k]
       # corresponding biomass weights for those bins
       w_tk   <- weights[[t]][idx_tk, k]
       # sum of binned responses in those bins
@@ -624,11 +624,11 @@ mstep_update_intercepts <- function(
 #' X          <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
 #' intercepts <- list(0.5, -1.2)
 #' slopes     <- list(c(1.0, 0.5), c(-0.5, 2.0))
-#' res_list   <- compute_residuals(Y_bin, X, intercepts, slopes)
+#' res_list   <- comp_resi(Y_bin, X, intercepts, slopes)
 #' str(res_list)
 #' }
 #' @export
-compute_residuals <- function(
+comp_resi <- function(
   Y_bin,
   X,
   intercepts,
@@ -673,8 +673,8 @@ compute_residuals <- function(
 #'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
 #' @param weights A list of length \code{TT}, where each element is an \eqn{M_t \times K}
 #'   matrix of posterior weights (e.g., responsibilities) corresponding to \code{residuals}.
-#' @param indices A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   logical or integer matrix.  \code{indices[[t]][i,k]} indicates whether the \(i\)th bin
+#' @param idx A list of length \code{TT}, where each element is an \eqn{M_t \times K}
+#'   logical or integer matrix.  \code{idx[[t]][i,k]} indicates whether the \(i\)th bin
 #'   at time \(t\) contributes to component \(k\).
 #'
 #' @return A list of length \code{K}, where element \code{k} is the output of
@@ -687,25 +687,25 @@ compute_residuals <- function(
 #' residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
 #' weights   <- lapply(residuals, function(m) abs(m))  # just for demo
 #' # Include all bins for both components
-#' indices <- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
-#' densities <- mstep_estimate_log_concave_densities(residuals, weights, indices)
+#' idx <- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
+#' densities <- mstep_g(residuals, weights, idx)
 #' }
 #' @export
-mstep_estimate_log_concave_densities <- function(
+mstep_g <- function(
   residuals,
   weights,
-  indices
+  idx
 ) {
   TT <- length(weights)
-  K  <- ncol(indices[[1]])
+  K  <- ncol(idx[[1]])
   densities <- vector("list", K)
   
   for (k in seq_len(K)) {
     # Collect all residuals and weights for component k
     res_k <- unlist(lapply(seq_len(TT),
-                           function(t) residuals[[t]][indices[[t]][, k], k]))
+                           function(t) residuals[[t]][idx[[t]][, k], k]))
     w_k   <- unlist(lapply(seq_len(TT),
-                           function(t) weights[[t]][indices[[t]][, k], k]))
+                           function(t) weights[[t]][idx[[t]][, k], k]))
     
     # Unique residual values & aggregated weights
     uniq_res <- unique(res_k)
@@ -897,8 +897,8 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
 #' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.
 #' @param slopes A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.
 #' @param alpha A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).
-#' @param indices A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
-#' @param responsibilities A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
+#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
+#' @param resp A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.
 #' @param lambda_theta Nonnegative numeric L1 penalty on slope parameters \code{slopes}.
 #'
@@ -913,28 +913,28 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
 #'   simplify = FALSE
 #' )
 #' residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-#' indices   <- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
-#' responsibilities <- lapply(indices,
+#' idx   <- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
+#' resp <- lapply(idx,
 #'   function(idx) matrix(runif(length(idx)), nrow = nrow(idx))
 #' )
 #' slopes <- replicate(K, rnorm(p), simplify = FALSE)
 #' alpha  <- matrix(rnorm(K*(p+1)), nrow = K)
 #'
-#' Q_val <- compute_surrogate_loglikelihood(
+#' Q_val <- comp_Q(
 #'   X, densities, residuals, slopes, alpha,
-#'   indices, responsibilities,
+#'   idx, resp,
 #'   lambda_alpha = 1e-3, lambda_theta = 1e-3
 #' )
 #' }
 #' @export
-compute_surrogate_loglikelihood <- function(
+comp_Q <- function(
   X,
   densities,
   residuals,
   slopes,
   alpha,
-  indices,
-  responsibilities,
+  idx,
+  resp,
   lambda_alpha,
   lambda_theta
 ) {
@@ -943,7 +943,7 @@ compute_surrogate_loglikelihood <- function(
   K_comp <- length(densities)
 
   # Total “effective sample size”
-  N_total <- sum(unlist(responsibilities))
+  N_total <- sum(unlist(resp))
 
   # Mixture probabilities: TT x K matrix
   pi_mat <- pi_k(X, alpha)
@@ -953,8 +953,8 @@ compute_surrogate_loglikelihood <- function(
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
       # Select bins for component k at time t
-      idx_tk    <- indices[[t]][, k]
-      w_tk      <- responsibilities[[t]][idx_tk, k]
+      idx_tk    <- idx[[t]][, k]
+      w_tk      <- resp[[t]][idx_tk, k]
       resi_tk   <- residuals[[t]][idx_tk, k]
 
       if (length(w_tk) == 0) next
@@ -1142,21 +1142,21 @@ lcd_loglikelihood <- function(
 
 
 ```{r}
-#' Run EM‐style iterations for log‐concave mixture‐of‐experts model
+#' Run EM-style iterations for log-concave mixture-of-experts model
 #'
 #' @description
 #' Performs up to \code{max_iter} iterations of the EM algorithm:
-#' 1. E‐step via \code{e_step_log_concave()}  
-#' 2. M‐steps:
-#'    - Update mixture weights with \code{mstep_update_alpha()}  
-#'    - Update regression slopes/intercepts via \code{mstep_update_theta_log_concave()} and \code{mstep_update_intercepts()}  
-#'    - Update log‐concave component densities with \code{mstep_estimate_log_concave_densities()}  
+#' 1. E-step via \code{estep_lcd()}  
+#' 2. M-steps:
+#'    - Update mixture weights with \code{mstep_alpha()}  
+#'    - Update regression slopes/intercepts via \code{mstep_theta()} and \code{mstep_shift()}  
+#'    - Update log‐concave component densities with \code{mstep_g()}  
 #' Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
 #'
 #' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
 #' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
 #' @param bin_mass List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.
-#' @param init_res List returned by \code{initialize_model()}, containing:\cr
+#' @param init_res List returned by \code{initialization()}, containing:\cr
 #'   \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
 #'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
@@ -1228,7 +1228,7 @@ iteration <- function(
   for (i in seq_len(max_iter)){
     
     #— E‐step —#
-    Estep   <- e_step_log_concave(
+    Estep   <- estep_lcd(
       X               = X,
       bin_mass        = bin_mass,
       residuals       = resi_old,
@@ -1240,14 +1240,14 @@ iteration <- function(
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_old,
         alpha                = alpha_old,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -1256,21 +1256,21 @@ iteration <- function(
     message("✔ E‐step complete")
     
     #— M‐step α —#
-    alpha_new <- mstep_update_alpha(
+    alpha_new <- mstep_alpha(
       X                    = X,
-      posterior_weights    = weight_new,
-      responsibility_mask  = idx_new,
+      weights              = weight_new,
+      idx                  = idx_new,
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_old,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -1279,13 +1279,13 @@ iteration <- function(
     message("✔ Updated α")
     
     #— M‐step θ via LP + shift —#
-    theta_lp <- mstep_update_theta_log_concave(
+    theta_lp <- mstep_theta(
       Y_bin               = Y_bin,
       X                   = X,
-      posterior_weights   = weight_new,
+      weights             = weight_new,
       residuals           = resi_old,
       densities           = g_old,
-      responsibility_mask = idx_old,
+      idx                 = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
       lambda_theta        = lambda_theta
@@ -1293,14 +1293,14 @@ iteration <- function(
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_new,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -1309,28 +1309,28 @@ iteration <- function(
     message("✔ Updated θ via LP")
     
     # Shift intercepts analytically
-    theta0_new <- mstep_update_intercepts(
+    theta0_new <- mstep_shift(
       Y_bin              = Y_bin,
       X                  = X,
       weights            = weight_new,
-      indices            = idx_new,
+      idx                = idx_new,
       slopes             = theta_new
     )
-    resi_new <- compute_residuals(
+    resi_new <- comp_resi(
       Y_bin   = Y_bin,
       X       = X,
       intercepts = theta0_new,
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_new,
         slopes               = theta_new,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -1339,22 +1339,22 @@ iteration <- function(
     message("✔ Centered the intercepts")
     
     #— M‐step g —#
-    g_new <- mstep_estimate_log_concave_densities(
-      residuals           = resi_new,
-      weights             = weight_new,
-      indices             = idx_new
+    g_new <- mstep_g(
+      residuals       = resi_new,
+      weights         = weight_new,
+      idx             = idx_new
     )
     message("✔ Updated g")
     
-    # Surrogate log‐likelihood
-    Q_new    <- compute_surrogate_loglikelihood(
+    # Surrogate log-likelihood
+    Q_new    <- comp_Q(
       X                    = X,
       densities            = g_new,
       residuals            = resi_new,
       slopes               = theta_new,
       alpha                = alpha_new,
-      indices              = idx_new,
-      responsibilities     = weight_new,
+      idx                  = idx_new,
+      resp                 = weight_new,
       lambda_alpha         = lambda_alpha,
       lambda_theta         = lambda_theta
     )
@@ -1404,7 +1404,7 @@ iteration <- function(
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
-    i           = i)
+    iter_num    = i)
   }
     list(final = last_state,
          error = NULL)
@@ -1434,7 +1434,7 @@ iteration <- function(
     g_new       = g_new,
     Q           = Q,
     Q_every     = Q_every,
-    i           = i))
+    iter_num    = i))
 }
 ```
 
@@ -1486,7 +1486,7 @@ iteration <- function(
 #' # Random mixture parameters
 #' alpha <- matrix(rnorm(K*(p+1)), nrow = K)
 #' # One E‐step
-#' e_res <- e_step_log_concave(
+#' e_res <- estep_lcd(
 #'   X              = matrix(rnorm(TT*p), nrow = TT),
 #'   bin_mass       = bin_mass,
 #'   residuals      = residuals,
@@ -1497,7 +1497,7 @@ iteration <- function(
 #' str(e_res)
 #' }
 #' @export
-e_step_log_concave <- function(
+estep_lcd <- function(
   X,
   bin_mass,
   residuals,
@@ -1562,9 +1562,9 @@ e_step_log_concave <- function(
 #' on covariates with an L1 penalty to update the mixture‐weight parameters \code{alpha}.
 #'
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#' @param weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
 #'   matrix of posterior weights (e.g.\ responsibilities × biomass) for each bin and component.
-#' @param responsibility_mask A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#' @param idx A list of length \eqn{TT}, each element an \eqn{M_t \times K}
 #'   logical matrix indicating which bins have effectively nonzero posterior weight.
 #' @param lambda_alpha Positive numeric L1 penalty on the non‐intercept mixture‐weight coefficients.
 #'
@@ -1579,17 +1579,17 @@ e_step_log_concave <- function(
 #' # Simulate posterior weights and threshold mask
 #' post_w <- lapply(1:TT, function(i) matrix(runif(4 * K), ncol = K))
 #' mask  <- lapply(post_w, function(w) w > 0.1)
-#' alpha <- mstep_update_alpha(X, post_w, mask, lambda_alpha = 1e-3)
+#' alpha <- mstep_alpha(X, post_w, mask, lambda_alpha = 1e-3)
 #' }
 #' @export
-mstep_update_alpha <- function(
+mstep_alpha <- function(
   X,
-  posterior_weights,
-  responsibility_mask,
+  weights,
+  idx,
   lambda_alpha
 ) {
   TT <- nrow(X)
-  K  <- ncol(responsibility_mask[[1]])
+  K  <- ncol(idx[[1]])
   
   # Sequence of candidate lambda values (from large to target)
   lambda_max <- lambda_alpha * 100
@@ -1599,8 +1599,8 @@ mstep_update_alpha <- function(
   weight_sum <- matrix(0, nrow = TT, ncol = K)
   for (t in seq_len(TT)) {
     for (k in seq_len(K)) {
-      mask_tk         <- responsibility_mask[[t]][, k]
-      weight_sum[t, k] <- sum(posterior_weights[[t]][mask_tk, k])
+      mask_tk         <- idx[[t]][, k]
+      weight_sum[t, k] <- sum(weights[[t]][mask_tk, k])
     }
   }
   
@@ -1630,14 +1630,14 @@ mstep_update_alpha <- function(
 #' @description
 #' For each mixture component \(k\), performs the M‐step update of intercept \(\theta_{0k}\)
 #' and slope vector \(\theta_k\) by invoking the LP solver with log‐concave constraints
-#' (\code{mstep_update_theta_lp()}), returning updated lists of intercepts and slopes.
+#' (\code{mstep_theta_lp()}), returning updated lists of intercepts and slopes.
 #'
 #' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses at time \(t\).
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
+#' @param weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
 #' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.
 #' @param densities A list of length \code{K}, each an object returned by \code{modified_logcondens()} for one component.
-#' @param responsibility_mask A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
+#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
@@ -1662,7 +1662,7 @@ mstep_update_alpha <- function(
 #' )
 #' intercepts <- replicate(K, 0, simplify = FALSE)
 #' slopes     <- replicate(K, rep(0, p), simplify = FALSE)
-#' result <- mstep_update_theta_log_concave(
+#' result <- mstep_theta(
 #'   Y_bin, X, weights, resi,
 #'   densities, mask,
 #'   intercepts, slopes,
@@ -1671,13 +1671,13 @@ mstep_update_alpha <- function(
 #' str(result)
 #' }
 #' @export
-mstep_update_theta_log_concave <- function(
+mstep_theta <- function(
   Y_bin,
   X,
-  posterior_weights,
+  weights,
   residuals,
   densities,
-  responsibility_mask,
+  idx,
   intercepts,
   slopes,
   lambda_theta
@@ -1687,13 +1687,13 @@ mstep_update_theta_log_concave <- function(
   theta_new  <- vector("list", K)
   
   for (k in seq_len(K)) {
-    tmp <- mstep_update_theta_lp(
+    tmp <- mstep_theta_lp(
       Y_bin               = Y_bin,
       X                   = X,
-      posterior_weights   = posterior_weights,
+      weights             = weights,
       residuals           = residuals,
       density_k           = densities[[k]],
-      responsibility_mask = responsibility_mask,
+      idx                 = idx,
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
@@ -1728,10 +1728,10 @@ mstep_update_theta_log_concave <- function(
 #'
 #' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.
 #' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
+#' @param weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
 #' @param residuals List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.
 #' @param density_k An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
-#' @param responsibility_mask List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
+#' @param idx List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
 #' @param intercept_k Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
@@ -1744,13 +1744,13 @@ mstep_update_theta_log_concave <- function(
 #' }
 #'
 #' @export
-mstep_update_theta_lp <- function(
+mstep_theta_lp <- function(
   Y_bin,
   X,
-  posterior_weights,
+  weights,
   residuals,
   density_k,
-  responsibility_mask,
+  idx,
   intercept_k,
   slopes_k,
   lambda_theta,
@@ -1767,10 +1767,10 @@ mstep_update_theta_lp <- function(
   skip_ts <- integer(0)
   
   for (t in seq_len(TT)) {
-    idx_tk <- responsibility_mask[[t]][, component]
+    idx_tk <- idx[[t]][, component]
     if (any(idx_tk)) {
       res_k <- c(res_k, residuals[[t]][idx_tk, component])
-      w_k   <- c(w_k, posterior_weights[[t]][idx_tk, component])
+      w_k   <- c(w_k, weights[[t]][idx_tk, component])
       Y_k   <- c(Y_k, Y_bin[[t]][idx_tk, 1])
       X_k   <- rbind(
                 X_k,
@@ -1820,7 +1820,7 @@ mstep_update_theta_lp <- function(
   tmp_vec <- numeric(2 * TT_new)
   cnt <- 1
   for (t in seq_len(TT)) {
-    idx_tk <- responsibility_mask[[t]][, component]
+    idx_tk <- idx[[t]][, component]
     if (any(idx_tk)) {
       tmp_vec[cnt]           <- min(Y_bin[[t]][idx_tk]) - L
       tmp_vec[TT_new + cnt]  <- U - max(Y_bin[[t]][idx_tk])
@@ -1835,7 +1835,7 @@ mstep_update_theta_lp <- function(
 #  print(format(object.size(const_mat), "Mb"))
   
   # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
-  N_total <- sum(unlist(posterior_weights))
+  N_total <- sum(unlist(weights))
   obj_coef <- c(
     w_k,
     0,
@@ -1910,12 +1910,12 @@ mstep_update_theta_lp <- function(
 #' # Estimated with potential label swap
 #' est_mat1 <- true_mat + 0.1  # small noise, same ordering
 #' est_mat2 <- true_mat[, 2:1] + 0.2  # swapped + noise
-#' d1 <- compute_l1_distance(true_mat, est_mat1)
-#' d2 <- compute_l1_distance(true_mat, est_mat2)
+#' d1 <- comp_l1_dist(true_mat, est_mat1)
+#' d2 <- comp_l1_dist(true_mat, est_mat2)
 #' stopifnot(d1 < d2)
 #' }
 #' @export
-compute_l1_distance <- function(
+comp_l1_dist <- function(
   true_params,
   est_params
 ) {
@@ -1975,7 +1975,7 @@ is_increasing <- function(v) {
 #' constructs a normalized histogram (as a density estimate) over \code{n_bins}
 #' equal‐width bins spanning the range of \code{xn}.
 #'
-#' @param logcondens_obj A list (output of \code{modified_logcondens()}) containing:
+#' @param g A list (output of \code{modified_logcondens()}) containing:
 #'   \describe{
 #'     \item{\code{xn}}{Numeric vector of sample points.}
 #'     \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
@@ -1991,9 +1991,9 @@ is_increasing <- function(v) {
 #'
 #' @examples
 #' \dontrun{
-#' # Suppose g_k is one component from mstep_estimate_log_concave_densities()
+#' # Suppose g_k is one component from mstep_g()
 #' w_hist <- weighted_hist(
-#'   logcondens_obj = g_k,
+#'   g = g_k,
 #'   n_bins         = 50
 #' )
 #' plot(w_hist$midpoints, w_hist$densities, type = "h",
@@ -2001,12 +2001,12 @@ is_increasing <- function(v) {
 #' }
 #' @export
 weighted_hist <- function(
-  logcondens_obj,
+  g,
   n_bins = 30
 ) {
   # Extract sample points and weights
-  x_vals <- logcondens_obj$xn
-  w_vals <- logcondens_obj$w
+  x_vals <- g$xn
+  w_vals <- g$w
 
   # Determine range and bin cutpoints
   min_x   <- min(x_vals)
@@ -2148,7 +2148,7 @@ weighted_quantile <- function(
 #'
 #' @examples
 #' \dontrun{
-#' res <- evaluate_lcd_model(
+#' res <- eval_lcd(
 #'   model        = fit$iter,
 #'   Y_test       = Y_bin[test_idx],
 #'   X_test       = X[test_idx, , drop = FALSE],
@@ -2159,7 +2159,7 @@ weighted_quantile <- function(
 #' }
 #'
 #' @export
-evaluate_lcd_model <- function(
+eval_lcd <- function(
   model,
   Y_test,
   X_test,
@@ -2272,7 +2272,7 @@ evaluate_lcd_model <- function(
 #'
 #' @examples
 #' \dontrun{
-#' idx <- make_cv_index_matrix(
+#' idx <- cv_idx_mat(
 #'   nfold         = 5,
 #'   seeds         = c(101, 202, 303),
 #'   alpha_lambdas = c(1e-4, 1e-3, 1e-2),
@@ -2282,7 +2282,7 @@ evaluate_lcd_model <- function(
 #' }
 #'
 #' @export
-make_cv_index_matrix <- function(
+cv_idx_mat <- function(
   nfold,
   seeds,
   alpha_lambdas,
@@ -2383,7 +2383,7 @@ cv_lcd_onejob <- function(
   set.seed(seed_idx)
   err_msg <- NULL
   out_log <- utils::capture.output(
-    fit_try <- tryCatch(
+    fit <- tryCatch(
       main(
         Y               = Y_tr,
         X               = X_tr,
@@ -2406,7 +2406,7 @@ cv_lcd_onejob <- function(
 
   log_msg <- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
 
-  if (!is.list(fit_try) || is.null(fit_try$iter)) {
+  if (!is.list(fit) || is.null(fit$iter)) {
     log_msg <- paste0(log_msg, "✖ Fit failed: ", err_msg)
     saveRDS(
       list(
@@ -2424,8 +2424,8 @@ cv_lcd_onejob <- function(
   }
 
   # Evaluate on hold-out
-  eval_res <- evaluate_lcd_model(
-    model        = fit_try$iter,
+  eval_res <- eval_lcd(
+    model        = fit$iter,
     Y_test       = Y_bin[test_i],
     X_test       = X[test_i, , drop = FALSE],
     biomass_test = bin_mass[test_i],
@@ -2435,15 +2435,15 @@ cv_lcd_onejob <- function(
   prop_inf       <- eval_res$prop_inf
   trimmed_loglik <- eval_res$trimmed_loglik
   finite_loglik  <- eval_res$finite_loglik
-  L              <- fit_try$L$loglik
+  L              <- fit$L$loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
-  theta_mat   <- do.call(cbind, fit_try$iter$theta_new)
+  theta_mat   <- do.call(cbind, fit$iter$theta_new)
   theta_spars <- mean(abs(as.numeric(theta_mat)) < sparsity_eps, na.rm = TRUE)
 
   # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
-  alpha_core  <- fit_try$iter$alpha_new[-1, -1, drop = FALSE]
+  alpha_core  <- fit$iter$alpha_new[-1, -1, drop = FALSE]
   alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
 
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))
@@ -2499,7 +2499,7 @@ cv_lcd <- function(
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
 
-  index_matrix <- make_cv_index_matrix(
+  index_matrix <- cv_idx_mat(
     nfold         = nfold,
     seeds         = seeds,
     alpha_lambdas = alpha_lambdas,
@@ -2581,7 +2581,7 @@ cv_lcd <- function(
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{evaluate_lcd_model()}. Default \code{0.01}.
+#'   \code{eval_lcd()}. Default \code{0.01}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
@@ -2594,7 +2594,7 @@ cv_lcd <- function(
 #' @details
 #' This function uses a single outer cluster to process a \emph{grand} index of
 #' all simulation jobs in chunks, avoiding nested parallel. For reproducibility,
-#' job seeds are offset by the simulation index (\code{seed_idx + 1000 * sim_idx})
+#' job seeds are  (\code{seed_idx})
 #' before fitting. Each per-job RDS file contains:
 #' \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
 #' and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
@@ -2607,7 +2607,7 @@ cv_lcd <- function(
 #' }
 #'
 #' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
-#'   \code{\link{evaluate_lcd_model}}, \code{\link[flowmix]{make_cv_folds}}
+#'   \code{\link{eval_lcd}}, \code{\link[flowmix]{make_cv_folds}}
 #'
 #' @examples
 #' \dontrun{
@@ -2670,7 +2670,7 @@ cv_lcd_simul <- function(
       load(f, envir = env)
     }
     env$folds <- flowmix::make_cv_folds(ylist = env$Y_bin, nfold = nfold, blocksize = blocksize)
-    env$index_matrix <- make_cv_index_matrix(
+    env$index_matrix <- cv_idx_mat(
       nfold          = nfold,
       seeds          = seeds,
       alpha_lambdas  = sort(alpha_lambdas),
@@ -2764,7 +2764,7 @@ cv_lcd_simul <- function(
 #' (\code{lambda_alpha}, \code{lambda_theta}) by maximizing the mean
 #' trimmed held-out (penalized) log-likelihood across folds.
 #'
-#' @param index_matrix Numeric matrix generated by \code{\link{make_cv_index_matrix}}
+#' @param index_matrix Numeric matrix generated by \code{\link{cv_idx_mat}}
 #'   with columns \code{alpha_idx}, \code{theta_idx}, \code{seed_idx},
 #'   \code{fold_idx}, \code{lambda_alpha}, \code{lambda_theta}.
 #' @param save_dir Character; directory where per-run files
@@ -2797,8 +2797,8 @@ cv_lcd_simul <- function(
 #'   \item{\code{max_inf_prop}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}},
-#'   \code{\link{make_cv_index_matrix}}
+#' @seealso \code{\link{cv_lcd}}, \code{\link{eval_lcd}},
+#'   \code{\link{cv_idx_mat}}
 #'
 #' @examples
 #' \dontrun{
@@ -2906,6 +2906,9 @@ cv_lcd_summary <- function(
 ```
 
 
+
+
+
 ```{r}
 #' @export
 cv_lcd_summary_simul <- function(base_dir, num_sims) {
@@ -2929,21 +2932,40 @@ cv_lcd_summary_simul <- function(base_dir, num_sims) {
 #' @keywords internal
 #' @export
 refit_onejob <- function(
-  Y_bin, X, bin_mass, K,
-  lambda_alpha, lambda_theta,
-  seed, max_iter, iter_eta, resp_threshold, trim_prob,
-  save_dir, debug = FALSE
+  Y_bin,
+  X,
+  bin_mass,
+  K,
+  lambda_alpha,
+  lambda_theta,
+  seed,
+  max_iter,
+  iter_eta,
+  resp_threshold,
+  trim_prob,
+  save_dir,
+  debug = FALSE
 ) {
-  # cache file for this seed
-  out_path <- file.path(save_dir, sprintf("refit_%d.rds", as.integer(seed)))
+  seed_int <- as.integer(seed)
+  out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
+
+  # Fast path: cached result
   if (file.exists(out_path)) {
-    saved <- readRDS(out_path)
-    return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit = saved$fit))
+    saved <- tryCatch(readRDS(out_path), error = function(e) NULL)
+    if (is.list(saved)) {
+      L_cached <- if (!is.null(saved$L)) as.numeric(saved$L) else NA_real_
+      return(list(log_msg = saved$log_msg, L = L_cached, fit = saved$fit, file = out_path))
+    }
+    # if cache unreadable, fall through to re-fit
   }
 
-  log_msg <- paste0("▶ Refit seed ", seed, " | λa=", lambda_alpha, ", λθ=", lambda_theta, "\n")
+  log_msg <- paste0(
+    "▶ Refit seed ", seed_int,
+    " | lambda_alpha=", lambda_alpha,
+    ", lambda_theta=", lambda_theta, "\n"
+  )
 
-  set.seed(seed)
+  set.seed(seed_int)
   err_msg <- NULL
   out_log <- utils::capture.output(
     fit <- tryCatch(
@@ -2971,14 +2993,19 @@ refit_onejob <- function(
   if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
     log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
     saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
-    return(list(log_msg = log_msg, L = NA_real_, fit = NULL))
+    return(list(log_msg = log_msg, L = NA_real_, fit = NULL, file = out_path))
   }
 
-  L <- fit$L$loglik
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed, "; final L = ", round(L, 6), "\n")
+  L <- as.numeric(fit$L$loglik)
+  log_msg <- paste0(
+    log_msg,
+    "✔ Completed seed ", seed_int,
+    "; final L = ", round(L, 6), "\n"
+  )
+
   saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
 
-  return(list(log_msg = log_msg, L = L, fit = fit))
+  return(list(log_msg = log_msg, L = L, fit = fit, file = out_path))
 }
 ```
 
@@ -2989,66 +3016,56 @@ refit_onejob <- function(
 ```{r}
 #' Refit LCDmix multiple times and select the best training fit
 #'
-#' Given optimal penalties from CV, repeatedly refits \code{main()} on the
-#' full (binned) dataset using different random seeds, records the final
-#' training objective \code{L$loglik} for each repeat, caches results to disk,
-#' and returns logs, per-repeat scores, and the best fit.
+#' Runs multiple refits of an LCDmix model on the full training data using a
+#' grid of random seeds (one outer parallel cluster; no nested parallel). Each
+#' refit is cached to \code{save_dir/refit_<seed>.rds} so the procedure is
+#' fully resumable. The best fit is chosen by the largest training objective
+#' \eqn{L} among the completed refits.
 #'
-#' @param Y_bin List of length \eqn{TT}; binned responses for each time point.
-#'   Element \eqn{t} is a numeric vector of length \eqn{n_t}.
-#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#' @param bin_mass List of length \eqn{TT}; per-time weights for each bin/observation.
+#' @param Y_bin List of responses (one element per time point/bin), as used by \code{main()}.
+#' @param X Numeric matrix of covariates with \code{nrow(X) == length(Y_bin)}.
+#' @param bin_mass List of nonnegative weights aligned with \code{Y_bin}.
 #' @param K Integer; number of mixture components.
-#' @param opt_lambdas Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
-#'   chosen from cross-validation.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
-#' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-3}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
-#'   provide \code{cv_reps} to derive \code{seeds <- 1:cv_reps}. Default \code{NULL}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction passed to
-#'   \code{main()} for any internal diagnostics (not used in the training
-#'   objective). Default \code{0.01}.
-#' @param save_dir Character; directory to cache per-repeat results as
-#'   \code{"refit_<seed>.rds"}. Default \code{"./result"}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers for
-#'   \pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{main()} to print extra diagnostics.
-#'   Default \code{FALSE}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL}. Default \code{NULL}.
+#' @param opt_lambdas Numeric vector of length 2 giving \code{c(lambda_alpha, lambda_theta)}.
+#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
+#'   The seeds will be \code{1:cv_reps}.
+#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.
+#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.
+#' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
+#' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
+#' @param debug Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.
 #'
 #' @details
-#' Each repeat runs a full fit with \code{main()} and extracts the final training
-#' objective \code{L$loglik}. Results are cached to enable resuming; cached runs
-#' are skipped on subsequent calls. Parallelization uses a socket cluster and is
-#' cleaned up on exit.
+#' Each seed triggers a call to \code{refit_onejob()}, which caches its result to
+#' disk and returns a log string and the final training objective \eqn{L}.
+#' Existing cache files are reused and not recomputed.
 #'
 #' @return A list with:
 #' \describe{
-#'   \item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
-#'   \item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
-#'     (\code{L$loglik}) across repeats (one per seed).}
-#'   \item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
-#'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
+#'   \item{\code{logs}}{Character vector of log messages (one per seed plus a summary line).}
+#'   \item{\code{refit_scores}}{Numeric vector of per-seed training objectives \eqn{L} (may contain \code{NA}).}
+#'   \item{\code{best_fit}}{The list returned by \code{refit_onejob()} for the best seed
+#'     (largest \eqn{L}); \code{NULL} if all refits failed.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
+#' @seealso \code{\link{refit_onejob}}
 #'
 #' @examples
 #' \dontrun{
-#' best <- refit_lcd(
-#'   Y_bin        = Y_bin,
-#'   X            = X,
-#'   bin_mass     = bin_mass,
-#'   K            = 2,
-#'   opt_lambdas  = c(1e-3, 1e-3),
-#'   seeds        = 1:5,
-#'   save_dir     = "refits"
+#' # Given Y_bin, X, bin_mass, and chosen penalties:
+#' opt <- c(lambda_alpha = 1e-3, lambda_theta = 1e-3)
+#' out <- refit_lcd(
+#'   Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = 2,
+#'   opt_lambdas = opt,
+#'   seeds = 1:10,
+#'   save_dir = "refits",
+#'   n_cores = 8
 #' )
-#' best$refit_scores
+#' out$best_fit$L       # best training objective
+#' out$best_fit$file    # path to the cached best refit
 #' }
 #'
 #' @export
@@ -3112,7 +3129,9 @@ refit_lcd <- function(
     " (seed index ", best_idx, ").\n"
   ))
 
-  return(list(logs = logs, refit_scores = scores, best_fit = res_list[[best_idx]]))
+  return(list(logs = logs, 
+              refit_scores = scores, 
+              best_fit = res_list[[best_idx]]))
 }
 ```
 
@@ -3120,79 +3139,83 @@ refit_lcd <- function(
 
 
 ```{r}
-#' Refit LCDmix per simulation (with best lambdas) and score via \code{mixture_metric}
+#' Refit LCDmix across many simulations and record best files (no rereads)
 #'
-#' @description
-#' For each simulation in \code{best_table}, this function refits the LCD
-#' mixture-of-experts model using the provided optimal penalty pair
-#' \code{(lambda_alpha, lambda_theta)} and multiple random seeds. Each fit is
-#' evaluated with \code{mixture_metric()} against the simulation ground truth,
-#' and a per-run result is written to \code{save_dir} as
-#' \code{refit_sim<sim_idx>_seed<seed>.rds}. Results are computed in parallel.
+#' For each simulation, runs multiple refits across the given seeds using a
+#' single outer parallel cluster (no nested parallel). Each refit is cached to
+#' \code{base_dir/sim_<s>/refit/refit_<seed>.rds}. The function returns:
+#' (i) a per-job table with refit metrics, (ii) logs, and (iii) a per-simulation
+#' \emph{best table} giving the simulation index, its \code{lambda_alpha} and
+#' \code{lambda_theta}, and the filename of the best refit chosen by the largest
+#' training objective \eqn{L}. The best table is built directly from in-memory
+#' results—no disk rereads.
 #'
-#' @param best_table A two- or three-column matrix/data.frame with at least
-#'   columns \code{sim_idx}, \code{lambda_alpha}, \code{lambda_theta}. Typically
-#'   the output of \code{summarize_simul_cv()}.
-#' @param sim_dir Directory containing simulation files named
-#'   \code{"sim_<sim_idx>.rds"} produced by \code{simulate_and_save()}.
-#' @param save_dir Directory to write per-refit result files
-#'   \code{"refit_sim<sim_idx>_seed<seed>.rds"}.
+#' @param sim_files Character vector; paths to simulation files. Each file must
+#'   contain \code{Y_bin}, \code{X}, and \code{bin_mass}. Files may be \code{.rds}
+#'   (containing a list) or \code{.RData}.
+#' @param opt_lambdas_list List of length \code{length(sim_files)}; each element
+#'   is \code{c(lambda_alpha, lambda_theta)} to use for that simulation.
 #' @param K Integer; number of mixture components.
-#' @param max_iter Integer; maximum EM iterations in \code{main()}. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance (relative change in Q). Default \code{1e-3}.
-#' @param resp_threshold Numeric in \[0,1\]; responsibilities below this are zeroed
-#'   for numerical stability. Default \code{1e-3}.
-#' @param refit_seeds Integer vector of RNG seeds for repeated refits per
-#'   simulation. Default \code{1:1}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers. \code{"max"}
-#'   uses all physical cores minus one. Default \code{"max"}.
+#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
+#'   \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.
+#' @param max_iter Integer; maximum EM iterations per refit. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance for the surrogate objective.
+#'   Default \code{1e-3}.
+#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
+#'   zeroed for stability. Default \code{1e-3}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
+#'   Default \code{0.01}.
+#' @param base_dir Character; base directory for outputs. Refit caches are written
+#'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
+#' @param n_cores Integer or \code{"max"}; number of workers for the single outer
+#'   cluster. Default \code{"max"}.
+#' @param chunk_size Integer; number of refit jobs each worker processes serially
+#'   per task (reduces overhead). Default \code{20}.
+#' @param debug Logical; forwarded to \code{main()} for verbose diagnostics.
+#'   Default \code{FALSE}.
 #'
-#' @details
-#' Each job:
-#' \enumerate{
-#'   \item Loads \code{sim_<sim_idx>.rds} (which contains \code{ylist}, \code{X},
-#'         \code{countslist}, \code{prob}, and \code{dens_true}).
-#'   \item Calls \code{main()} with the best \code{lambda_alpha/theta} and the
-#'         given seed.
-#'   \item Computes the weighted L1 mixture distance via \code{mixture_metric()}.
-#'   \item Saves an \code{.rds} with \code{metric}, \code{L}, \code{fit_try},
-#'         and log/error text.
-#' }
-#'
-#' @return A matrix (one row per \code{sim_idx} × \code{seed_idx}) with columns:
+#' @return A list with:
 #' \describe{
-#'   \item{\code{sim_idx}}{Simulation ID.}
-#'   \item{\code{lambda_alpha}}{Penalty used for mixture weights.}
-#'   \item{\code{lambda_theta}}{Penalty used for component parameters.}
-#'   \item{\code{seed_idx}}{Refit seed.}
-#'   \item{\code{L}}{Final loglikelihood objective value (NA on failure).}
-#'   \item{\code{metric}}{Weighted L1 distance to truth from \code{mixture_metric()} (NA on failure).}
+#'   \item{\code{jobs}}{Data frame of per-job metrics with columns
+#'         \code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta},
+#'         \code{L}, and \code{file}.}
+#'   \item{\code{logs}}{Character vector of chunk logs.}
+#'   \item{\code{best_table}}{Data frame with columns
+#'         \code{sim}, \code{lambda_alpha}, \code{lambda_theta}, \code{best_file};
+#'         one row per simulation, where \code{best_file} is the cached filename
+#'         of the refit with the largest \eqn{L} (or \code{NA} if none succeeded).}
 #' }
 #'
-#' @seealso \code{\link{simulate_and_save}}, \code{\link{cv_lcd_simul}},
-#'   \code{\link{summarize_simul_cv}}, \code{\link{mixture_metric}}
+#' @seealso \code{\link{refit_onejob}}, \code{\link{cv_lcd_simul}}
 #'
 #' @examples
 #' \dontrun{
-#' # Suppose 'best_tbl' came from summarize_simul_cv()
-#' out <- simul_refit(
-#'   best_table  = best_tbl,
-#'   sim_dir     = "sim_data",
-#'   save_dir    = "cv_saves",
-#'   K           = 2,
-#'   refit_seeds = 1:3,
-#'   n_cores     = "max"
+#' sims <- sprintf("sim_%02d.rds", 1:10)
+#' # suppose each sim has its own chosen penalties from CV:
+#' opt_list <- replicate(10, c(1e-3, 1e-3), simplify = FALSE)
+#' out <- refit_lcd_simul(
+#'   sim_files        = sims,
+#'   opt_lambdas_list = opt_list,
+#'   K                = 2,
+#'   seeds            = 1:8,
+#'   base_dir         = "cv_saves",
+#'   n_cores          = 32
 #' )
-#' head(out)
+#' out$best_table
 #' }
 #'
 #' @export
-simul_refit <- function(
+refit_lcd_simul <- function(
   sim_files,
-  opt_lambdas_list,      # list length = length(sim_files), each c(lambda_alpha, lambda_theta)
+  opt_lambdas_list,
   K,
-  seeds = NULL, cv_reps = NULL,
-  max_iter = 30, iter_eta = 1e-3, resp_threshold = 1e-3, trim_prob = 0.01,
+  seeds = NULL, 
+  cv_reps = NULL,
+  max_iter = 30, 
+  iter_eta = 1e-3, 
+  resp_threshold = 1e-3, 
+  trim_prob = 0.01,
   base_dir = "./cv_saves",
   n_cores = "max",
   chunk_size = 20,
@@ -3204,15 +3227,17 @@ simul_refit <- function(
 
   num_sims <- length(sim_files)
   if (length(opt_lambdas_list) != num_sims)
-    stop("opt_lambdas_list must have length equal to length(sim_files).")
+    stop("`opt_lambdas_list` length must equal `length(sim_files)`.")
 
-  # Load sims
+  # Load simulations and ensure refit dirs exist
   sims <- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
     env <- new.env(parent = emptyenv())
     f <- sim_files[s]
     if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj <- readRDS(f); if (is.list(obj)) base::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
+      obj <- readRDS(f)
+      if (is.list(obj)) base::list2env(obj, envir = env) else
+        stop("RDS must be a list with Y_bin, X, bin_mass.")
     } else {
       load(f, envir = env)
     }
@@ -3221,15 +3246,19 @@ simul_refit <- function(
     if (!dir.exists(sim_refit_dir)) dir.create(sim_refit_dir, recursive = TRUE)
   }
 
-  # Build grand job index over (sim, seed)
+  # Grand jobs: all (sim, seed) with that sim's lambdas
   grand_jobs <- do.call(rbind, lapply(seq_len(num_sims), function(s) {
-    data.frame(sim_idx = s, seed = seeds, lambda_alpha = opt_lambdas_list[[s]][1],
-               lambda_theta = opt_lambdas_list[[s]][2])
+    data.frame(
+      sim_idx      = s,
+      seed         = seeds,
+      lambda_alpha = opt_lambdas_list[[s]][1],
+      lambda_theta = opt_lambdas_list[[s]][2]
+    )
   }))
   rownames(grand_jobs) <- NULL
 
   # Chunk rows
-  rows <- seq_len(nrow(grand_jobs))
+  rows   <- seq_len(nrow(grand_jobs))
   chunks <- split(rows, ceiling(seq_along(rows) / chunk_size))
 
   # Cluster
@@ -3241,22 +3270,35 @@ simul_refit <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_jobs","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir","debug"),
+                "trim_prob","base_dir","debug","refit_onejob"),
     envir = environment()
   )
 
-  logs <- parallel::parLapply(cl, chunks, function(rr) {
-    out <- character(length(rr))
+  # Each chunk returns: a single log string + a small data.frame of job metrics
+  chunk_results <- parallel::parLapply(cl, chunks, function(rr) {
+    logs <- character(length(rr))
+    df   <- data.frame(
+      sim_idx = integer(length(rr)),
+      seed    = integer(length(rr)),
+      lambda_alpha = numeric(length(rr)),
+      lambda_theta = numeric(length(rr)),
+      L       = numeric(length(rr)),
+      file    = character(length(rr)),
+      stringsAsFactors = FALSE
+    )
+
     for (i in seq_along(rr)) {
-      gi <- rr[i]
+      gi  <- rr[i]
       row <- grand_jobs[gi, ]
-      s <- row[["sim_idx"]]
-      sd <- row[["seed"]]
-      la <- row[["lambda_alpha"]]
-      lt <- row[["lambda_theta"]]
+      s   <- row[["sim_idx"]]
+      sd  <- row[["seed"]]
+      la  <- row[["lambda_alpha"]]
+      lt  <- row[["lambda_theta"]]
 
       env <- sims[[s]]
       sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
+      # expected cache filename
+      file_name <- sprintf("refit_%d.rds", as.integer(sd))
 
       res <- refit_onejob(
         Y_bin = env$Y_bin, X = env$X, bin_mass = env$bin_mass, K = K,
@@ -3265,17 +3307,52 @@ simul_refit <- function(
         resp_threshold = resp_threshold, trim_prob = trim_prob,
         save_dir = sim_refit_dir, debug = debug
       )
-      out[i] <- paste0("[sim ", s, "] ", res$log_msg)
+
+      logs[i] <- paste0("[sim ", s, "] ", res$log_msg)
+      df$sim_idx[i]      <- s
+      df$seed[i]         <- sd
+      df$lambda_alpha[i] <- la
+      df$lambda_theta[i] <- lt
+      df$L[i]            <- if (is.null(res$L)) NA_real_ else as.numeric(res$L)
+      df$file[i]         <- file.path(sim_refit_dir, file_name)
     }
-    paste(out, collapse = "\n")
+
+    list(log = paste(logs, collapse = "\n"), df = df)
   })
 
+  # Collect logs and per-job table
+  logs <- vapply(chunk_results, `[[`, character(1), "log")
+  jobs <- do.call(rbind, lapply(chunk_results, `[[`, "df"))
+  rownames(jobs) <- NULL
+
+  # Build best_table directly from in-memory Ls (no file rereads)
+  best_table <- data.frame(
+    sim           = seq_len(num_sims),
+    lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
+    lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
+    best_file     = NA_character_,
+    stringsAsFactors = FALSE
+  )
+  for (s in seq_len(num_sims)) {
+    rows_s <- which(jobs$sim_idx == s)
+    if (length(rows_s) == 0L) next
+    Ls <- jobs$L[rows_s]
+    if (!any(is.finite(Ls))) next
+    # first max is deterministic
+    best_idx <- rows_s[ which.max(Ls) ]
+    best_table$best_file[s] <- basename(jobs$file[best_idx])
+  }
+
   return(list(
-    jobs = grand_jobs,
-    logs = unlist(logs, use.names = FALSE)
+    jobs       = jobs,                        # per-job metrics (sim, seed, lambdas, L, file)
+    logs       = unlist(logs, use.names = FALSE),
+    best_table = best_table                   # sim, lambda_alpha, lambda_theta, best_file
   ))
 }
 ```
+
+
+
 
 
 
@@ -3712,56 +3789,6 @@ simulate_and_save <- function(
 
 
 
-
-```{r}
-#' Summarize CV results across simulations and pick best lambdas
-#'
-#' @description
-#' For each unique simulation ID in \code{simul_idx_mat}, this helper subsets the
-#' corresponding rows, calls \code{cv_lcd_summary()} to aggregate the CV results for
-#' that simulation, and extracts the optimal penalty pair
-#' \code{(lambda_alpha, lambda_theta)}. It returns a compact matrix with one row
-#' per simulation.
-#'
-#' @param simul_idx_mat Numeric matrix of CV jobs (e.g., from
-#'   \code{simul_idx_matrix()}). Must contain a \code{sim_idx} column; all other
-#'   columns required by your \code{cv_lcd_summary()} are passed along after removing
-#'   \code{sim_idx}.
-#' @param save_dir Character path to the directory containing the per–CV-run
-#'   result files produced by \code{cv_lcd_simul()}.
-#'
-#' @return A numeric matrix with three columns:
-#' \describe{
-#'   \item{\code{sim_idx}}{Simulation identifier.}
-#'   \item{\code{lambda_alpha}}{Selected \code{lambda_alpha} for that simulation.}
-#'   \item{\code{lambda_theta}}{Selected \code{lambda_theta} for that simulation.}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' # Suppose you already ran:
-#' # logs <- cv_lcd_simul(idx_mat, sim_dir="sim_data", K=2, save_dir="cv_saves")
-#'
-#' best_tbl <- summarize_simul_cv(
-#'   simul_idx_mat = idx_mat,
-#'   save_dir      = "cv_saves"
-#' )
-#' head(best_tbl)
-#' }
-#'
-#' @export
-summarize_simul_cv <- function(simul_idx_mat, save_dir) {
-  sim_idxs <- unique(simul_idx_mat[,"sim_idx"])
-  bests   <- matrix(0, nrow = length(sim_idxs), ncol = 3)
-  colnames(bests) = c("sim_idx", "lambda_alpha", "lambda_theta")
-  for (sim in sim_idxs) {
-    idx_mat <- simul_idx_mat[simul_idx_mat[,"sim_idx"] == sim, -1]
-    out     <- cv_lcd_summary(idx_mat, save_dir, simul = TRUE, sim_idx = sim)
-    bests[sim,] <- c(sim, out$opt_lambdas[1], out$opt_lambdas[2])
-  }
-  return(bests)
-}
-```
 
 
 

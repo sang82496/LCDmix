@@ -50,7 +50,7 @@ A list with components:
 \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
 \item{X}{Covariate matrix (unchanged).}
 \item{bin_mass}{List of biomass‐per‐bin weights.}
-\item{initial}{List returned by \code{initialize_model()}, containing starting parameters.}
+\item{initial}{List returned by \code{initialization()}, containing starting parameters.}
 \item{iter}{List returned by \code{iteration()}, containing fitted parameters over EM iterations.}
 }
 }

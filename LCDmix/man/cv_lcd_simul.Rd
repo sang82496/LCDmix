@@ -50,7 +50,7 @@ surrogate objective. Default \code{1e-3}.}
 zeroed for stability. Default \code{1e-3}.}
 
 \item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used inside
-\code{evaluate_lcd_model()}. Default \code{0.01}.}
+\code{eval_lcd()}. Default \code{0.01}.}
 
 \item{blocksize}{Integer; block size for \code{flowmix::make_cv_folds()}.
 Default \code{20}.}
@@ -83,7 +83,7 @@ are resumable.
 \details{
 This function uses a single outer cluster to process a \emph{grand} index of
 all simulation jobs in chunks, avoiding nested parallel. For reproducibility,
-job seeds are offset by the simulation index (\code{seed_idx + 1000 * sim_idx})
+job seeds are  (\code{seed_idx})
 before fitting. Each per-job RDS file contains:
 \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
 and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
@@ -118,5 +118,5 @@ for (s in seq_along(sims)) {
 }
 \seealso{
 \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
-\code{\link{evaluate_lcd_model}}, \code{\link[flowmix]{make_cv_folds}}
+\code{\link{eval_lcd}}, \code{\link[flowmix]{make_cv_folds}}
 }

@@ -11,8 +11,8 @@
 #'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
 #' @param weights A list of length \code{TT}, where each element is an \eqn{M_t \times K}
 #'   matrix of posterior weights (e.g., responsibilities) corresponding to \code{residuals}.
-#' @param indices A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   logical or integer matrix.  \code{indices[[t]][i,k]} indicates whether the \(i\)th bin
+#' @param idx A list of length \code{TT}, where each element is an \eqn{M_t \times K}
+#'   logical or integer matrix.  \code{idx[[t]][i,k]} indicates whether the \(i\)th bin
 #'   at time \(t\) contributes to component \(k\).
 #'
 #' @return A list of length \code{K}, where element \code{k} is the output of
@@ -25,25 +25,25 @@
 #' residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
 #' weights   <- lapply(residuals, function(m) abs(m))  # just for demo
 #' # Include all bins for both components
-#' indices <- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
-#' densities <- mstep_estimate_log_concave_densities(residuals, weights, indices)
+#' idx <- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
+#' densities <- mstep_g(residuals, weights, idx)
 #' }
 #' @export
-mstep_estimate_log_concave_densities <- function(
+mstep_g <- function(
   residuals,
   weights,
-  indices
+  idx
 ) {
   TT <- length(weights)
-  K  <- ncol(indices[[1]])
+  K  <- ncol(idx[[1]])
   densities <- vector("list", K)
   
   for (k in seq_len(K)) {
     # Collect all residuals and weights for component k
     res_k <- unlist(lapply(seq_len(TT),
-                           function(t) residuals[[t]][indices[[t]][, k], k]))
+                           function(t) residuals[[t]][idx[[t]][, k], k]))
     w_k   <- unlist(lapply(seq_len(TT),
-                           function(t) weights[[t]][indices[[t]][, k], k]))
+                           function(t) weights[[t]][idx[[t]][, k], k]))
     
     # Unique residual values & aggregated weights
     uniq_res <- unique(res_k)

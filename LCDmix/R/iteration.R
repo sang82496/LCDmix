@@ -1,20 +1,20 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Run EM‐style iterations for log‐concave mixture‐of‐experts model
+#' Run EM-style iterations for log-concave mixture-of-experts model
 #'
 #' @description
 #' Performs up to \code{max_iter} iterations of the EM algorithm:
-#' 1. E‐step via \code{e_step_log_concave()}  
-#' 2. M‐steps:
-#'    - Update mixture weights with \code{mstep_update_alpha()}  
-#'    - Update regression slopes/intercepts via \code{mstep_update_theta_log_concave()} and \code{mstep_update_intercepts()}  
-#'    - Update log‐concave component densities with \code{mstep_estimate_log_concave_densities()}  
+#' 1. E-step via \code{estep_lcd()}  
+#' 2. M-steps:
+#'    - Update mixture weights with \code{mstep_alpha()}  
+#'    - Update regression slopes/intercepts via \code{mstep_theta()} and \code{mstep_shift()}  
+#'    - Update log‐concave component densities with \code{mstep_g()}  
 #' Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
 #'
 #' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
 #' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
 #' @param bin_mass List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.
-#' @param init_res List returned by \code{initialize_model()}, containing:\cr
+#' @param init_res List returned by \code{initialization()}, containing:\cr
 #'   \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
 #'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
@@ -86,7 +86,7 @@ iteration <- function(
   for (i in seq_len(max_iter)){
     
     #— E‐step —#
-    Estep   <- e_step_log_concave(
+    Estep   <- estep_lcd(
       X               = X,
       bin_mass        = bin_mass,
       residuals       = resi_old,
@@ -98,14 +98,14 @@ iteration <- function(
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_old,
         alpha                = alpha_old,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -114,21 +114,21 @@ iteration <- function(
     message("✔ E‐step complete")
     
     #— M‐step α —#
-    alpha_new <- mstep_update_alpha(
+    alpha_new <- mstep_alpha(
       X                    = X,
-      posterior_weights    = weight_new,
-      responsibility_mask  = idx_new,
+      weights              = weight_new,
+      idx                  = idx_new,
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_old,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -137,13 +137,13 @@ iteration <- function(
     message("✔ Updated α")
     
     #— M‐step θ via LP + shift —#
-    theta_lp <- mstep_update_theta_log_concave(
+    theta_lp <- mstep_theta(
       Y_bin               = Y_bin,
       X                   = X,
-      posterior_weights   = weight_new,
+      weights             = weight_new,
       residuals           = resi_old,
       densities           = g_old,
-      responsibility_mask = idx_old,
+      idx                 = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
       lambda_theta        = lambda_theta
@@ -151,14 +151,14 @@ iteration <- function(
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_old,
         slopes               = theta_new,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -167,28 +167,28 @@ iteration <- function(
     message("✔ Updated θ via LP")
     
     # Shift intercepts analytically
-    theta0_new <- mstep_update_intercepts(
+    theta0_new <- mstep_shift(
       Y_bin              = Y_bin,
       X                  = X,
       weights            = weight_new,
-      indices            = idx_new,
+      idx                = idx_new,
       slopes             = theta_new
     )
-    resi_new <- compute_residuals(
+    resi_new <- comp_resi(
       Y_bin   = Y_bin,
       X       = X,
       intercepts = theta0_new,
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    <- compute_surrogate_loglikelihood(
+      Q_new    <- comp_Q(
         X                    = X,
         densities            = g_old,
         residuals            = resi_new,
         slopes               = theta_new,
         alpha                = alpha_new,
-        indices              = idx_new,
-        responsibilities     = weight_new,
+        idx                  = idx_new,
+        resp                 = weight_new,
         lambda_alpha         = lambda_alpha,
         lambda_theta         = lambda_theta
       )
@@ -197,22 +197,22 @@ iteration <- function(
     message("✔ Centered the intercepts")
     
     #— M‐step g —#
-    g_new <- mstep_estimate_log_concave_densities(
-      residuals           = resi_new,
-      weights             = weight_new,
-      indices             = idx_new
+    g_new <- mstep_g(
+      residuals       = resi_new,
+      weights         = weight_new,
+      idx             = idx_new
     )
     message("✔ Updated g")
     
-    # Surrogate log‐likelihood
-    Q_new    <- compute_surrogate_loglikelihood(
+    # Surrogate log-likelihood
+    Q_new    <- comp_Q(
       X                    = X,
       densities            = g_new,
       residuals            = resi_new,
       slopes               = theta_new,
       alpha                = alpha_new,
-      indices              = idx_new,
-      responsibilities     = weight_new,
+      idx                  = idx_new,
+      resp                 = weight_new,
       lambda_alpha         = lambda_alpha,
       lambda_theta         = lambda_theta
     )
@@ -262,7 +262,7 @@ iteration <- function(
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
-    i           = i)
+    iter_num    = i)
   }
     list(final = last_state,
          error = NULL)
@@ -292,5 +292,5 @@ iteration <- function(
     g_new       = g_new,
     Q           = Q,
     Q_every     = Q_every,
-    i           = i))
+    iter_num    = i))
 }

@@ -29,7 +29,7 @@ cv_lcd <- function(
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
 
-  index_matrix <- make_cv_index_matrix(
+  index_matrix <- cv_idx_mat(
     nfold         = nfold,
     seeds         = seeds,
     alpha_lambdas = alpha_lambdas,

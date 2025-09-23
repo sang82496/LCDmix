@@ -4,21 +4,40 @@
 #' @keywords internal
 #' @export
 refit_onejob <- function(
-  Y_bin, X, bin_mass, K,
-  lambda_alpha, lambda_theta,
-  seed, max_iter, iter_eta, resp_threshold, trim_prob,
-  save_dir, debug = FALSE
+  Y_bin,
+  X,
+  bin_mass,
+  K,
+  lambda_alpha,
+  lambda_theta,
+  seed,
+  max_iter,
+  iter_eta,
+  resp_threshold,
+  trim_prob,
+  save_dir,
+  debug = FALSE
 ) {
-  # cache file for this seed
-  out_path <- file.path(save_dir, sprintf("refit_%d.rds", as.integer(seed)))
+  seed_int <- as.integer(seed)
+  out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
+
+  # Fast path: cached result
   if (file.exists(out_path)) {
-    saved <- readRDS(out_path)
-    return(list(log_msg = saved$log_msg, L = as.numeric(saved$L), fit = saved$fit))
+    saved <- tryCatch(readRDS(out_path), error = function(e) NULL)
+    if (is.list(saved)) {
+      L_cached <- if (!is.null(saved$L)) as.numeric(saved$L) else NA_real_
+      return(list(log_msg = saved$log_msg, L = L_cached, fit = saved$fit, file = out_path))
+    }
+    # if cache unreadable, fall through to re-fit
   }
 
-  log_msg <- paste0("▶ Refit seed ", seed, " | λa=", lambda_alpha, ", λθ=", lambda_theta, "\n")
+  log_msg <- paste0(
+    "▶ Refit seed ", seed_int,
+    " | lambda_alpha=", lambda_alpha,
+    ", lambda_theta=", lambda_theta, "\n"
+  )
 
-  set.seed(seed)
+  set.seed(seed_int)
   err_msg <- NULL
   out_log <- utils::capture.output(
     fit <- tryCatch(
@@ -46,12 +65,17 @@ refit_onejob <- function(
   if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
     log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
     saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
-    return(list(log_msg = log_msg, L = NA_real_, fit = NULL))
+    return(list(log_msg = log_msg, L = NA_real_, fit = NULL, file = out_path))
   }
 
-  L <- fit$L$loglik
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed, "; final L = ", round(L, 6), "\n")
+  L <- as.numeric(fit$L$loglik)
+  log_msg <- paste0(
+    log_msg,
+    "✔ Completed seed ", seed_int,
+    "; final L = ", round(L, 6), "\n"
+  )
+
   saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
 
-  return(list(log_msg = log_msg, L = L, fit = fit))
+  return(list(log_msg = log_msg, L = L, fit = fit, file = out_path))
 }

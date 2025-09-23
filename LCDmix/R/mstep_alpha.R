@@ -7,9 +7,9 @@
 #' on covariates with an L1 penalty to update the mixture‐weight parameters \code{alpha}.
 #'
 #' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param posterior_weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#' @param weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
 #'   matrix of posterior weights (e.g.\ responsibilities × biomass) for each bin and component.
-#' @param responsibility_mask A list of length \eqn{TT}, each element an \eqn{M_t \times K}
+#' @param idx A list of length \eqn{TT}, each element an \eqn{M_t \times K}
 #'   logical matrix indicating which bins have effectively nonzero posterior weight.
 #' @param lambda_alpha Positive numeric L1 penalty on the non‐intercept mixture‐weight coefficients.
 #'
@@ -24,17 +24,17 @@
 #' # Simulate posterior weights and threshold mask
 #' post_w <- lapply(1:TT, function(i) matrix(runif(4 * K), ncol = K))
 #' mask  <- lapply(post_w, function(w) w > 0.1)
-#' alpha <- mstep_update_alpha(X, post_w, mask, lambda_alpha = 1e-3)
+#' alpha <- mstep_alpha(X, post_w, mask, lambda_alpha = 1e-3)
 #' }
 #' @export
-mstep_update_alpha <- function(
+mstep_alpha <- function(
   X,
-  posterior_weights,
-  responsibility_mask,
+  weights,
+  idx,
   lambda_alpha
 ) {
   TT <- nrow(X)
-  K  <- ncol(responsibility_mask[[1]])
+  K  <- ncol(idx[[1]])
   
   # Sequence of candidate lambda values (from large to target)
   lambda_max <- lambda_alpha * 100
@@ -44,8 +44,8 @@ mstep_update_alpha <- function(
   weight_sum <- matrix(0, nrow = TT, ncol = K)
   for (t in seq_len(TT)) {
     for (k in seq_len(K)) {
-      mask_tk         <- responsibility_mask[[t]][, k]
-      weight_sum[t, k] <- sum(posterior_weights[[t]][mask_tk, k])
+      mask_tk         <- idx[[t]][, k]
+      weight_sum[t, k] <- sum(weights[[t]][mask_tk, k])
     }
   }
   

@@ -8,7 +8,7 @@
 #' constructs a normalized histogram (as a density estimate) over \code{n_bins}
 #' equal‐width bins spanning the range of \code{xn}.
 #'
-#' @param logcondens_obj A list (output of \code{modified_logcondens()}) containing:
+#' @param g A list (output of \code{modified_logcondens()}) containing:
 #'   \describe{
 #'     \item{\code{xn}}{Numeric vector of sample points.}
 #'     \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
@@ -24,9 +24,9 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Suppose g_k is one component from mstep_estimate_log_concave_densities()
+#' # Suppose g_k is one component from mstep_g()
 #' w_hist <- weighted_hist(
-#'   logcondens_obj = g_k,
+#'   g = g_k,
 #'   n_bins         = 50
 #' )
 #' plot(w_hist$midpoints, w_hist$densities, type = "h",
@@ -34,12 +34,12 @@
 #' }
 #' @export
 weighted_hist <- function(
-  logcondens_obj,
+  g,
   n_bins = 30
 ) {
   # Extract sample points and weights
-  x_vals <- logcondens_obj$xn
-  w_vals <- logcondens_obj$w
+  x_vals <- g$xn
+  w_vals <- g$w
 
   # Determine range and bin cutpoints
   min_x   <- min(x_vals)

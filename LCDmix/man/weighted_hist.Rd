@@ -4,10 +4,10 @@
 \alias{weighted_hist}
 \title{Compute a weighted histogram from a log‐concave density object}
 \usage{
-weighted_hist(logcondens_obj, n_bins = 30)
+weighted_hist(g, n_bins = 30)
 }
 \arguments{
-\item{logcondens_obj}{A list (output of \code{modified_logcondens()}) containing:
+\item{g}{A list (output of \code{modified_logcondens()}) containing:
 \describe{
 \item{\code{xn}}{Numeric vector of sample points.}
 \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
@@ -31,9 +31,9 @@ equal‐width bins spanning the range of \code{xn}.
 }
 \examples{
 \dontrun{
-# Suppose g_k is one component from mstep_estimate_log_concave_densities()
+# Suppose g_k is one component from mstep_g()
 w_hist <- weighted_hist(
-  logcondens_obj = g_k,
+  g = g_k,
   n_bins         = 50
 )
 plot(w_hist$midpoints, w_hist$densities, type = "h",

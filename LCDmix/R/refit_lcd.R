@@ -2,66 +2,56 @@
 
 #' Refit LCDmix multiple times and select the best training fit
 #'
-#' Given optimal penalties from CV, repeatedly refits \code{main()} on the
-#' full (binned) dataset using different random seeds, records the final
-#' training objective \code{L$loglik} for each repeat, caches results to disk,
-#' and returns logs, per-repeat scores, and the best fit.
+#' Runs multiple refits of an LCDmix model on the full training data using a
+#' grid of random seeds (one outer parallel cluster; no nested parallel). Each
+#' refit is cached to \code{save_dir/refit_<seed>.rds} so the procedure is
+#' fully resumable. The best fit is chosen by the largest training objective
+#' \eqn{L} among the completed refits.
 #'
-#' @param Y_bin List of length \eqn{TT}; binned responses for each time point.
-#'   Element \eqn{t} is a numeric vector of length \eqn{n_t}.
-#' @param X Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#' @param bin_mass List of length \eqn{TT}; per-time weights for each bin/observation.
+#' @param Y_bin List of responses (one element per time point/bin), as used by \code{main()}.
+#' @param X Numeric matrix of covariates with \code{nrow(X) == length(Y_bin)}.
+#' @param bin_mass List of nonnegative weights aligned with \code{Y_bin}.
 #' @param K Integer; number of mixture components.
-#' @param opt_lambdas Numeric length-2 vector \code{c(lambda_alpha, lambda_theta)}
-#'   chosen from cross-validation.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
-#' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-3}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param seeds Integer vector of random seeds (one per repeat). If \code{NULL},
-#'   provide \code{cv_reps} to derive \code{seeds <- 1:cv_reps}. Default \code{NULL}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction passed to
-#'   \code{main()} for any internal diagnostics (not used in the training
-#'   objective). Default \code{0.01}.
-#' @param save_dir Character; directory to cache per-repeat results as
-#'   \code{"refit_<seed>.rds"}. Default \code{"./result"}.
-#' @param n_cores Integer or \code{"max"}; number of parallel workers for
-#'   \pkg{parallel}. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{main()} to print extra diagnostics.
-#'   Default \code{FALSE}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL}. Default \code{NULL}.
+#' @param opt_lambdas Numeric vector of length 2 giving \code{c(lambda_alpha, lambda_theta)}.
+#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
+#' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
+#'   The seeds will be \code{1:cv_reps}.
+#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.
+#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.
+#' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
+#' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
+#' @param debug Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.
 #'
 #' @details
-#' Each repeat runs a full fit with \code{main()} and extracts the final training
-#' objective \code{L$loglik}. Results are cached to enable resuming; cached runs
-#' are skipped on subsequent calls. Parallelization uses a socket cluster and is
-#' cleaned up on exit.
+#' Each seed triggers a call to \code{refit_onejob()}, which caches its result to
+#' disk and returns a log string and the final training objective \eqn{L}.
+#' Existing cache files are reused and not recomputed.
 #'
 #' @return A list with:
 #' \describe{
-#'   \item{\code{logs}}{Character vector of per-repeat logs plus a summary line.}
-#'   \item{\code{refit_scores}}{Numeric vector of final training log-likelihoods
-#'     (\code{L$loglik}) across repeats (one per seed).}
-#'   \item{\code{best_fit}}{The list for the best repeat (by \code{refit_scores}),
-#'     containing \code{log_msg}, \code{L}, and \code{fit_try} (the fitted object).}
+#'   \item{\code{logs}}{Character vector of log messages (one per seed plus a summary line).}
+#'   \item{\code{refit_scores}}{Numeric vector of per-seed training objectives \eqn{L} (may contain \code{NA}).}
+#'   \item{\code{best_fit}}{The list returned by \code{refit_onejob()} for the best seed
+#'     (largest \eqn{L}); \code{NULL} if all refits failed.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{evaluate_lcd_model}}
+#' @seealso \code{\link{refit_onejob}}
 #'
 #' @examples
 #' \dontrun{
-#' best <- refit_lcd(
-#'   Y_bin        = Y_bin,
-#'   X            = X,
-#'   bin_mass     = bin_mass,
-#'   K            = 2,
-#'   opt_lambdas  = c(1e-3, 1e-3),
-#'   seeds        = 1:5,
-#'   save_dir     = "refits"
+#' # Given Y_bin, X, bin_mass, and chosen penalties:
+#' opt <- c(lambda_alpha = 1e-3, lambda_theta = 1e-3)
+#' out <- refit_lcd(
+#'   Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = 2,
+#'   opt_lambdas = opt,
+#'   seeds = 1:10,
+#'   save_dir = "refits",
+#'   n_cores = 8
 #' )
-#' best$refit_scores
+#' out$best_fit$L       # best training objective
+#' out$best_fit$file    # path to the cached best refit
 #' }
 #'
 #' @export
@@ -125,5 +115,7 @@ refit_lcd <- function(
     " (seed index ", best_idx, ").\n"
   ))
 
-  return(list(logs = logs, refit_scores = scores, best_fit = res_list[[best_idx]]))
+  return(list(logs = logs, 
+              refit_scores = scores, 
+              best_fit = res_list[[best_idx]]))
 }

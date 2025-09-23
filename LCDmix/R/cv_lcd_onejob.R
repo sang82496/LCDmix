@@ -62,7 +62,7 @@ cv_lcd_onejob <- function(
   set.seed(seed_idx)
   err_msg <- NULL
   out_log <- utils::capture.output(
-    fit_try <- tryCatch(
+    fit <- tryCatch(
       main(
         Y               = Y_tr,
         X               = X_tr,
@@ -85,7 +85,7 @@ cv_lcd_onejob <- function(
 
   log_msg <- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
 
-  if (!is.list(fit_try) || is.null(fit_try$iter)) {
+  if (!is.list(fit) || is.null(fit$iter)) {
     log_msg <- paste0(log_msg, "✖ Fit failed: ", err_msg)
     saveRDS(
       list(
@@ -103,8 +103,8 @@ cv_lcd_onejob <- function(
   }
 
   # Evaluate on hold-out
-  eval_res <- evaluate_lcd_model(
-    model        = fit_try$iter,
+  eval_res <- eval_lcd(
+    model        = fit$iter,
     Y_test       = Y_bin[test_i],
     X_test       = X[test_i, , drop = FALSE],
     biomass_test = bin_mass[test_i],
@@ -114,15 +114,15 @@ cv_lcd_onejob <- function(
   prop_inf       <- eval_res$prop_inf
   trimmed_loglik <- eval_res$trimmed_loglik
   finite_loglik  <- eval_res$finite_loglik
-  L              <- fit_try$L$loglik
+  L              <- fit$L$loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
-  theta_mat   <- do.call(cbind, fit_try$iter$theta_new)
+  theta_mat   <- do.call(cbind, fit$iter$theta_new)
   theta_spars <- mean(abs(as.numeric(theta_mat)) < sparsity_eps, na.rm = TRUE)
 
   # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
-  alpha_core  <- fit_try$iter$alpha_new[-1, -1, drop = FALSE]
+  alpha_core  <- fit$iter$alpha_new[-1, -1, drop = FALSE]
   alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
 
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))

@@ -14,8 +14,8 @@
 #' @param weights A list of length \code{TT}; each element is a numeric vector of length
 #'   \eqn{M_t} giving the total biomass per bin (i.e.\ the \code{bin_mass} output
 #'   from \code{binning()}, with empty bins removed).
-#' @param indices A list of length \code{TT}; each element is an \eqn{M_t \times K}
-#'   logical or integer matrix where \code{indices[[t]][i, k]} is \code{TRUE} if the
+#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K}
+#'   logical or integer matrix where \code{idx[[t]][i, k]} is \code{TRUE} if the
 #'   \(i\)th bin at time \emph{t} contributes to component \emph{k}.
 #' @param slopes A list of length \code{K}; each element is a numeric vector of length
 #'   \eqn{p} giving the current slope parameters \eqn{\boldsymbol{\theta}_k}.
@@ -29,21 +29,21 @@
 #' # Simulate binned responses and bin_mass
 #' Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
 #' bin_mass<- lapply(Y_bin, function(m) runif(nrow(m)))
-#' # Dummy X and indices
+#' # Dummy X and idx
 #' X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' indices <- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
+#' idx <- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
 #'                       length(m) * K, replace = TRUE),
 #'                       ncol = K))
 #' slopes  <- replicate(K, runif(p), simplify = FALSE)
 #' # Compute updated intercepts
-#' intercepts <- mstep_update_intercepts(Y_bin, X, bin_mass, indices, slopes)
+#' intercepts <- mstep_shift(Y_bin, X, bin_mass, idx, slopes)
 #' }
 #' @export
-mstep_update_intercepts <- function(
+mstep_shift <- function(
   Y_bin,
   X,
   weights,
-  indices,
+  idx,
   slopes
 ) {
   K_comp <- length(slopes)
@@ -55,7 +55,7 @@ mstep_update_intercepts <- function(
     den <- 0
     for (t in seq_len(TT)) {
       # select which bins at time t belong to component k
-      idx_tk <- indices[[t]][, k]
+      idx_tk <- idx[[t]][, k]
       # corresponding biomass weights for those bins
       w_tk   <- weights[[t]][idx_tk, k]
       # sum of binned responses in those bins
