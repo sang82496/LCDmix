@@ -128,7 +128,7 @@ main <- function(
     model     = iter_res,
     X         = X,
     biomass   = bin_mass,
-    trim_prob = trim_prob,
+    trim_prob = trim_prob
   )
   
   
