@@ -130,7 +130,7 @@ main <- function(
     biomass   = bin_mass,
     trim_prob = trim_prob
   )
-  
+  message("✔ Calculating loglikelihood complete")
   
   #— Return all key results —#
   return(list(

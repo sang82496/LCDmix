@@ -11,6 +11,8 @@
 #' @param save_dir directory to write "<alpha>-<theta>-<seed>-<fold>.rds"
 #' @return character (one log line); writes result file as side-effect
 #' @keywords internal
+#' 
+#' @export
 cv_lcd_worker <- function(
   job,
   Y_bin, 
