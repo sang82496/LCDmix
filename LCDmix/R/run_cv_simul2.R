@@ -137,9 +137,7 @@ run_cv_simul2 <- function(
   # Grand index with sim_idx + seed offset to decorrelate RNG across sims
   grand_list <- lapply(seq_len(S), function(s) {
     im <- sims[[s]]$index_matrix
-    im2 <- im
-    im2[, "seed_idx"] <- im[, "seed_idx"] + 1000L * s
-    cbind(sim_idx = s, im2)
+    cbind(sim_idx = s, im)
   })
   grand_index <- do.call(rbind, grand_list)
   rownames(grand_index) <- NULL
@@ -158,7 +156,7 @@ run_cv_simul2 <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","maxdev","n_restarts","cv_lcd_worker"),
+                "trim_prob","save_dir","maxdev","n_restarts"),
     envir = environment()
   )
 
@@ -173,7 +171,7 @@ run_cv_simul2 <- function(
       job <- c(
         alpha_idx    = as.numeric(row[["alpha_idx"]]),
         theta_idx    = as.numeric(row[["theta_idx"]]),
-        seed_idx     = as.numeric(row[["seed_idx"]]),   # already offset
+        seed_idx     = as.numeric(row[["seed_idx"]]),
         fold_idx     = as.numeric(row[["fold_idx"]]),
         lambda_alpha = as.numeric(row[["lambda_alpha"]]),
         lambda_theta = as.numeric(row[["lambda_theta"]])
