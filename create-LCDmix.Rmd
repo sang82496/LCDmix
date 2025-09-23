@@ -130,7 +130,7 @@ main <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
-  Q_every        = FALSE,
+  calc_Q_every   = FALSE,
   debug          = FALSE,
   maxdev         = NULL,
   n_restarts     = 1
@@ -171,7 +171,7 @@ main <- function(
     iter_eta,
     max_iter,
     resp_threshold,
-    Q_every,
+    calc_Q_every,
     debug
   )
   
@@ -196,7 +196,7 @@ main <- function(
     model     = iter_res,
     X         = X,
     biomass   = bin_mass,
-    trim_prob = 0.01,
+    trim_prob = trim_prob,
   )
   
   
@@ -1082,6 +1082,8 @@ lcd_loglikelihood <- function(
   # 1) π_{t,k} and log π
   pi_mat <- pi_k(X, alpha)                # TT × K
   log_pi <- log(pi_mat)
+  
+  print(1)
 
   # 2) Build per-observation log-terms (N × K after rbind)
   log_terms_list <- vector("list", TT)
@@ -1099,6 +1101,8 @@ lcd_loglikelihood <- function(
     log_terms_list[[t]] <- lt
   }
   log_terms <- do.call(rbind, log_terms_list)   # N × K
+  
+  print(2)
 
   # 3) Weights
   weights <- unlist(biomass)
@@ -1111,6 +1115,8 @@ lcd_loglikelihood <- function(
     loglikes[any_finite_comp] <-
       M + log(rowSums(exp(log_terms[any_finite_comp, , drop = FALSE] - M)))
   }
+  
+  print(4)
 
   # 5) Base and trimmed summaries
   finite_mask <- is.finite(loglikes)
@@ -1134,6 +1140,8 @@ lcd_loglikelihood <- function(
   } else {
     trim_ll_base <- -Inf
   }
+  
+  print(5)
   
   # 6) L1 penalties (α intercept column is the first; K >= 2 assumed)
   l1_alpha  <- sum(abs(alpha[, -1]))
@@ -1352,6 +1360,7 @@ iteration <- function(
       )
       Q_every <- c(Q_every, Q_new)
     }
+    message("✔ Centered the intercepts")
     
     #— M‐step g —#
     g_new <- mstep_estimate_log_concave_densities(
@@ -1359,6 +1368,7 @@ iteration <- function(
       weights             = weight_new,
       indices             = idx_new
     )
+    message("✔ Updated g")
     
     # Surrogate log‐likelihood
     Q_new    <- compute_surrogate_loglikelihood(

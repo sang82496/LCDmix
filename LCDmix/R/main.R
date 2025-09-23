@@ -62,7 +62,7 @@ main <- function(
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
-  Q_every        = FALSE,
+  calc_Q_every   = FALSE,
   debug          = FALSE,
   maxdev         = NULL,
   n_restarts     = 1
@@ -103,7 +103,7 @@ main <- function(
     iter_eta,
     max_iter,
     resp_threshold,
-    Q_every,
+    calc_Q_every,
     debug
   )
   
@@ -128,7 +128,7 @@ main <- function(
     model     = iter_res,
     X         = X,
     biomass   = bin_mass,
-    trim_prob = 0.01,
+    trim_prob = trim_prob,
   )
   
   

@@ -457,7 +457,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
   trim_prob      = 0.01,
-  Q_every        = FALSE,
+  calc_Q_every   = FALSE,
   debug          = FALSE,
   maxdev         = NULL,
   n_restarts     = 1
@@ -498,7 +498,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     iter_eta,
     max_iter,
     resp_threshold,
-    Q_every,
+    calc_Q_every,
     debug
   )
   
@@ -523,7 +523,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     model     = iter_res,
     X         = X,
     biomass   = bin_mass,
-    trim_prob = 0.01,
+    trim_prob = trim_prob,
   )
   
   
@@ -1355,6 +1355,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # 1) π_{t,k} and log π
   pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)                # TT × K
   log_pi &lt;- log(pi_mat)
+  
+  print(1)
 
   # 2) Build per-observation log-terms (N × K after rbind)
   log_terms_list &lt;- vector("list", TT)
@@ -1372,6 +1374,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     log_terms_list[[t]] &lt;- lt
   }
   log_terms &lt;- do.call(rbind, log_terms_list)   # N × K
+  
+  print(2)
 
   # 3) Weights
   weights &lt;- unlist(biomass)
@@ -1384,6 +1388,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     loglikes[any_finite_comp] &lt;-
       M + log(rowSums(exp(log_terms[any_finite_comp, , drop = FALSE] - M)))
   }
+  
+  print(4)
 
   # 5) Base and trimmed summaries
   finite_mask &lt;- is.finite(loglikes)
@@ -1407,6 +1413,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   } else {
     trim_ll_base &lt;- -Inf
   }
+  
+  print(5)
   
   # 6) L1 penalties (α intercept column is the first; K &gt;= 2 assumed)
   l1_alpha  &lt;- sum(abs(alpha[, -1]))
@@ -1619,6 +1627,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       )
       Q_every &lt;- c(Q_every, Q_new)
     }
+    message("✔ Centered the intercepts")
     
     #— M‐step g —#
     g_new &lt;- <a href="create-LCDmix.html#mstep_estimate_log_concave_densities">mstep_estimate_log_concave_densities</a>(
@@ -1626,6 +1635,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       weights             = weight_new,
       indices             = idx_new
     )
+    message("✔ Updated g")
     
     # Surrogate log‐likelihood
     Q_new    &lt;- <a href="create-LCDmix.html#compute_surrogate_loglikelihood">compute_surrogate_loglikelihood</a>(
