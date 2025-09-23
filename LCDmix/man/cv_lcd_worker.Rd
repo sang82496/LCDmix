@@ -15,8 +15,6 @@ cv_lcd_worker(
   iter_eta,
   resp_threshold,
   trim_prob,
-  maxdev,
-  n_restarts,
   save_dir
 )
 }
@@ -28,7 +26,7 @@ alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta}
 
 \item{folds}{list of fold indices as from flowmix::make_cv_folds()}
 
-\item{K, max_iter, iter_eta, resp_threshold, trim_prob, maxdev, n_restarts}{standard LCDmix args}
+\item{K, max_iter, iter_eta, resp_threshold, trim_prob}{standard LCDmix args}
 
 \item{save_dir}{directory to write "\if{html}{\out{<alpha>}}-\if{html}{\out{<theta>}}-\if{html}{\out{<seed>}}-\if{html}{\out{<fold>}}.rds"}
 }

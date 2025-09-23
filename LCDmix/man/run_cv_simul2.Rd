@@ -17,8 +17,6 @@ run_cv_simul2(
   resp_threshold = 0.001,
   trim_prob = 0.01,
   blocksize = 20,
-  maxdev = NULL,
-  n_restarts = 1,
   save_dir = "./result",
   n_cores = "max",
   chunk_size = 25
@@ -56,11 +54,6 @@ zeroed for stability. Default \code{1e-3}.}
 
 \item{blocksize}{Integer; block size for \code{flowmix::make_cv_folds()}.
 Default \code{20}.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional max-deviation constraint for the
-LP theta-step. Default \code{NULL}.}
-
-\item{n_restarts}{Integer; random restarts for initialization. Default \code{1}.}
 
 \item{save_dir}{Character; base directory for outputs. Per-simulation results
 are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.}

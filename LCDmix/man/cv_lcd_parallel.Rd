@@ -20,9 +20,7 @@ cv_lcd_parallel(
   save_dir = "./result",
   n_cores = "max",
   cv_reps = NULL,
-  blocksize = 20,
-  maxdev = NULL,
-  n_restarts = 1
+  blocksize = 20
 )
 }
 \arguments{
@@ -58,10 +56,6 @@ containing binned responses at time \eqn{t}.}
 \item{cv_reps}{Integer; number of repeats, used only when \code{seeds} is \code{NULL}. Default \code{NULL}.}
 
 \item{blocksize}{Integer; block size passed to \code{flowmix::make_cv_folds()}. Default \code{20}.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional max-deviation constraint for the LP theta-step. Default \code{NULL}.}
-
-\item{n_restarts}{Integer; random restarts for initialization. Default \code{1}.}
 }
 \value{
 A list with:

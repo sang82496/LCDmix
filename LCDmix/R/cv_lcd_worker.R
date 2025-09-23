@@ -7,7 +7,7 @@
 #'   alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta
 #' @param Y_bin list of responses; @param X matrix; @param bin_mass list of weights
 #' @param folds list of fold indices as from flowmix::make_cv_folds()
-#' @param K,max_iter,iter_eta,resp_threshold,trim_prob,maxdev,n_restarts standard LCDmix args
+#' @param K,max_iter,iter_eta,resp_threshold,trim_prob standard LCDmix args
 #' @param save_dir directory to write "<alpha>-<theta>-<seed>-<fold>.rds"
 #' @return character (one log line); writes result file as side-effect
 #' @keywords internal
@@ -24,8 +24,6 @@ cv_lcd_worker <- function(
   iter_eta, 
   resp_threshold, 
   trim_prob,
-  maxdev, 
-  n_restarts,
   save_dir
 ) {
   alpha_idx     <- job[["alpha_idx"]]
@@ -77,9 +75,7 @@ cv_lcd_worker <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE,
-        maxdev          = maxdev,
-        n_restarts      = n_restarts
+        debug           = TRUE
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),

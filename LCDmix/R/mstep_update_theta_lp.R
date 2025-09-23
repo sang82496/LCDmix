@@ -18,7 +18,6 @@
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
-#' @param maxdev Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -37,8 +36,7 @@ mstep_update_theta_lp <- function(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component,
-  maxdev    = NULL
+  component
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -112,15 +110,6 @@ mstep_update_theta_lp <- function(
     }
   }
   const_vec <- c(const_vec, tmp_vec)
-  
-  # Optional max‐deviation constraints
-  if (!is.null(maxdev)) {
-    tmp2   <- cbind(matrix(0, nrow = TT_new, ncol = n + 1), X_new)
-    b1     <- cbind(tmp2, -tmp2)
-    b2     <- cbind(-tmp2, tmp2)
-    const_mat <- rbind(const_mat, b1, b2)
-    const_vec <- c(const_vec, rep(maxdev, 2 * TT_new))
-  }
   
   #–– Debugging: print size and memory usage of constraint matrix ––#
 #  print(dim(const_mat))

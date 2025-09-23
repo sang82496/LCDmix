@@ -14,8 +14,7 @@ mstep_update_theta_lp(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component,
-  maxdev = NULL
+  component
 )
 }
 \arguments{
@@ -38,8 +37,6 @@ mstep_update_theta_lp(
 \item{lambda_theta}{Nonnegative numeric; L1 penalty on the slope parameters.}
 
 \item{component}{Integer in \(\{1,\dots,K\}\); index of the component to update.}
-
-\item{maxdev}{Numeric or \code{NULL}; optional maximum‐deviation constraint on predictions. Default: \code{NULL}.}
 }
 \value{
 A list with components:
