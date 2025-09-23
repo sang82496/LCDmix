@@ -84,8 +84,6 @@ lcd_loglikelihood <- function(
   # 1) π_{t,k} and log π
   pi_mat <- pi_k(X, alpha)                # TT × K
   log_pi <- log(pi_mat)
-  
-  print(1)
 
   # 2) Build per-observation log-terms (N × K after rbind)
   log_terms_list <- vector("list", TT)
@@ -103,8 +101,6 @@ lcd_loglikelihood <- function(
     log_terms_list[[t]] <- lt
   }
   log_terms <- do.call(rbind, log_terms_list)   # N × K
-  
-  print(2)
 
   # 3) Weights
   weights <- unlist(biomass)
@@ -117,8 +113,6 @@ lcd_loglikelihood <- function(
     loglikes[any_finite_comp] <-
       M + log(rowSums(exp(log_terms[any_finite_comp, , drop = FALSE] - M)))
   }
-  
-  print(4)
 
   # 5) Base and trimmed summaries
   finite_mask <- is.finite(loglikes)
@@ -142,8 +136,6 @@ lcd_loglikelihood <- function(
   } else {
     trim_ll_base <- -Inf
   }
-  
-  print(5)
   
   # 6) L1 penalties (α intercept column is the first; K >= 2 assumed)
   l1_alpha  <- sum(abs(alpha[, -1]))
