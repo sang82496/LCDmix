@@ -99,5 +99,6 @@ mixture_metric <- function(
   w_t      <- vapply(bin_mass, sum, numeric(1))
   weighted <- sum(w_t * per_time) / sum(w_t)
   
-  list(per_time = per_time, weighted = weighted)
+  return(list(per_time = per_time, 
+              weighted = weighted))
 }

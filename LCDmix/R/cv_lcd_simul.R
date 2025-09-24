@@ -189,11 +189,11 @@ cv_lcd_simul <- function(
         save_dir   = sim_dir
       )
     }
-    paste(out, collapse = "\n")
+    return(paste(out, collapse = "\n"))
   })
 
   return(list(
     grand_index = grand_index,
-    logs        = unlist(logs, use.names = FALSE)
+    logs        = logs
   ))
 }
