@@ -178,7 +178,7 @@ refit_lcd_simul <- function(
       df$file[i]         <- file.path(sim_refit_dir, file_name)
     }
 
-    list(log = paste(logs, collapse = "\n"), df = df)
+    return(list(log = paste(logs, collapse = "\n"), df = df))
   })
 
   # Collect logs and per-job table
@@ -192,6 +192,7 @@ refit_lcd_simul <- function(
     lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
     lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
     best_file     = NA_character_,
+    metric        = NA_character_,
     stringsAsFactors = FALSE
   )
   for (s in seq_len(num_sims)) {
@@ -202,8 +203,28 @@ refit_lcd_simul <- function(
     # first max is deterministic
     best_idx <- rows_s[ which.max(Ls) ]
     best_table$best_file[s] <- basename(jobs$file[best_idx])
+    
+    # metric
+    path = file.path(base_dir, sprintf("sim_%d", s), "refit", best_table$best_file[s])
+    res = readRDS(path)$fit$iter
+    sim = readRDS(sim_files[s])
+    
+    # Coefficient sparsity
+    theta_mat   <- do.call(cbind, res$theta_new)
+    theta_spars <- mean(abs(as.numeric(theta_mat)) < 1e-6, na.rm = TRUE)
+    
+    # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
+    alpha_mat   <- res$alpha_new
+    alpha_spars <- mean(abs(as.numeric(alpha_mat[-1, -1])) < 1e-6, na.rm = TRUE)
+    
+    # calculate mixture metrics
+    best_table$metric[s] = LCDmix::mixture_metric(
+      sim$Y_bin, sim$X, sim$bin_mass,
+      est_res  = res,
+      true_res = list(prob = sim$prob, 
+                      dens_true = sim$dens_true))$weighted
   }
-
+  
   return(list(
     jobs       = jobs,                        # per-job metrics (sim, seed, lambdas, L, file)
     logs       = unlist(logs, use.names = FALSE),

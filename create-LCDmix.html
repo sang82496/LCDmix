@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-09-24">
+<meta name="date" content="2025-09-25">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-09-24</h4>
+<h4 class="date">2025-09-25</h4>
 
 </div>
 
@@ -3471,7 +3471,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       df$file[i]         &lt;- file.path(sim_refit_dir, file_name)
     }
 
-    list(log = paste(logs, collapse = "\n"), df = df)
+    return(list(log = paste(logs, collapse = "\n"), df = df))
   })
 
   # Collect logs and per-job table
@@ -3485,6 +3485,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
     lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
     best_file     = NA_character_,
+    metric        = NA_character_,
     stringsAsFactors = FALSE
   )
   for (s in seq_len(num_sims)) {
@@ -3495,8 +3496,28 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     # first max is deterministic
     best_idx &lt;- rows_s[ which.max(Ls) ]
     best_table$best_file[s] &lt;- basename(jobs$file[best_idx])
+    
+    # metric
+    path = file.path(base_dir, sprintf("sim_%d", s), "refit", best_table$best_file[s])
+    res = readRDS(path)$fit$iter
+    sim = readRDS(sim_files[s])
+    
+    # Coefficient sparsity
+    theta_mat   &lt;- do.call(cbind, res$theta_new)
+    theta_spars &lt;- mean(abs(as.numeric(theta_mat)) &lt; 1e-6, na.rm = TRUE)
+    
+    # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
+    alpha_mat   &lt;- res$alpha_new
+    alpha_spars &lt;- mean(abs(as.numeric(alpha_mat[-1, -1])) &lt; 1e-6, na.rm = TRUE)
+    
+    # calculate mixture metrics
+    best_table$metric[s] = LCDmix::<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(
+      sim$Y_bin, sim$X, sim$bin_mass,
+      est_res  = res,
+      true_res = list(prob = sim$prob, 
+                      dens_true = sim$dens_true))$weighted
   }
-
+  
   return(list(
     jobs       = jobs,                        # per-job metrics (sim, seed, lambdas, L, file)
     logs       = unlist(logs, use.names = FALSE),
