@@ -18,8 +18,7 @@ cv_lcd_simul(
   trim_prob = 0.01,
   blocksize = 20,
   base_dir = "./cv_saves",
-  n_cores = "max",
-  chunk_size = 25
+  n_cores = "max"
 )
 }
 \arguments{
@@ -58,11 +57,11 @@ Default \code{20}.}
 \item{n_cores}{Integer or \code{"max"}; number of workers for the single
 outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.}
 
-\item{chunk_size}{Integer; number of CV jobs each worker processes serially per
-task to reduce overhead. Default \code{25}.}
-
 \item{save_dir}{Character; base directory for outputs. Per-simulation results
 are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.}
+
+\item{chunk_size}{Integer; number of CV jobs each worker processes serially per
+task to reduce overhead. Default \code{25}.}
 }
 \value{
 A list with:

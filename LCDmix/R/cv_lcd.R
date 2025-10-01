@@ -35,7 +35,7 @@ cv_lcd <- function(
     alpha_lambdas = alpha_lambdas,
     theta_lambdas = theta_lambdas
   )
-  save(index_matrix, file = file.path(save_dir, "index_matrix.Rdata"))
+  saveRDS(index_matrix, file = file.path(save_dir, "index_matrix.rds"))
 
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
@@ -49,14 +49,29 @@ cv_lcd <- function(
     envir = environment()
   )
 
-  logs <- parallel::parLapply(
+  res <- parallel::parLapply(
     cl,
     seq_len(nrow(index_matrix)),
     function(ii) {
       job <- index_matrix[ii, , drop = FALSE][1, ]
       # ensure names present for worker
       job <- setNames(as.numeric(job), colnames(index_matrix))
-      cv_lcd_onejob(
+      alpha_idx     <- job[["alpha_idx"]]
+      theta_idx     <- job[["theta_idx"]]
+      seed_idx      <- job[["seed_idx"]]
+      fold_idx      <- job[["fold_idx"]]
+      
+      out_path <- file.path(
+        save_dir,
+        sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
+      )
+      
+      if (file.exists(out_path)) {
+        res_ii = readRDS(out_path)
+        return(is.finite(res_ii$L))
+      }
+      
+      res_ii = cv_lcd_onejob(
         job       = job,
         Y_bin     = Y_bin,
         X         = X,
@@ -69,14 +84,13 @@ cv_lcd <- function(
         trim_prob = trim_prob,
         save_dir  = save_dir
       )
+      return(res_ii)
     }
   )
+  success   <- unlist(res, use.names = FALSE)
+  summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), 
+                       length(success), 100 * sum(!success)/length(success))
 
-  num_na <- sum(grepl("✖ Fit failed", logs, fixed = TRUE))
-  logs   <- c(logs, sprintf("Failures: %d/%d (%.1f%%)", num_na, length(logs), 100 * num_na / length(logs)))
-
-  return(list(
-    logs         = logs,
-    index_matrix = index_matrix
-  ))
+  return(list(index_matrix = index_matrix, 
+              summary = summary))
 }

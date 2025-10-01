@@ -96,51 +96,38 @@ cv_lcd_simul <- function(
   trim_prob      = 0.01,
   blocksize      = 20,
   base_dir       = "./cv_saves",
-  n_cores        = "max",
-  chunk_size     = 25
+  n_cores        = "max"
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
   if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
 
   num_sims <- length(sim_files)
-  sims <- vector("list", num_sims)
+  alpha_lambdas <- sort(alpha_lambdas)
+  theta_lambdas <- sort(theta_lambdas)
 
-  # Load sims + build per-sim folds and index matrices
+  # --- per-sim index matrices & subdirs ---
+  per_sim_idx <- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
-    env <- new.env(parent = emptyenv())
-    f <- sim_files[s]
-    if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj <- readRDS(f); if (is.list(obj)) base::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
-    } else {
-      load(f, envir = env)
-    }
-    env$folds <- flowmix::make_cv_folds(ylist = env$Y_bin, nfold = nfold, blocksize = blocksize)
-    env$index_matrix <- cv_idx_mat(
-      nfold          = nfold,
-      seeds          = seeds,
-      alpha_lambdas  = sort(alpha_lambdas),
-      theta_lambdas  = sort(theta_lambdas)
-    )
-    # Persist per-sim index for later summary
     sim_dir <- file.path(base_dir, sprintf("sim_%d", s))
     if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
-    saveRDS(env$index_matrix, file = file.path(sim_dir, "index_matrix.rds"))
-    sims[[s]] <- env
+
+    # index matrix for this simulation (no data needed)
+    idx <- cv_idx_mat(
+      nfold         = nfold,
+      seeds         = seeds,
+      alpha_lambdas = alpha_lambdas,
+      theta_lambdas = theta_lambdas
+    )
+    # persist for summaries
+    saveRDS(idx, file = file.path(sim_dir, "index_matrix.rds"))
+    per_sim_idx[[s]] <- cbind(sim_idx = s, idx)
   }
 
-  # Grand index with sim_idx + seed
-  grand_list <- lapply(seq_len(num_sims), function(s) {
-    im <- sims[[s]]$index_matrix
-    cbind(sim_idx = s, im)
-  })
-  grand_index <- do.call(rbind, grand_list)
-  rownames(grand_index) <- NULL
-  grand_index <- as.data.frame(grand_index)
-
-  # Chunk rows
-  rows   <- seq_len(nrow(grand_index))
-  chunks <- split(rows, ceiling(seq_along(rows) / chunk_size))
+  # --- grand job matrix ---
+  grand_jobs <- do.call(rbind, per_sim_idx)
+  rownames(grand_jobs) <- NULL
+  grand_jobs <- as.data.frame(grand_jobs)
 
   # One outer cluster
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
@@ -150,37 +137,55 @@ cv_lcd_simul <- function(
   parallel::clusterEvalQ(cl, { library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir"),
+    varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold"),
     envir = environment()
   )
 
-  logs <- parallel::parLapply(cl, chunks, function(chunk_rows) {
-    out <- character(length(chunk_rows))
-    for (i in seq_along(chunk_rows)) {
-      gi  <- chunk_rows[i]
-      row <- grand_index[gi, ]
-      s   <- row[["sim_idx"]]
+   # --- worker: one job per task; return TRUE on success, FALSE on fail ---
+  res <- parallel::parLapply(cl, seq_len(nrow(grand_jobs)), function(ii) {
+    row <- grand_jobs[ii, ]
+    s   <- as.integer(row[["sim_idx"]])
+    a_i <- as.integer(row[["alpha_idx"]])
+    t_i <- as.integer(row[["theta_idx"]])
+    sd_i<- as.integer(row[["seed_idx"]])
+    f_i <- as.integer(row[["fold_idx"]])
+    la  <- as.numeric(row[["lambda_alpha"]])
+    lt  <- as.numeric(row[["lambda_theta"]])
+    
+    # ensure sim_<s> directory exists
+    sim_dir <- file.path(base_dir, sprintf("sim_%d", s))
+    if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
+    
+    out_path <- file.path(
+      sim_dir,
+      sprintf("%d-%d-%d-%d.rds", a_i, t_i, sd_i, f_i)
+    )
+    if (file.exists(out_path)) {
+      res_ii = readRDS(out_path)
+      return(is.finite(res_ii$L))
+    }
 
-      # Build the 'job' vector for the worker
-      job <- c(
-        alpha_idx    = as.numeric(row[["alpha_idx"]]),
-        theta_idx    = as.numeric(row[["theta_idx"]]),
-        seed_idx     = as.numeric(row[["seed_idx"]]),
-        fold_idx     = as.numeric(row[["fold_idx"]]),
-        lambda_alpha = as.numeric(row[["lambda_alpha"]]),
-        lambda_theta = as.numeric(row[["lambda_theta"]])
-      )
-      
-      env      <- sims[[s]]
-      sim_dir  <- file.path(base_dir, sprintf("sim_%d", s))
+    # load the one simulation needed for this job
+    sim = readRDS(sim_files[s])
+    Y_bin   <- sim$Y_bin
+    X       <- sim$X
+    bin_mass<- sim$bin_mass
 
-      out[i] <- cv_lcd_onejob(
+    # folds for this simulation (deterministic given inputs)
+    folds <- flowmix::make_cv_folds(ylist = Y_bin, nfold = nfold, blocksize = blocksize)
+
+    # build job descriptor expected by cv_lcd_onejob()
+    job <- c(alpha_idx = a_i, theta_idx = t_i, seed_idx = sd_i, fold_idx = f_i, 
+             lambda_alpha = la, lambda_theta = lt)
+
+    # run one CV job; cv_lcd_onejob writes its own RDS and returns a log string
+    res_ii = cv_lcd_onejob(
         job        = job,
-        Y_bin      = env$Y_bin,
-        X          = env$X,
-        bin_mass   = env$bin_mass,
-        folds      = env$folds,
+        Y_bin      = Y_bin,
+        X          = X,
+        bin_mass   = bin_mass,
+        folds      = folds,
         K          = K,
         max_iter   = max_iter,
         iter_eta   = iter_eta,
@@ -188,12 +193,12 @@ cv_lcd_simul <- function(
         trim_prob  = trim_prob,
         save_dir   = sim_dir
       )
-    }
-    return(paste(out, collapse = "\n"))
+      return(res_ii)
   })
 
-  return(list(
-    grand_index = grand_index,
-    logs        = logs
-  ))
+  success   <- unlist(res, use.names = FALSE)
+  summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
+  
+  return(list(grand_jobs = grand_jobs,
+              summary = summary))
 }

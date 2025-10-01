@@ -192,7 +192,7 @@ refit_lcd_simul <- function(
     lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
     lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
     best_file     = NA_character_,
-    metric        = NA_character_,
+    metric        = NA_real_,
     stringsAsFactors = FALSE
   )
   for (s in seq_len(num_sims)) {

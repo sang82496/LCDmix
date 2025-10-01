@@ -38,12 +38,6 @@ cv_lcd_onejob <- function(
     save_dir,
     sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
   )
-  if (file.exists(out_path)) {
-    return(paste0("Skipping existing: alpha=", lambda_alpha,
-                  ", theta=", lambda_theta,
-                  ", seed=",  seed_idx,
-                  ", fold=",  fold_idx))
-  }
 
   log_msg <- paste0(
     "alpha=", lambda_alpha,
@@ -99,7 +93,7 @@ cv_lcd_onejob <- function(
       ),
       file = out_path
     )
-    return(log_msg)
+    return(FALSE)
   }
 
   # Evaluate on hold-out
@@ -139,6 +133,5 @@ cv_lcd_onejob <- function(
     ),
     file = out_path
   )
-
-  return(log_msg)
+  return(TRUE)
 }
