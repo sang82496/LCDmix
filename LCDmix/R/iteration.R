@@ -80,7 +80,7 @@ iteration <- function(
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
-    i           = 0)
+    iter_num    = 0)
   
   res <- tryCatch({
   for (i in seq_len(max_iter)){
@@ -98,17 +98,8 @@ iteration <- function(
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
     if (calc_Q_every) {
-      Q_new    <- comp_Q(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_old,
-        alpha                = alpha_old,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    <- comp_Q(X, g_old, resi_old, theta_old, alpha_old, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every <- c(Q_every, Q_new)
     }
     message("✔ E‐step complete")
@@ -121,17 +112,8 @@ iteration <- function(
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    <- comp_Q(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_old,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    <- comp_Q(X, g_old, resi_old, theta_old, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every <- c(Q_every, Q_new)
     }
     message("✔ Updated α")
@@ -151,17 +133,8 @@ iteration <- function(
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
     if (calc_Q_every) {
-      Q_new    <- comp_Q(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_new,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    <- comp_Q(X, g_old, resi_old, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every <- c(Q_every, Q_new)
     }
     message("✔ Updated θ via LP")
@@ -181,17 +154,8 @@ iteration <- function(
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    <- comp_Q(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_new,
-        slopes               = theta_new,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    <- comp_Q(X, g_old, resi_new, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every <- c(Q_every, Q_new)
     }
     message("✔ Centered the intercepts")
@@ -205,17 +169,8 @@ iteration <- function(
     message("✔ Updated g")
     
     # Surrogate log-likelihood
-    Q_new    <- comp_Q(
-      X                    = X,
-      densities            = g_new,
-      residuals            = resi_new,
-      slopes               = theta_new,
-      alpha                = alpha_new,
-      idx                  = idx_new,
-      resp                 = weight_new,
-      lambda_alpha         = lambda_alpha,
-      lambda_theta         = lambda_theta
-    )
+    Q_new    <- comp_Q(X, g_new, resi_new, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
     Q_every <- c(Q_every, Q_new)
     Q       <- c(Q, Q_new)
     message("✔ Q[i] = ", Q_new)
@@ -252,20 +207,20 @@ iteration <- function(
     
     # Store the current parameters
     last_state <- list(
-    idx_old     = idx_old,
-    resp_old    = resp_old,
-    weight_old  = weight_old,
-    resi_old    = resi_old,
-    alpha_old   = alpha_old,
-    theta0_old  = theta0_old,
-    theta_old   = theta_old, 
-    g_old       = g_old,
-    Q           = Q,
-    Q_every     = Q_every,
-    iter_num    = i)
+      idx_old     = idx_old,
+      resp_old    = resp_old,
+      weight_old  = weight_old,
+      resi_old    = resi_old,
+      alpha_old   = alpha_old,
+      theta0_old  = theta0_old,
+      theta_old   = theta_old, 
+      g_old       = g_old,
+      Q           = Q,
+      Q_every     = Q_every,
+      iter_num    = i)
   }
-    list(final = last_state,
-         error = NULL)
+    return(list(final = last_state,
+         error = NULL))
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {

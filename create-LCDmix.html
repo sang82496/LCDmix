@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-09-25">
+<meta name="date" content="2025-10-01">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-09-25</h4>
+<h4 class="date">2025-10-01</h4>
 
 </div>
 
@@ -1489,7 +1489,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
-    i           = 0)
+    iter_num    = 0)
   
   res &lt;- tryCatch({
   for (i in seq_len(max_iter)){
@@ -1507,17 +1507,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     resp_new   &lt;- Estep$resp
     weight_new &lt;- Estep$weight
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_old,
-        alpha                = alpha_old,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_old, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every &lt;- c(Q_every, Q_new)
     }
     message("✔ E‐step complete")
@@ -1530,17 +1521,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_old,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every &lt;- c(Q_every, Q_new)
     }
     message("✔ Updated α")
@@ -1560,17 +1542,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     theta0_new &lt;- theta_lp$theta0
     theta_new  &lt;- theta_lp$theta
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_old,
-        slopes               = theta_new,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every &lt;- c(Q_every, Q_new)
     }
     message("✔ Updated θ via LP")
@@ -1590,17 +1563,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
-        X                    = X,
-        densities            = g_old,
-        residuals            = resi_new,
-        slopes               = theta_new,
-        alpha                = alpha_new,
-        idx                  = idx_new,
-        resp                 = weight_new,
-        lambda_alpha         = lambda_alpha,
-        lambda_theta         = lambda_theta
-      )
+      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_new, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
       Q_every &lt;- c(Q_every, Q_new)
     }
     message("✔ Centered the intercepts")
@@ -1614,17 +1578,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     message("✔ Updated g")
     
     # Surrogate log-likelihood
-    Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
-      X                    = X,
-      densities            = g_new,
-      residuals            = resi_new,
-      slopes               = theta_new,
-      alpha                = alpha_new,
-      idx                  = idx_new,
-      resp                 = weight_new,
-      lambda_alpha         = lambda_alpha,
-      lambda_theta         = lambda_theta
-    )
+    Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_new, resi_new, theta_new, alpha_new, idx_new,
+                         weight_new, lambda_alpha, lambda_theta)
     Q_every &lt;- c(Q_every, Q_new)
     Q       &lt;- c(Q, Q_new)
     message("✔ Q[i] = ", Q_new)
@@ -1661,20 +1616,20 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     
     # Store the current parameters
     last_state &lt;- list(
-    idx_old     = idx_old,
-    resp_old    = resp_old,
-    weight_old  = weight_old,
-    resi_old    = resi_old,
-    alpha_old   = alpha_old,
-    theta0_old  = theta0_old,
-    theta_old   = theta_old, 
-    g_old       = g_old,
-    Q           = Q,
-    Q_every     = Q_every,
-    iter_num    = i)
+      idx_old     = idx_old,
+      resp_old    = resp_old,
+      weight_old  = weight_old,
+      resi_old    = resi_old,
+      alpha_old   = alpha_old,
+      theta0_old  = theta0_old,
+      theta_old   = theta_old, 
+      g_old       = g_old,
+      Q           = Q,
+      Q_every     = Q_every,
+      iter_num    = i)
   }
-    list(final = last_state,
-         error = NULL)
+    return(list(final = last_state,
+         error = NULL))
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
@@ -2557,12 +2512,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     save_dir,
     sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
   )
-  if (file.exists(out_path)) {
-    return(paste0("Skipping existing: alpha=", lambda_alpha,
-                  ", theta=", lambda_theta,
-                  ", seed=",  seed_idx,
-                  ", fold=",  fold_idx))
-  }
 
   log_msg &lt;- paste0(
     "alpha=", lambda_alpha,
@@ -2618,7 +2567,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       ),
       file = out_path
     )
-    return(log_msg)
+    return(FALSE)
   }
 
   # Evaluate on hold-out
@@ -2658,8 +2607,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     ),
     file = out_path
   )
-
-  return(log_msg)
+  return(TRUE)
 }</code></pre>
 <pre class="r"><code>#' @export
 <span id="cv_lcd">cv_lcd</span> &lt;- function(
@@ -2696,7 +2644,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     alpha_lambdas = alpha_lambdas,
     theta_lambdas = theta_lambdas
   )
-  save(index_matrix, file = file.path(save_dir, "index_matrix.Rdata"))
+  saveRDS(index_matrix, file = file.path(save_dir, "index_matrix.rds"))
 
   n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl &lt;- parallel::makeCluster(n_workers)
@@ -2710,14 +2658,29 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     envir = environment()
   )
 
-  logs &lt;- parallel::parLapply(
+  res &lt;- parallel::parLapply(
     cl,
     seq_len(nrow(index_matrix)),
     function(ii) {
       job &lt;- index_matrix[ii, , drop = FALSE][1, ]
       # ensure names present for worker
       job &lt;- setNames(as.numeric(job), colnames(index_matrix))
-      <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
+      alpha_idx     &lt;- job[["alpha_idx"]]
+      theta_idx     &lt;- job[["theta_idx"]]
+      seed_idx      &lt;- job[["seed_idx"]]
+      fold_idx      &lt;- job[["fold_idx"]]
+      
+      out_path &lt;- file.path(
+        save_dir,
+        sprintf("%d-%d-%d-%d.rds", alpha_idx, theta_idx, seed_idx, fold_idx)
+      )
+      
+      if (file.exists(out_path)) {
+        res_ii = readRDS(out_path)
+        return(is.finite(res_ii$L))
+      }
+      
+      res_ii = <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
         job       = job,
         Y_bin     = Y_bin,
         X         = X,
@@ -2730,16 +2693,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         trim_prob = trim_prob,
         save_dir  = save_dir
       )
+      return(res_ii)
     }
   )
+  success   &lt;- unlist(res, use.names = FALSE)
+  summary   &lt;- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), 
+                       length(success), 100 * sum(!success)/length(success))
 
-  num_na &lt;- sum(grepl("✖ Fit failed", logs, fixed = TRUE))
-  logs   &lt;- c(logs, sprintf("Failures: %d/%d (%.1f%%)", num_na, length(logs), 100 * num_na / length(logs)))
-
-  return(list(
-    logs         = logs,
-    index_matrix = index_matrix
-  ))
+  return(list(index_matrix = index_matrix, 
+              summary = summary))
 }</code></pre>
 <pre class="r"><code>#' Run LCDmix CV across many simulated datasets (outer-parallel, chunked)
 #'
@@ -2837,51 +2799,38 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob      = 0.01,
   blocksize      = 20,
   base_dir       = "./cv_saves",
-  n_cores        = "max",
-  chunk_size     = 25
+  n_cores        = "max"
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
   if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE)
 
   num_sims &lt;- length(sim_files)
-  sims &lt;- vector("list", num_sims)
+  alpha_lambdas &lt;- sort(alpha_lambdas)
+  theta_lambdas &lt;- sort(theta_lambdas)
 
-  # Load sims + build per-sim folds and index matrices
+  # --- per-sim index matrices &amp; subdirs ---
+  per_sim_idx &lt;- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
-    env &lt;- new.env(parent = emptyenv())
-    f &lt;- sim_files[s]
-    if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj &lt;- readRDS(f); if (is.list(obj)) base::list2env(obj, env) else stop("RDS must be a list with Y_bin, X, bin_mass.")
-    } else {
-      load(f, envir = env)
-    }
-    env$folds &lt;- flowmix::make_cv_folds(ylist = env$Y_bin, nfold = nfold, blocksize = blocksize)
-    env$index_matrix &lt;- <a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>(
-      nfold          = nfold,
-      seeds          = seeds,
-      alpha_lambdas  = sort(alpha_lambdas),
-      theta_lambdas  = sort(theta_lambdas)
-    )
-    # Persist per-sim index for later summary
     sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
     if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
-    saveRDS(env$index_matrix, file = file.path(sim_dir, "index_matrix.rds"))
-    sims[[s]] &lt;- env
+
+    # index matrix for this simulation (no data needed)
+    idx &lt;- <a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>(
+      nfold         = nfold,
+      seeds         = seeds,
+      alpha_lambdas = alpha_lambdas,
+      theta_lambdas = theta_lambdas
+    )
+    # persist for summaries
+    saveRDS(idx, file = file.path(sim_dir, "index_matrix.rds"))
+    per_sim_idx[[s]] &lt;- cbind(sim_idx = s, idx)
   }
 
-  # Grand index with sim_idx + seed
-  grand_list &lt;- lapply(seq_len(num_sims), function(s) {
-    im &lt;- sims[[s]]$index_matrix
-    cbind(sim_idx = s, im)
-  })
-  grand_index &lt;- do.call(rbind, grand_list)
-  rownames(grand_index) &lt;- NULL
-  grand_index &lt;- as.data.frame(grand_index)
-
-  # Chunk rows
-  rows   &lt;- seq_len(nrow(grand_index))
-  chunks &lt;- split(rows, ceiling(seq_along(rows) / chunk_size))
+  # --- grand job matrix ---
+  grand_jobs &lt;- do.call(rbind, per_sim_idx)
+  rownames(grand_jobs) &lt;- NULL
+  grand_jobs &lt;- as.data.frame(grand_jobs)
 
   # One outer cluster
   n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
@@ -2891,37 +2840,55 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterEvalQ(cl, { library(flowmix); library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sims","grand_index","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir"),
+    varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold"),
     envir = environment()
   )
 
-  logs &lt;- parallel::parLapply(cl, chunks, function(chunk_rows) {
-    out &lt;- character(length(chunk_rows))
-    for (i in seq_along(chunk_rows)) {
-      gi  &lt;- chunk_rows[i]
-      row &lt;- grand_index[gi, ]
-      s   &lt;- row[["sim_idx"]]
+   # --- worker: one job per task; return TRUE on success, FALSE on fail ---
+  res &lt;- parallel::parLapply(cl, seq_len(nrow(grand_jobs)), function(ii) {
+    row &lt;- grand_jobs[ii, ]
+    s   &lt;- as.integer(row[["sim_idx"]])
+    a_i &lt;- as.integer(row[["alpha_idx"]])
+    t_i &lt;- as.integer(row[["theta_idx"]])
+    sd_i&lt;- as.integer(row[["seed_idx"]])
+    f_i &lt;- as.integer(row[["fold_idx"]])
+    la  &lt;- as.numeric(row[["lambda_alpha"]])
+    lt  &lt;- as.numeric(row[["lambda_theta"]])
+    
+    # ensure sim_&lt;s&gt; directory exists
+    sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
+    if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
+    
+    out_path &lt;- file.path(
+      sim_dir,
+      sprintf("%d-%d-%d-%d.rds", a_i, t_i, sd_i, f_i)
+    )
+    if (file.exists(out_path)) {
+      res_ii = readRDS(out_path)
+      return(is.finite(res_ii$L))
+    }
 
-      # Build the 'job' vector for the worker
-      job &lt;- c(
-        alpha_idx    = as.numeric(row[["alpha_idx"]]),
-        theta_idx    = as.numeric(row[["theta_idx"]]),
-        seed_idx     = as.numeric(row[["seed_idx"]]),
-        fold_idx     = as.numeric(row[["fold_idx"]]),
-        lambda_alpha = as.numeric(row[["lambda_alpha"]]),
-        lambda_theta = as.numeric(row[["lambda_theta"]])
-      )
-      
-      env      &lt;- sims[[s]]
-      sim_dir  &lt;- file.path(base_dir, sprintf("sim_%d", s))
+    # load the one simulation needed for this job
+    sim = readRDS(sim_files[s])
+    Y_bin   &lt;- sim$Y_bin
+    X       &lt;- sim$X
+    bin_mass&lt;- sim$bin_mass
 
-      out[i] &lt;- <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
+    # folds for this simulation (deterministic given inputs)
+    folds &lt;- flowmix::make_cv_folds(ylist = Y_bin, nfold = nfold, blocksize = blocksize)
+
+    # build job descriptor expected by <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()
+    job &lt;- c(alpha_idx = a_i, theta_idx = t_i, seed_idx = sd_i, fold_idx = f_i, 
+             lambda_alpha = la, lambda_theta = lt)
+
+    # run one CV job; cv_lcd_onejob writes its own RDS and returns a log string
+    res_ii = <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
         job        = job,
-        Y_bin      = env$Y_bin,
-        X          = env$X,
-        bin_mass   = env$bin_mass,
-        folds      = env$folds,
+        Y_bin      = Y_bin,
+        X          = X,
+        bin_mass   = bin_mass,
+        folds      = folds,
         K          = K,
         max_iter   = max_iter,
         iter_eta   = iter_eta,
@@ -2929,14 +2896,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         trim_prob  = trim_prob,
         save_dir   = sim_dir
       )
-    }
-    return(paste(out, collapse = "\n"))
+      return(res_ii)
   })
 
-  return(list(
-    grand_index = grand_index,
-    logs        = logs
-  ))
+  success   &lt;- unlist(res, use.names = FALSE)
+  summary   &lt;- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
+  
+  return(list(grand_jobs = grand_jobs,
+              summary = summary))
 }</code></pre>
 <pre class="r"><code>#' Summarize LCDmix cross-validation runs and choose optimal penalties
 #'
@@ -3485,7 +3452,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
     lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
     best_file     = NA_character_,
-    metric        = NA_character_,
+    metric        = NA_real_,
     stringsAsFactors = FALSE
   )
   for (s in seq_len(num_sims)) {
