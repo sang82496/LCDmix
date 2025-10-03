@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-10-01">
+<meta name="date" content="2025-10-03">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-10-01</h4>
+<h4 class="date">2025-10-03</h4>
 
 </div>
 
@@ -3083,16 +3083,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   seed_int &lt;- as.integer(seed)
   out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
 
-  # Fast path: cached result
-  if (file.exists(out_path)) {
-    saved &lt;- tryCatch(readRDS(out_path), error = function(e) NULL)
-    if (is.list(saved)) {
-      L_cached &lt;- if (!is.null(saved$L)) as.numeric(saved$L) else NA_real_
-      return(list(log_msg = saved$log_msg, L = L_cached, fit = saved$fit, file = out_path))
-    }
-    # if cache unreadable, fall through to re-fit
-  }
-
   log_msg &lt;- paste0(
     "▶ Refit seed ", seed_int,
     " | lambda_alpha=", lambda_alpha,
@@ -3124,22 +3114,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   )
   log_msg &lt;- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
 
-  if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
-    log_msg &lt;- paste0(log_msg, "✖ Refit failed: ", err_msg)
-    saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
-    return(list(log_msg = log_msg, L = NA_real_, fit = NULL, file = out_path))
-  }
+  # failure path
+    if (!is.list(fit) || !is.finite(fit$L$loglik)) {
+      log_msg &lt;- paste0(log_msg, "✖ Refit failed: ", err_msg)
+      saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
+      return(FALSE)
+    }
 
   L &lt;- as.numeric(fit$L$loglik)
-  log_msg &lt;- paste0(
-    log_msg,
-    "✔ Completed seed ", seed_int,
-    "; final L = ", round(L, 6), "\n"
-  )
-
+  log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final L = ", round(L, 6), "\n")
   saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
 
-  return(list(log_msg = log_msg, L = L, fit = fit, file = out_path))
+  return(TRUE)
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix multiple times and select the best training fit
 #'
@@ -3215,9 +3201,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  lambda_alpha &lt;- opt_lambdas[1]
-  lambda_theta &lt;- opt_lambdas[2]
+  
+  seeds        = as.integer(seeds)
+  lambda_alpha = as.numeric(opt_lambdas[1])
+  lambda_theta = as.numeric(opt_lambdas[2])
 
   n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl &lt;- parallel::makeCluster(n_workers)
@@ -3231,34 +3218,31 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     envir = environment()
   )
 
-  res_list &lt;- parallel::parLapply(cl, seeds, function(sd) {
-    <a href="create-LCDmix.html#refit_onejob">refit_onejob</a>(
+  # One refit per task; TRUE on success, FALSE on fail (cached or fresh)
+  res &lt;- parallel::parLapply(cl, seeds, function(ii) {
+    out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", ii))
+
+    # Cached result?
+    if (file.exists(out_path)) {
+      obj &lt;- readRDS(out_path)
+      return(isTRUE(is.finite(obj$L)))
+    }
+
+    # Run one refit (writes cache)
+    res_ii &lt;- <a href="create-LCDmix.html#refit_onejob">refit_onejob</a>(
       Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
-      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
+      seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
       save_dir = save_dir, debug = debug
     )
+    return(res_ii)
   })
 
-  logs &lt;- vapply(res_list, `[[`, character(1), "log_msg")
-  scores &lt;- vapply(res_list, function(x) x$L, numeric(1))
+  success &lt;- unlist(res, use.names = FALSE)
+  summary &lt;- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
 
-  if (all(is.na(scores))) {
-    logs &lt;- c(logs, "All refits failed.")
-    return(list(logs = logs, refit_scores = scores, best_fit = NULL))
-  }
-
-  best_idx &lt;- which.max(scores)
-  logs &lt;- c(logs, paste0(
-    "Completed ", length(seeds), " repeats; ",
-    sum(is.na(scores)), " failures; best L = ", round(scores[best_idx], 6),
-    " (seed index ", best_idx, ").\n"
-  ))
-
-  return(list(logs = logs, 
-              refit_scores = scores, 
-              best_fit = res_list[[best_idx]]))
+  return(summary)
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix across many simulations and record best files (no rereads)
 #'
@@ -3339,7 +3323,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob = 0.01,
   base_dir = "./cv_saves",
   n_cores = "max",
-  chunk_size = 20,
   debug = FALSE
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
@@ -3350,24 +3333,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   if (length(opt_lambdas_list) != num_sims)
     stop("`opt_lambdas_list` length must equal `length(sim_files)`.")
 
-  # Load simulations and ensure refit dirs exist
-  sims &lt;- vector("list", num_sims)
+  # Ensure per-simulation refit dirs exist
   for (s in seq_len(num_sims)) {
-    env &lt;- new.env(parent = emptyenv())
-    f &lt;- sim_files[s]
-    if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj &lt;- readRDS(f)
-      if (is.list(obj)) base::list2env(obj, envir = env) else
-        stop("RDS must be a list with Y_bin, X, bin_mass.")
-    } else {
-      load(f, envir = env)
-    }
-    sims[[s]] &lt;- env
     sim_refit_dir &lt;- file.path(base_dir, sprintf("sim_%d", s), "refit")
     if (!dir.exists(sim_refit_dir)) dir.create(sim_refit_dir, recursive = TRUE)
   }
 
-  # Grand jobs: all (sim, seed) with that sim's lambdas
+  # Grand job list: one row per (sim, seed) with that sim's lambdas
   grand_jobs &lt;- do.call(rbind, lapply(seq_len(num_sims), function(s) {
     data.frame(
       sim_idx      = s,
@@ -3378,10 +3350,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }))
   rownames(grand_jobs) &lt;- NULL
 
-  # Chunk rows
-  rows   &lt;- seq_len(nrow(grand_jobs))
-  chunks &lt;- split(rows, ceiling(seq_along(rows) / chunk_size))
-
   # Cluster
   n_workers &lt;- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl &lt;- parallel::makeCluster(n_workers)
@@ -3390,106 +3358,50 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterEvalQ(cl, { library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sims","grand_jobs","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir","debug","refit_onejob"),
+    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
+                "resp_threshold","trim_prob","base_dir","debug"),
     envir = environment()
   )
 
-  # Each chunk returns: a single log string + a small data.frame of job metrics
-  chunk_results &lt;- parallel::parLapply(cl, chunks, function(rr) {
-    logs &lt;- character(length(rr))
-    df   &lt;- data.frame(
-      sim_idx = integer(length(rr)),
-      seed    = integer(length(rr)),
-      lambda_alpha = numeric(length(rr)),
-      lambda_theta = numeric(length(rr)),
-      L       = numeric(length(rr)),
-      file    = character(length(rr)),
-      stringsAsFactors = FALSE
-    )
-
-    for (i in seq_along(rr)) {
-      gi  &lt;- rr[i]
-      row &lt;- grand_jobs[gi, ]
-      s   &lt;- row[["sim_idx"]]
-      sd  &lt;- row[["seed"]]
-      la  &lt;- row[["lambda_alpha"]]
-      lt  &lt;- row[["lambda_theta"]]
-
-      env &lt;- sims[[s]]
-      sim_refit_dir &lt;- file.path(base_dir, sprintf("sim_%d", s), "refit")
-      # expected cache filename
-      file_name &lt;- sprintf("refit_%d.rds", as.integer(sd))
-
-      res &lt;- <a href="create-LCDmix.html#refit_onejob">refit_onejob</a>(
-        Y_bin = env$Y_bin, X = env$X, bin_mass = env$bin_mass, K = K,
-        lambda_alpha = la, lambda_theta = lt,
-        seed = sd, max_iter = max_iter, iter_eta = iter_eta,
-        resp_threshold = resp_threshold, trim_prob = trim_prob,
-        save_dir = sim_refit_dir, debug = debug
-      )
-
-      logs[i] &lt;- paste0("[sim ", s, "] ", res$log_msg)
-      df$sim_idx[i]      &lt;- s
-      df$seed[i]         &lt;- sd
-      df$lambda_alpha[i] &lt;- la
-      df$lambda_theta[i] &lt;- lt
-      df$L[i]            &lt;- if (is.null(res$L)) NA_real_ else as.numeric(res$L)
-      df$file[i]         &lt;- file.path(sim_refit_dir, file_name)
+  # Worker: run one refit job
+  res &lt;- parallel::parLapply(cl, seq_len(nrow(grand_jobs)), function(ii) {
+    row &lt;- grand_jobs[ii, ]
+    s   &lt;- as.integer(row[["sim_idx"]])
+    sd  &lt;- as.integer(row[["seed"]])
+    la  &lt;- as.numeric(row[["lambda_alpha"]])
+    lt  &lt;- as.numeric(row[["lambda_theta"]])
+    
+    sim_refit_dir &lt;- file.path(base_dir, sprintf("sim_%d", s), "refit")
+    out_path &lt;- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
+    
+    # cached?
+    if (file.exists(out_path)) {
+      obj &lt;- readRDS(out_path)
+      return(is.finite(obj$L))
     }
-
-    return(list(log = paste(logs, collapse = "\n"), df = df))
-  })
-
-  # Collect logs and per-job table
-  logs &lt;- vapply(chunk_results, `[[`, character(1), "log")
-  jobs &lt;- do.call(rbind, lapply(chunk_results, `[[`, "df"))
-  rownames(jobs) &lt;- NULL
-
-  # Build best_table directly from in-memory Ls (no file rereads)
-  best_table &lt;- data.frame(
-    sim           = seq_len(num_sims),
-    lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
-    lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
-    best_file     = NA_character_,
-    metric        = NA_real_,
-    stringsAsFactors = FALSE
-  )
-  for (s in seq_len(num_sims)) {
-    rows_s &lt;- which(jobs$sim_idx == s)
-    if (length(rows_s) == 0L) next
-    Ls &lt;- jobs$L[rows_s]
-    if (!any(is.finite(Ls))) next
-    # first max is deterministic
-    best_idx &lt;- rows_s[ which.max(Ls) ]
-    best_table$best_file[s] &lt;- basename(jobs$file[best_idx])
     
-    # metric
-    path = file.path(base_dir, sprintf("sim_%d", s), "refit", best_table$best_file[s])
-    res = readRDS(path)$fit$iter
-    sim = readRDS(sim_files[s])
+    # load this simulation
+    sim &lt;- readRDS(sim_files[s])
+    Y_bin    &lt;- sim$Y_bin
+    X        &lt;- sim$X
+    bin_mass &lt;- sim$bin_mass
     
-    # Coefficient sparsity
-    theta_mat   &lt;- do.call(cbind, res$theta_new)
-    theta_spars &lt;- mean(abs(as.numeric(theta_mat)) &lt; 1e-6, na.rm = TRUE)
-    
-    # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
-    alpha_mat   &lt;- res$alpha_new
-    alpha_spars &lt;- mean(abs(as.numeric(alpha_mat[-1, -1])) &lt; 1e-6, na.rm = TRUE)
-    
-    # calculate mixture metrics
-    best_table$metric[s] = LCDmix::<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(
-      sim$Y_bin, sim$X, sim$bin_mass,
-      est_res  = res,
-      true_res = list(prob = sim$prob, 
-                      dens_true = sim$dens_true))$weighted
-  }
+    # run one refit (writes cache under sim_refit_dir)
+    res_ii &lt;- <a href="create-LCDmix.html#refit_onejob">refit_onejob</a>(
+      Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
+      lambda_alpha = la, lambda_theta = lt,
+      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
+      resp_threshold = resp_threshold, trim_prob = trim_prob,
+      save_dir = sim_refit_dir, debug = debug
+    )
+    return(res_ii)
+    })
   
-  return(list(
-    jobs       = jobs,                        # per-job metrics (sim, seed, lambdas, L, file)
-    logs       = unlist(logs, use.names = FALSE),
-    best_table = best_table                   # sim, lambda_alpha, lambda_theta, best_file
-  ))
+  success   &lt;- unlist(res, use.names = FALSE)
+  summary   &lt;- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
+
+  return(list(grand_jobs = grand_jobs,
+              summary    = summary))
 }</code></pre>
 <pre class="r"><code>#' Generate skewed mixture‐of‐experts time‐series data, binned for LCDmix
 #'

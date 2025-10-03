@@ -16,7 +16,6 @@ refit_lcd_simul(
   trim_prob = 0.01,
   base_dir = "./cv_saves",
   n_cores = "max",
-  chunk_size = 20,
   debug = FALSE
 )
 }
@@ -52,11 +51,11 @@ under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.}
 \item{n_cores}{Integer or \code{"max"}; number of workers for the single outer
 cluster. Default \code{"max"}.}
 
-\item{chunk_size}{Integer; number of refit jobs each worker processes serially
-per task (reduces overhead). Default \code{20}.}
-
 \item{debug}{Logical; forwarded to \code{main()} for verbose diagnostics.
 Default \code{FALSE}.}
+
+\item{chunk_size}{Integer; number of refit jobs each worker processes serially
+per task (reduces overhead). Default \code{20}.}
 }
 \value{
 A list with:

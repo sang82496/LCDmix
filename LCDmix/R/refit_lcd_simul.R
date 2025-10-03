@@ -79,7 +79,6 @@ refit_lcd_simul <- function(
   trim_prob = 0.01,
   base_dir = "./cv_saves",
   n_cores = "max",
-  chunk_size = 20,
   debug = FALSE
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
@@ -90,24 +89,13 @@ refit_lcd_simul <- function(
   if (length(opt_lambdas_list) != num_sims)
     stop("`opt_lambdas_list` length must equal `length(sim_files)`.")
 
-  # Load simulations and ensure refit dirs exist
-  sims <- vector("list", num_sims)
+  # Ensure per-simulation refit dirs exist
   for (s in seq_len(num_sims)) {
-    env <- new.env(parent = emptyenv())
-    f <- sim_files[s]
-    if (grepl("\\.rds$", f, ignore.case = TRUE)) {
-      obj <- readRDS(f)
-      if (is.list(obj)) base::list2env(obj, envir = env) else
-        stop("RDS must be a list with Y_bin, X, bin_mass.")
-    } else {
-      load(f, envir = env)
-    }
-    sims[[s]] <- env
     sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
     if (!dir.exists(sim_refit_dir)) dir.create(sim_refit_dir, recursive = TRUE)
   }
 
-  # Grand jobs: all (sim, seed) with that sim's lambdas
+  # Grand job list: one row per (sim, seed) with that sim's lambdas
   grand_jobs <- do.call(rbind, lapply(seq_len(num_sims), function(s) {
     data.frame(
       sim_idx      = s,
@@ -118,10 +106,6 @@ refit_lcd_simul <- function(
   }))
   rownames(grand_jobs) <- NULL
 
-  # Chunk rows
-  rows   <- seq_len(nrow(grand_jobs))
-  chunks <- split(rows, ceiling(seq_along(rows) / chunk_size))
-
   # Cluster
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
@@ -130,104 +114,48 @@ refit_lcd_simul <- function(
   parallel::clusterEvalQ(cl, { library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sims","grand_jobs","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir","debug","refit_onejob"),
+    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
+                "resp_threshold","trim_prob","base_dir","debug"),
     envir = environment()
   )
 
-  # Each chunk returns: a single log string + a small data.frame of job metrics
-  chunk_results <- parallel::parLapply(cl, chunks, function(rr) {
-    logs <- character(length(rr))
-    df   <- data.frame(
-      sim_idx = integer(length(rr)),
-      seed    = integer(length(rr)),
-      lambda_alpha = numeric(length(rr)),
-      lambda_theta = numeric(length(rr)),
-      L       = numeric(length(rr)),
-      file    = character(length(rr)),
-      stringsAsFactors = FALSE
-    )
-
-    for (i in seq_along(rr)) {
-      gi  <- rr[i]
-      row <- grand_jobs[gi, ]
-      s   <- row[["sim_idx"]]
-      sd  <- row[["seed"]]
-      la  <- row[["lambda_alpha"]]
-      lt  <- row[["lambda_theta"]]
-
-      env <- sims[[s]]
-      sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
-      # expected cache filename
-      file_name <- sprintf("refit_%d.rds", as.integer(sd))
-
-      res <- refit_onejob(
-        Y_bin = env$Y_bin, X = env$X, bin_mass = env$bin_mass, K = K,
-        lambda_alpha = la, lambda_theta = lt,
-        seed = sd, max_iter = max_iter, iter_eta = iter_eta,
-        resp_threshold = resp_threshold, trim_prob = trim_prob,
-        save_dir = sim_refit_dir, debug = debug
-      )
-
-      logs[i] <- paste0("[sim ", s, "] ", res$log_msg)
-      df$sim_idx[i]      <- s
-      df$seed[i]         <- sd
-      df$lambda_alpha[i] <- la
-      df$lambda_theta[i] <- lt
-      df$L[i]            <- if (is.null(res$L)) NA_real_ else as.numeric(res$L)
-      df$file[i]         <- file.path(sim_refit_dir, file_name)
+  # Worker: run one refit job
+  res <- parallel::parLapply(cl, seq_len(nrow(grand_jobs)), function(ii) {
+    row <- grand_jobs[ii, ]
+    s   <- as.integer(row[["sim_idx"]])
+    sd  <- as.integer(row[["seed"]])
+    la  <- as.numeric(row[["lambda_alpha"]])
+    lt  <- as.numeric(row[["lambda_theta"]])
+    
+    sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
+    out_path <- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
+    
+    # cached?
+    if (file.exists(out_path)) {
+      obj <- readRDS(out_path)
+      return(is.finite(obj$L))
     }
-
-    return(list(log = paste(logs, collapse = "\n"), df = df))
-  })
-
-  # Collect logs and per-job table
-  logs <- vapply(chunk_results, `[[`, character(1), "log")
-  jobs <- do.call(rbind, lapply(chunk_results, `[[`, "df"))
-  rownames(jobs) <- NULL
-
-  # Build best_table directly from in-memory Ls (no file rereads)
-  best_table <- data.frame(
-    sim           = seq_len(num_sims),
-    lambda_alpha  = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
-    lambda_theta  = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
-    best_file     = NA_character_,
-    metric        = NA_real_,
-    stringsAsFactors = FALSE
-  )
-  for (s in seq_len(num_sims)) {
-    rows_s <- which(jobs$sim_idx == s)
-    if (length(rows_s) == 0L) next
-    Ls <- jobs$L[rows_s]
-    if (!any(is.finite(Ls))) next
-    # first max is deterministic
-    best_idx <- rows_s[ which.max(Ls) ]
-    best_table$best_file[s] <- basename(jobs$file[best_idx])
     
-    # metric
-    path = file.path(base_dir, sprintf("sim_%d", s), "refit", best_table$best_file[s])
-    res = readRDS(path)$fit$iter
-    sim = readRDS(sim_files[s])
+    # load this simulation
+    sim <- readRDS(sim_files[s])
+    Y_bin    <- sim$Y_bin
+    X        <- sim$X
+    bin_mass <- sim$bin_mass
     
-    # Coefficient sparsity
-    theta_mat   <- do.call(cbind, res$theta_new)
-    theta_spars <- mean(abs(as.numeric(theta_mat)) < 1e-6, na.rm = TRUE)
-    
-    # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
-    alpha_mat   <- res$alpha_new
-    alpha_spars <- mean(abs(as.numeric(alpha_mat[-1, -1])) < 1e-6, na.rm = TRUE)
-    
-    # calculate mixture metrics
-    best_table$metric[s] = LCDmix::mixture_metric(
-      sim$Y_bin, sim$X, sim$bin_mass,
-      est_res  = res,
-      true_res = list(prob = sim$prob, 
-                      dens_true = sim$dens_true))$weighted
-  }
+    # run one refit (writes cache under sim_refit_dir)
+    res_ii <- refit_onejob(
+      Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
+      lambda_alpha = la, lambda_theta = lt,
+      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
+      resp_threshold = resp_threshold, trim_prob = trim_prob,
+      save_dir = sim_refit_dir, debug = debug
+    )
+    return(res_ii)
+    })
   
-  return(list(
-    jobs       = jobs,                        # per-job metrics (sim, seed, lambdas, L, file)
-    logs       = unlist(logs, use.names = FALSE),
-    best_table = best_table                   # sim, lambda_alpha, lambda_theta, best_file
-  ))
+  success   <- unlist(res, use.names = FALSE)
+  summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
+
+  return(list(grand_jobs = grand_jobs,
+              summary    = summary))
 }

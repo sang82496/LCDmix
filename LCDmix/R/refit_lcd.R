@@ -74,9 +74,10 @@ refit_lcd <- function(
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
-
-  lambda_alpha <- opt_lambdas[1]
-  lambda_theta <- opt_lambdas[2]
+  
+  seeds        = as.integer(seeds)
+  lambda_alpha = as.numeric(opt_lambdas[1])
+  lambda_theta = as.numeric(opt_lambdas[2])
 
   n_workers <- if (identical(n_cores, "max")) parallel::detectCores(logical = FALSE) else as.integer(n_cores)
   cl <- parallel::makeCluster(n_workers)
@@ -90,32 +91,29 @@ refit_lcd <- function(
     envir = environment()
   )
 
-  res_list <- parallel::parLapply(cl, seeds, function(sd) {
-    refit_onejob(
+  # One refit per task; TRUE on success, FALSE on fail (cached or fresh)
+  res <- parallel::parLapply(cl, seeds, function(ii) {
+    out_path <- file.path(save_dir, sprintf("refit_%d.rds", ii))
+
+    # Cached result?
+    if (file.exists(out_path)) {
+      obj <- readRDS(out_path)
+      return(isTRUE(is.finite(obj$L)))
+    }
+
+    # Run one refit (writes cache)
+    res_ii <- refit_onejob(
       Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = K,
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
-      seed = sd, max_iter = max_iter, iter_eta = iter_eta,
+      seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
       save_dir = save_dir, debug = debug
     )
+    return(res_ii)
   })
 
-  logs <- vapply(res_list, `[[`, character(1), "log_msg")
-  scores <- vapply(res_list, function(x) x$L, numeric(1))
+  success <- unlist(res, use.names = FALSE)
+  summary <- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
 
-  if (all(is.na(scores))) {
-    logs <- c(logs, "All refits failed.")
-    return(list(logs = logs, refit_scores = scores, best_fit = NULL))
-  }
-
-  best_idx <- which.max(scores)
-  logs <- c(logs, paste0(
-    "Completed ", length(seeds), " repeats; ",
-    sum(is.na(scores)), " failures; best L = ", round(scores[best_idx], 6),
-    " (seed index ", best_idx, ").\n"
-  ))
-
-  return(list(logs = logs, 
-              refit_scores = scores, 
-              best_fit = res_list[[best_idx]]))
+  return(summary)
 }

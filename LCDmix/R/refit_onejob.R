@@ -21,16 +21,6 @@ refit_onejob <- function(
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
 
-  # Fast path: cached result
-  if (file.exists(out_path)) {
-    saved <- tryCatch(readRDS(out_path), error = function(e) NULL)
-    if (is.list(saved)) {
-      L_cached <- if (!is.null(saved$L)) as.numeric(saved$L) else NA_real_
-      return(list(log_msg = saved$log_msg, L = L_cached, fit = saved$fit, file = out_path))
-    }
-    # if cache unreadable, fall through to re-fit
-  }
-
   log_msg <- paste0(
     "▶ Refit seed ", seed_int,
     " | lambda_alpha=", lambda_alpha,
@@ -62,20 +52,16 @@ refit_onejob <- function(
   )
   log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
 
-  if (!is.list(fit) || is.null(fit$L) || is.null(fit$L$loglik)) {
-    log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
-    saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
-    return(list(log_msg = log_msg, L = NA_real_, fit = NULL, file = out_path))
-  }
+  # failure path
+    if (!is.list(fit) || !is.finite(fit$L$loglik)) {
+      log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
+      saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
+      return(FALSE)
+    }
 
   L <- as.numeric(fit$L$loglik)
-  log_msg <- paste0(
-    log_msg,
-    "✔ Completed seed ", seed_int,
-    "; final L = ", round(L, 6), "\n"
-  )
-
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final L = ", round(L, 6), "\n")
   saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
 
-  return(list(log_msg = log_msg, L = L, fit = fit, file = out_path))
+  return(TRUE)
 }
