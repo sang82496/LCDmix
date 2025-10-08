@@ -123,7 +123,7 @@ main <- function(
     biomass   = bin_mass,
     trim_prob = trim_prob
   )
-  message(paste0("✔ Calculating loglikelihood complete: L = ", round(L, 6)) )
+  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trim_loglik, 6)) )
   
   #— Return all key results —#
   return(list(
