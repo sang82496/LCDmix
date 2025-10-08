@@ -114,6 +114,24 @@ refit_lcd <- function(
 
   success <- unlist(res, use.names = FALSE)
   summary <- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
-
-  return(summary)
+  
+  L_vec <- rep(-Inf, length(seeds))
+  for (i in seq_along(seeds)) {
+    sd <- as.integer(seeds[i])
+    file_name <- file.path(save_dir, sprintf("refit_%d.rds", sd))
+    if (!file.exists(file_name)) next
+    obj <- readRDS(file_name)
+    L_vec[i]  <- if (!is.na(obj$L)) obj$L
+  }
+  
+  if (all(!is.finite(L_vec))) {
+    warning("No finite loglikelihood among refits")
+    best_fit <- NULL
+  } else {
+      file_name <- file.path(save_dir, sprintf("refit_%d.rds", seeds[which.max(L_vec)]))
+      obj <- readRDS(file_name)
+      best_fit = obj$fit
+    }
+  return(list(summary = summary,
+              best_fit = best_fit))
 }
