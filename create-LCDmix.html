@@ -3238,8 +3238,26 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   success &lt;- unlist(res, use.names = FALSE)
   summary &lt;- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
-
-  return(summary)
+  
+  L_vec &lt;- rep(-Inf, length(seeds))
+  for (i in seq_along(seeds)) {
+    sd &lt;- as.integer(seeds[i])
+    file_name &lt;- file.path(save_dir, sprintf("refit_%d.rds", sd))
+    if (!file.exists(file_name)) next
+    obj &lt;- readRDS(file_name)
+    L_vec[i]  &lt;- if (!is.na(obj$L)) obj$L
+  }
+  
+  if (all(!is.finite(L_vec))) {
+    warning("No finite loglikelihood among refits")
+    best_fit &lt;- NULL
+  } else {
+      file_name &lt;- file.path(save_dir, sprintf("refit_%d.rds", seeds[which.max(L_vec)]))
+      obj &lt;- readRDS(file_name)
+      best_fit = obj$fit
+    }
+  return(list(summary = summary,
+              best_fit = best_fit))
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix across many simulations and record best files (no rereads)
 #'
@@ -3412,7 +3430,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       file_name  &lt;- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj &lt;- readRDS(file_name)
-      L_vec[i]  &lt;- if (!is.null(obj$L)) as.numeric(obj$L)
+      L_vec[i]  &lt;- if (!is.na(obj$L)) as.numeric(obj$L)
     }
     
     if (all(!is.finite(L_vec))) next
