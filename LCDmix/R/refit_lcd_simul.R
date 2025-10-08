@@ -31,8 +31,6 @@
 #'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
 #'   cluster. Default \code{"max"}.
-#' @param chunk_size Integer; number of refit jobs each worker processes serially
-#'   per task (reduces overhead). Default \code{20}.
 #' @param debug Logical; forwarded to \code{main()} for verbose diagnostics.
 #'   Default \code{FALSE}.
 #'

@@ -59,9 +59,6 @@ outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"ma
 
 \item{save_dir}{Character; base directory for outputs. Per-simulation results
 are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.}
-
-\item{chunk_size}{Integer; number of CV jobs each worker processes serially per
-task to reduce overhead. Default \code{25}.}
 }
 \value{
 A list with:
@@ -102,7 +99,6 @@ res <- cv_lcd_simul(
   seeds         = 1:10,
   save_dir      = "cv_runs",
   n_cores       = 64,          # USC CARC cap
-  chunk_size    = 25           # tune 10–50 based on runtime
 )
 
 # Summarize each simulation (stored under cv_runs/sim_<s>/):

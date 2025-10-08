@@ -34,8 +34,6 @@
 #'   are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single
 #'   outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param chunk_size Integer; number of CV jobs each worker processes serially per
-#'   task to reduce overhead. Default \code{25}.
 #'
 #' @details
 #' This function uses a single outer cluster to process a \emph{grand} index of
@@ -69,7 +67,6 @@
 #'   seeds         = 1:10,
 #'   save_dir      = "cv_runs",
 #'   n_cores       = 64,          # USC CARC cap
-#'   chunk_size    = 25           # tune 10–50 based on runtime
 #' )
 #'
 #' # Summarize each simulation (stored under cv_runs/sim_<s>/):

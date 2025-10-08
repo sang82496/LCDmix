@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-10-03">
+<meta name="date" content="2025-10-07">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-10-03</h4>
+<h4 class="date">2025-10-07</h4>
 
 </div>
 
@@ -1582,7 +1582,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
                          weight_new, lambda_alpha, lambda_theta)
     Q_every &lt;- c(Q_every, Q_new)
     Q       &lt;- c(Q, Q_new)
-    message("✔ Q[i] = ", Q_new)
+    message("✔ Q[i] = ", round(Q_new, 6))
     
     
     # Check convergence or decrease
@@ -1600,7 +1600,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       break
     }
     if (inc &lt;= iter_eta || i == max_iter) {
-      message("Converged at iteration ", i, " (inc = ", inc, ")")
+      message("Converged at iteration ", i, " (inc = ", round(inc, 6), ")")
       break
     }
     
@@ -1628,8 +1628,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       Q_every     = Q_every,
       iter_num    = i)
   }
-    return(list(final = last_state,
-         error = NULL))
+    list(final = last_state,
+         error = NULL)
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
@@ -2737,8 +2737,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   are written to \code{save_dir/sim_&lt;s&gt;/}. Default \code{"./result"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single
 #'   outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param chunk_size Integer; number of CV jobs each worker processes serially per
-#'   task to reduce overhead. Default \code{25}.
 #'
 #' @details
 #' This function uses a single outer cluster to process a \emph{grand} index of
@@ -2772,7 +2770,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   seeds         = 1:10,
 #'   save_dir      = "cv_runs",
 #'   n_cores       = 64,          # USC CARC cap
-#'   chunk_size    = 25           # tune 10–50 based on runtime
 #' )
 #'
 #' # Summarize each simulation (stored under cv_runs/sim_&lt;s&gt;/):
@@ -3275,8 +3272,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   under \code{base_dir/sim_&lt;s&gt;/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
 #'   cluster. Default \code{"max"}.
-#' @param chunk_size Integer; number of refit jobs each worker processes serially
-#'   per task (reduces overhead). Default \code{20}.
 #' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} for verbose diagnostics.
 #'   Default \code{FALSE}.
 #'
