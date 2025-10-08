@@ -1315,7 +1315,7 @@ iteration <- function(
                          weight_new, lambda_alpha, lambda_theta)
     Q_every <- c(Q_every, Q_new)
     Q       <- c(Q, Q_new)
-    message("✔ Q[i] = ", Q_new)
+    message("✔ Q[i] = ", round(Q_new, 6))
     
     
     # Check convergence or decrease
@@ -1333,7 +1333,7 @@ iteration <- function(
       break
     }
     if (inc <= iter_eta || i == max_iter) {
-      message("Converged at iteration ", i, " (inc = ", inc, ")")
+      message("Converged at iteration ", i, " (inc = ", round(inc, 6), ")")
       break
     }
     
@@ -1361,8 +1361,8 @@ iteration <- function(
       Q_every     = Q_every,
       iter_num    = i)
   }
-    return(list(final = last_state,
-         error = NULL))
+    list(final = last_state,
+         error = NULL)
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
@@ -2550,8 +2550,6 @@ cv_lcd <- function(
 #'   are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single
 #'   outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
-#' @param chunk_size Integer; number of CV jobs each worker processes serially per
-#'   task to reduce overhead. Default \code{25}.
 #'
 #' @details
 #' This function uses a single outer cluster to process a \emph{grand} index of
@@ -2585,7 +2583,6 @@ cv_lcd <- function(
 #'   seeds         = 1:10,
 #'   save_dir      = "cv_runs",
 #'   n_cores       = 64,          # USC CARC cap
-#'   chunk_size    = 25           # tune 10–50 based on runtime
 #' )
 #'
 #' # Summarize each simulation (stored under cv_runs/sim_<s>/):
@@ -3121,8 +3118,6 @@ refit_lcd <- function(
 #'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
 #'   cluster. Default \code{"max"}.
-#' @param chunk_size Integer; number of refit jobs each worker processes serially
-#'   per task (reduces overhead). Default \code{20}.
 #' @param debug Logical; forwarded to \code{main()} for verbose diagnostics.
 #'   Default \code{FALSE}.
 #'

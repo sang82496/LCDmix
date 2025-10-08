@@ -173,7 +173,7 @@ iteration <- function(
                          weight_new, lambda_alpha, lambda_theta)
     Q_every <- c(Q_every, Q_new)
     Q       <- c(Q, Q_new)
-    message("✔ Q[i] = ", Q_new)
+    message("✔ Q[i] = ", round(Q_new, 6))
     
     
     # Check convergence or decrease
@@ -191,7 +191,7 @@ iteration <- function(
       break
     }
     if (inc <= iter_eta || i == max_iter) {
-      message("Converged at iteration ", i, " (inc = ", inc, ")")
+      message("Converged at iteration ", i, " (inc = ", round(inc, 6), ")")
       break
     }
     
@@ -219,8 +219,8 @@ iteration <- function(
       Q_every     = Q_every,
       iter_num    = i)
   }
-    return(list(final = last_state,
-         error = NULL))
+    list(final = last_state,
+         error = NULL)
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
