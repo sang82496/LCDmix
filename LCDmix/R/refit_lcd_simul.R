@@ -131,7 +131,7 @@ refit_lcd_simul <- function(
     # cached?
     if (file.exists(out_path)) {
       obj <- readRDS(out_path)
-      return(is.finite(obj$L))
+      return(isTRUE(is.finite(obj$L)))
     }
     
     # load this simulation
@@ -153,7 +153,32 @@ refit_lcd_simul <- function(
   
   success   <- unlist(res, use.names = FALSE)
   summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
+  
+  best_table <- data.frame(
+    sim            = seq_len(num_sims),
+    lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
+    lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
+    best_idx       = NA_integer_,
+    stringsAsFactors = FALSE
+  )
+
+  for (s in seq_len(num_sims)) {
+    sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
+    L_vec     <- rep(-Inf, length(seeds))
+    
+    for (i in seq_along(seeds)) {
+      sd <- as.integer(seeds[i])
+      file_name  <- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
+      if (!file.exists(file_name)) next
+      obj <- readRDS(file_name)
+      L_vec[i]  <- if (!is.null(obj$L)) as.numeric(obj$L)
+    }
+    
+    if (all(!is.finite(L_vec))) next
+    best_table$best_idx[s] <- seeds[which.max(L_vec)]
+  }
 
   return(list(grand_jobs = grand_jobs,
-              summary    = summary))
+              summary    = summary,
+              best_table = best_table))
 }
