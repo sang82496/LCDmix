@@ -3039,7 +3039,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
-    max_prop_inf  = max(CVmat[, "prop_inf"], na.rm = TRUE)
+    max_prop_inf = max(CVmat[, "prop_inf"], na.rm = TRUE)
   ))
 }</code></pre>
 <pre class="r"><code>#' @export
@@ -3232,13 +3232,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   success &lt;- unlist(res, use.names = FALSE)
   summary &lt;- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
   
-  L_vec &lt;- rep(-Inf, length(seeds))
+  L_vec &lt;- rep(NA, length(seeds))
   for (i in seq_along(seeds)) {
     sd &lt;- as.integer(seeds[i])
     file_name &lt;- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj &lt;- readRDS(file_name)
-    L_vec[i]  &lt;- if (!is.na(obj$L)) obj$L
+    L_vec[i]  &lt;- obj$L
   }
   
   if (all(!is.finite(L_vec))) {
