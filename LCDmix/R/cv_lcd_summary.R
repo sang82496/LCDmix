@@ -60,11 +60,11 @@ cv_lcd_summary <- function(
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
-    index_matrix,
+    index_matrix   = index_matrix,
     L              = rep(NA_real_, n_runs),
     prop_inf       = rep(NA_real_, n_runs),
     trimmed_loglik = rep(NA_real_, n_runs),
-    finite_loglik  = rep(NA_real_, n_runs),
+    finite_loglik  = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
