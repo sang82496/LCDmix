@@ -30,7 +30,7 @@ including \code{lambda_alpha}, \code{lambda_theta}, the mean CV score
 (\code{cv_score}), and counts of non-\code{NA} \code{L} (\code{counts}).}
 \item{\code{opt_lambdas}}{Numeric length-2 vector:
 \code{c(lambda_alpha, lambda_theta)} for the maximizing pair.}
-\item{\code{max_inf_prop}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
+\item{\code{max_prop_inf}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
 }
 }
 \description{

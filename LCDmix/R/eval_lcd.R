@@ -108,7 +108,8 @@ eval_lcd <- function(
 
   # Proportion of non-finite rows
   finite_mask <- is.finite(loglikes)
-  prop_inf    <- mean(!finite_mask)
+  #prop_inf    <- mean(!finite_mask)
+  prop_inf    <- sum(weights[!finite_mask])/sum(weights)
 
   # All -Inf → return early
   if (!any(finite_mask)) {
