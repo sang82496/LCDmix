@@ -2810,7 +2810,7 @@ cv_lcd_summary <- function(
     # load
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
-    CVmat[i, "eval_prop_inf "]      <- mat$eval_prop_inf 
+    CVmat[i, "eval_prop_inf"]       <- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
     CVmat[i, "eval_finite_loglik"]  <- mat$eval_finite_loglik
   }
