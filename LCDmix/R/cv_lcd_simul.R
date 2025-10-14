@@ -160,7 +160,7 @@ cv_lcd_simul <- function(
     )
     if (file.exists(out_path)) {
       res_ii = readRDS(out_path)
-      return(is.finite(res_ii$L))
+      return(!is.na(res_ii$fit_trimmed_loglik))
     }
 
     # load the one simulation needed for this job

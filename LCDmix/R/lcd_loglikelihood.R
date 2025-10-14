@@ -49,7 +49,7 @@
 #' \describe{
 #' \item{\code{loglik}}{Penalized average log-likelihood using all rows
 #' (\code{-Inf} if any row is non-finite before penalization).}
-#' \item{\code{trim_loglik}}{Penalized quantile-trimmed average
+#' \item{\code{trimmed_loglik}}{Penalized quantile-trimmed average
 #' log-likelihood (lower \code{trim_prob} fraction removed).}
 #' \item{\code{prop_inf}}{Proportion of rows with non-finite per-row
 #' log-likelihoods.}
@@ -59,7 +59,7 @@
 #' \dontrun{
 #' out <- lcd_loglikelihood(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
 #' out$loglik
-#' out$trim_loglik
+#' out$trimmed_loglik
 #' out$prop_inf
 #' }
 #'
@@ -142,12 +142,12 @@ lcd_loglikelihood <- function(
   l1_theta  <- sum(abs(unlist(slopes)))
   pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  loglik      <- base_ll      - pen_total
-  trim_loglik <- trim_ll_base - pen_total
+  loglik         <- base_ll      - pen_total
+  trimmed_loglik <- trim_ll_base - pen_total
 
   return(list(
-    loglik       = loglik,     # penalized, using all rows; -Inf if any -Inf present
-    trim_loglik  = trim_loglik,    # penalized, trimmed
-    prop_inf     = prop_inf
+    loglik          = loglik,     # penalized, using all rows; -Inf if any -Inf present
+    trimmed_loglik  = trimmed_loglik,    # penalized, trimmed
+    prop_inf        = prop_inf
   ))
 }

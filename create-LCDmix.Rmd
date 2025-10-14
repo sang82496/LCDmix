@@ -191,7 +191,7 @@ main <- function(
     biomass   = bin_mass,
     trim_prob = trim_prob
   )
-  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trim_loglik, 6)) )
+  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
   
   #— Return all key results —#
   return(list(
@@ -1034,7 +1034,7 @@ comp_Q <- function(
 #' \describe{
 #' \item{\code{loglik}}{Penalized average log-likelihood using all rows
 #' (\code{-Inf} if any row is non-finite before penalization).}
-#' \item{\code{trim_loglik}}{Penalized quantile-trimmed average
+#' \item{\code{trimmed_loglik}}{Penalized quantile-trimmed average
 #' log-likelihood (lower \code{trim_prob} fraction removed).}
 #' \item{\code{prop_inf}}{Proportion of rows with non-finite per-row
 #' log-likelihoods.}
@@ -1044,7 +1044,7 @@ comp_Q <- function(
 #' \dontrun{
 #' out <- lcd_loglikelihood(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
 #' out$loglik
-#' out$trim_loglik
+#' out$trimmed_loglik
 #' out$prop_inf
 #' }
 #'
@@ -1127,13 +1127,13 @@ lcd_loglikelihood <- function(
   l1_theta  <- sum(abs(unlist(slopes)))
   pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  loglik      <- base_ll      - pen_total
-  trim_loglik <- trim_ll_base - pen_total
+  loglik         <- base_ll      - pen_total
+  trimmed_loglik <- trim_ll_base - pen_total
 
   return(list(
-    loglik       = loglik,     # penalized, using all rows; -Inf if any -Inf present
-    trim_loglik  = trim_loglik,    # penalized, trimmed
-    prop_inf     = prop_inf
+    loglik          = loglik,     # penalized, using all rows; -Inf if any -Inf present
+    trimmed_loglik  = trimmed_loglik,    # penalized, trimmed
+    prop_inf        = prop_inf
   ))
 }
 ```
@@ -2360,14 +2360,15 @@ cv_lcd_onejob <- function(
     log_msg <- paste0(log_msg, "✖ Fit failed: ", err_msg)
     saveRDS(
       list(
-        prop_inf       = NA_real_,
-        trimmed_loglik = NA_real_,
-        finite_loglik  = NA_real_,
-        L              = NA_real_,
-        theta_spars    = NA_real_,
-        alpha_spars    = NA_real_,
-        log_msg        = log_msg
+        eval_prop_inf       = NA_real_,
+        eval_trimmed_loglik = NA_real_,
+        eval_finite_loglik  = NA_real_,
+        fit_trimmed_loglik  = NA_real_,
+        theta_spars         = NA_real_,
+        alpha_spars         = NA_real_,
+        log_msg             = log_msg
       ),
+      
       file = out_path
     )
     return(FALSE)
@@ -2382,10 +2383,10 @@ cv_lcd_onejob <- function(
     trim_prob    = trim_prob
   )
 
-  prop_inf       <- eval_res$prop_inf
-  trimmed_loglik <- eval_res$trimmed_loglik
-  finite_loglik  <- eval_res$finite_loglik
-  L              <- fit$L$loglik
+  eval_prop_inf       <- eval_res$prop_inf
+  eval_trimmed_loglik <- eval_res$trimmed_loglik
+  eval_finite_loglik  <- eval_res$finite_loglik
+  fit_trimmed_loglik  <- fit$L$trimmed_loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
@@ -2400,13 +2401,13 @@ cv_lcd_onejob <- function(
 
   saveRDS(
     list(
-      prop_inf       = prop_inf,
-      trimmed_loglik = trimmed_loglik,
-      finite_loglik  = finite_loglik,
-      L              = L,
-      theta_spars    = theta_spars,
-      alpha_spars    = alpha_spars,
-      log_msg        = log_msg
+      eval_prop_inf       = eval_prop_inf,
+      eval_trimmed_loglik = eval_trimmed_loglik,
+      eval_finite_loglik  = eval_finite_loglik,
+      fit_trimmed_loglik  = fit_trimmed_loglik,
+      theta_spars         = theta_spars,
+      alpha_spars         = alpha_spars,
+      log_msg             = log_msg
     ),
     file = out_path
   )
@@ -2487,9 +2488,9 @@ cv_lcd <- function(
       
       if (file.exists(out_path)) {
         res_ii = readRDS(out_path)
-        return(is.finite(res_ii$L))
+        return(!is.na(res_ii$fit_trimmed_loglik))
       }
-      
+
       res_ii = cv_lcd_onejob(
         job       = job,
         Y_bin     = Y_bin,
@@ -2677,7 +2678,7 @@ cv_lcd_simul <- function(
     )
     if (file.exists(out_path)) {
       res_ii = readRDS(out_path)
-      return(is.finite(res_ii$L))
+      return(!is.na(res_ii$fit_trimmed_loglik))
     }
 
     # load the one simulation needed for this job
@@ -2781,11 +2782,11 @@ cv_lcd_summary <- function(
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
-    index_matrix   = index_matrix,
-    L              = rep(NA_real_, n_runs),
-    prop_inf       = rep(NA_real_, n_runs),
-    trimmed_loglik = rep(NA_real_, n_runs),
-    finite_loglik  = rep(NA_real_, n_runs)
+    index_matrix        = index_matrix,
+    fit_trimmed_loglik  = rep(NA_real_, n_runs),
+    eval_prop_inf       = rep(NA_real_, n_runs),
+    eval_trimmed_loglik = rep(NA_real_, n_runs),
+    eval_finite_loglik  = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
@@ -2808,26 +2809,30 @@ cv_lcd_summary <- function(
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "L"]              <- mat$L
-    CVmat[i, "prop_inf"]       <- mat$prop_inf
-    CVmat[i, "trimmed_loglik"] <- mat$trimmed_loglik
-    CVmat[i, "finite_loglik"]  <- mat$finite_loglik
+    CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
+    CVmat[i, "eval_prop_inf "]      <- mat$eval_prop_inf 
+    CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
+    CVmat[i, "eval_finite_loglik"]  <- mat$eval_finite_loglik
   }
   
-  ## 4) Per-(alpha,theta,fold) maxima of trimmed_loglik (no sorting, no dedup)
-  mx <- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx + fold_idx,
-    data = CVmat,
-    FUN  = function(x) {
-      fx <- x[is.finite(x)]
-      if (length(fx) == 0L) NA_real_ else max(fx)
-    }
-  )
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
+  gid <- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
+  row_groups <- split(seq_len(nrow(CVmat)), gid)
+  
+  ftl <- CVmat$fit_trimmed_loglik
+  pick_idx <- vapply(row_groups, function(idx) {
+    v <- ftl[idx]
+#    v[!is.finite(v)] <- -Inf          # treat NA/NaN/Inf as -Inf so which.max works
+    if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
+    idx[which.max(v)]                 # pick the row index with max trimmed_loglik
+  }, integer(1L))
+  
+  selected <- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
   best_by_combo <- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx,
-    data = mx,
+    eval_trimmed_loglik ~ alpha_idx + theta_idx,
+    data = selected,
     FUN  = function(x) mean(x, na.rm = TRUE)
   )
   names(best_by_combo)[3] <- "cv_score"
@@ -2837,7 +2842,7 @@ cv_lcd_summary <- function(
 
   ## 7) Count rows in CVmat with non-NA and finite trimmed_loglik per (alpha_idx, theta_idx)
   counts_df <- aggregate(
-    I(is.finite(trimmed_loglik)) ~ alpha_idx + theta_idx,
+    I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
     data = CVmat,
     FUN  = sum
   )
@@ -2940,14 +2945,29 @@ refit_onejob <- function(
   # failure path
     if (!is.list(fit) || !is.finite(fit$L$loglik)) {
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
-      saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
+      saveRDS(list(
+        prop_inf       = NA_real_,
+        trimmed_loglik = NA_real_,
+        finite_loglik  = NA_real_,
+        L              = NA_real_,
+        theta_spars    = NA_real_,
+        alpha_spars    = NA_real_,
+        log_msg        = log_msg
+      ), file = out_path)
       return(FALSE)
     }
 
-  L <- as.numeric(fit$L$loglik)
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final L = ", round(L, 6), "\n")
-  saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
-
+  trimmed_loglik <- as.numeric(fit$L$trimmed_loglik)
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", round(L, 6), "\n")
+  saveRDS(list(
+      prop_inf       = prop_inf,
+      trimmed_loglik = trimmed_loglik,
+      finite_loglik  = finite_loglik,
+      L              = L,
+      theta_spars    = theta_spars,
+      alpha_spars    = alpha_spars,
+      log_msg        = log_msg
+    ), file = out_path)
   return(TRUE)
 }
 ```

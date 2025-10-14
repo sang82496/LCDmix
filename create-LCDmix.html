@@ -518,7 +518,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     biomass   = bin_mass,
     trim_prob = trim_prob
   )
-  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trim_loglik, 6)) )
+  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
   
   #— Return all key results —#
   return(list(
@@ -1307,7 +1307,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' \describe{
 #' \item{\code{loglik}}{Penalized average log-likelihood using all rows
 #' (\code{-Inf} if any row is non-finite before penalization).}
-#' \item{\code{trim_loglik}}{Penalized quantile-trimmed average
+#' \item{\code{trimmed_loglik}}{Penalized quantile-trimmed average
 #' log-likelihood (lower \code{trim_prob} fraction removed).}
 #' \item{\code{prop_inf}}{Proportion of rows with non-finite per-row
 #' log-likelihoods.}
@@ -1317,7 +1317,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' \dontrun{
 #' out &lt;- <a href="create-LCDmix.html#lcd_loglikelihood">lcd_loglikelihood</a>(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
 #' out$loglik
-#' out$trim_loglik
+#' out$trimmed_loglik
 #' out$prop_inf
 #' }
 #'
@@ -1400,13 +1400,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   l1_theta  &lt;- sum(abs(unlist(slopes)))
   pen_total &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  loglik      &lt;- base_ll      - pen_total
-  trim_loglik &lt;- trim_ll_base - pen_total
+  loglik         &lt;- base_ll      - pen_total
+  trimmed_loglik &lt;- trim_ll_base - pen_total
 
   return(list(
-    loglik       = loglik,     # penalized, using all rows; -Inf if any -Inf present
-    trim_loglik  = trim_loglik,    # penalized, trimmed
-    prop_inf     = prop_inf
+    loglik          = loglik,     # penalized, using all rows; -Inf if any -Inf present
+    trimmed_loglik  = trimmed_loglik,    # penalized, trimmed
+    prop_inf        = prop_inf
   ))
 }</code></pre>
 <pre class="r"><code>#' Run EM-style iterations for log-concave mixture-of-experts model
@@ -2558,14 +2558,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     log_msg &lt;- paste0(log_msg, "✖ Fit failed: ", err_msg)
     saveRDS(
       list(
-        prop_inf       = NA_real_,
-        trimmed_loglik = NA_real_,
-        finite_loglik  = NA_real_,
-        L              = NA_real_,
-        theta_spars    = NA_real_,
-        alpha_spars    = NA_real_,
-        log_msg        = log_msg
+        eval_prop_inf       = NA_real_,
+        eval_trimmed_loglik = NA_real_,
+        eval_finite_loglik  = NA_real_,
+        fit_trimmed_loglik  = NA_real_,
+        theta_spars         = NA_real_,
+        alpha_spars         = NA_real_,
+        log_msg             = log_msg
       ),
+      
       file = out_path
     )
     return(FALSE)
@@ -2580,10 +2581,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     trim_prob    = trim_prob
   )
 
-  prop_inf       &lt;- eval_res$prop_inf
-  trimmed_loglik &lt;- eval_res$trimmed_loglik
-  finite_loglik  &lt;- eval_res$finite_loglik
-  L              &lt;- fit$L$loglik
+  eval_prop_inf       &lt;- eval_res$prop_inf
+  eval_trimmed_loglik &lt;- eval_res$trimmed_loglik
+  eval_finite_loglik  &lt;- eval_res$finite_loglik
+  fit_trimmed_loglik  &lt;- fit$L$trimmed_loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
@@ -2598,13 +2599,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   saveRDS(
     list(
-      prop_inf       = prop_inf,
-      trimmed_loglik = trimmed_loglik,
-      finite_loglik  = finite_loglik,
-      L              = L,
-      theta_spars    = theta_spars,
-      alpha_spars    = alpha_spars,
-      log_msg        = log_msg
+      eval_prop_inf       = eval_prop_inf,
+      eval_trimmed_loglik = eval_trimmed_loglik,
+      eval_finite_loglik  = eval_finite_loglik,
+      fit_trimmed_loglik  = fit_trimmed_loglik,
+      theta_spars         = theta_spars,
+      alpha_spars         = alpha_spars,
+      log_msg             = log_msg
     ),
     file = out_path
   )
@@ -2678,9 +2679,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       
       if (file.exists(out_path)) {
         res_ii = readRDS(out_path)
-        return(is.finite(res_ii$L))
+        return(!is.na(res_ii$fit_trimmed_loglik))
       }
-      
+
       res_ii = <a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>(
         job       = job,
         Y_bin     = Y_bin,
@@ -2864,7 +2865,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     )
     if (file.exists(out_path)) {
       res_ii = readRDS(out_path)
-      return(is.finite(res_ii$L))
+      return(!is.na(res_ii$fit_trimmed_loglik))
     }
 
     # load the one simulation needed for this job
@@ -2963,11 +2964,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   n_runs &lt;- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat &lt;- cbind(
-    index_matrix   = index_matrix,
-    L              = rep(NA_real_, n_runs),
-    prop_inf       = rep(NA_real_, n_runs),
-    trimmed_loglik = rep(NA_real_, n_runs),
-    finite_loglik  = rep(NA_real_, n_runs)
+    index_matrix        = index_matrix,
+    fit_trimmed_loglik  = rep(NA_real_, n_runs),
+    eval_prop_inf       = rep(NA_real_, n_runs),
+    eval_trimmed_loglik = rep(NA_real_, n_runs),
+    eval_finite_loglik  = rep(NA_real_, n_runs)
   )
   CVmat &lt;- as.data.frame(CVmat)
   
@@ -2990,26 +2991,30 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "L"]              &lt;- mat$L
-    CVmat[i, "prop_inf"]       &lt;- mat$prop_inf
-    CVmat[i, "trimmed_loglik"] &lt;- mat$trimmed_loglik
-    CVmat[i, "finite_loglik"]  &lt;- mat$finite_loglik
+    CVmat[i, "fit_trimmed_loglik"]  &lt;- mat$fit_trimmed_loglik
+    CVmat[i, "eval_prop_inf "]      &lt;- mat$eval_prop_inf 
+    CVmat[i, "eval_trimmed_loglik"] &lt;- mat$eval_trimmed_loglik
+    CVmat[i, "eval_finite_loglik"]  &lt;- mat$eval_finite_loglik
   }
   
-  ## 4) Per-(alpha,theta,fold) maxima of trimmed_loglik (no sorting, no dedup)
-  mx &lt;- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx + fold_idx,
-    data = CVmat,
-    FUN  = function(x) {
-      fx &lt;- x[is.finite(x)]
-      if (length(fx) == 0L) NA_real_ else max(fx)
-    }
-  )
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
+  gid &lt;- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
+  row_groups &lt;- split(seq_len(nrow(CVmat)), gid)
+  
+  ftl &lt;- CVmat$fit_trimmed_loglik
+  pick_idx &lt;- vapply(row_groups, function(idx) {
+    v &lt;- ftl[idx]
+#    v[!is.finite(v)] &lt;- -Inf          # treat NA/NaN/Inf as -Inf so which.max works
+    if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
+    idx[which.max(v)]                 # pick the row index with max trimmed_loglik
+  }, integer(1L))
+  
+  selected &lt;- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
   best_by_combo &lt;- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx,
-    data = mx,
+    eval_trimmed_loglik ~ alpha_idx + theta_idx,
+    data = selected,
     FUN  = function(x) mean(x, na.rm = TRUE)
   )
   names(best_by_combo)[3] &lt;- "cv_score"
@@ -3019,7 +3024,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   ## 7) Count rows in CVmat with non-NA and finite trimmed_loglik per (alpha_idx, theta_idx)
   counts_df &lt;- aggregate(
-    I(is.finite(trimmed_loglik)) ~ alpha_idx + theta_idx,
+    I(is.finite(eval_trimmed_loglik) &amp; is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
     data = CVmat,
     FUN  = sum
   )
@@ -3107,14 +3112,29 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # failure path
     if (!is.list(fit) || !is.finite(fit$L$loglik)) {
       log_msg &lt;- paste0(log_msg, "✖ Refit failed: ", err_msg)
-      saveRDS(list(log_msg = log_msg, L = NA_real_, fit = NULL), file = out_path)
+      saveRDS(list(
+        prop_inf       = NA_real_,
+        trimmed_loglik = NA_real_,
+        finite_loglik  = NA_real_,
+        L              = NA_real_,
+        theta_spars    = NA_real_,
+        alpha_spars    = NA_real_,
+        log_msg        = log_msg
+      ), file = out_path)
       return(FALSE)
     }
 
-  L &lt;- as.numeric(fit$L$loglik)
-  log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final L = ", round(L, 6), "\n")
-  saveRDS(list(log_msg = log_msg, L = L, fit = fit), file = out_path)
-
+  trimmed_loglik &lt;- as.numeric(fit$L$trimmed_loglik)
+  log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", round(L, 6), "\n")
+  saveRDS(list(
+      prop_inf       = prop_inf,
+      trimmed_loglik = trimmed_loglik,
+      finite_loglik  = finite_loglik,
+      L              = L,
+      theta_spars    = theta_spars,
+      alpha_spars    = alpha_spars,
+      log_msg        = log_msg
+    ), file = out_path)
   return(TRUE)
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix multiple times and select the best training fit

@@ -68,9 +68,9 @@ cv_lcd <- function(
       
       if (file.exists(out_path)) {
         res_ii = readRDS(out_path)
-        return(is.finite(res_ii$L))
+        return(!is.na(res_ii$fit_trimmed_loglik))
       }
-      
+
       res_ii = cv_lcd_onejob(
         job       = job,
         Y_bin     = Y_bin,

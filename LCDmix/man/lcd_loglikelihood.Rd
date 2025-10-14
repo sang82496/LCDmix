@@ -36,7 +36,7 @@ A list with:
 \describe{
 \item{\code{loglik}}{Penalized average log-likelihood using all rows
 (\code{-Inf} if any row is non-finite before penalization).}
-\item{\code{trim_loglik}}{Penalized quantile-trimmed average
+\item{\code{trimmed_loglik}}{Penalized quantile-trimmed average
 log-likelihood (lower \code{trim_prob} fraction removed).}
 \item{\code{prop_inf}}{Proportion of rows with non-finite per-row
 log-likelihoods.}
@@ -68,7 +68,7 @@ support are suppressed (these yield \code{-Inf} log-densities).
 \dontrun{
 out <- lcd_loglikelihood(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
 out$loglik
-out$trim_loglik
+out$trimmed_loglik
 out$prop_inf
 }
 
