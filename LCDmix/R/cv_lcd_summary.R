@@ -60,11 +60,11 @@ cv_lcd_summary <- function(
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
-    index_matrix   = index_matrix,
-    L              = rep(NA_real_, n_runs),
-    prop_inf       = rep(NA_real_, n_runs),
-    trimmed_loglik = rep(NA_real_, n_runs),
-    finite_loglik  = rep(NA_real_, n_runs)
+    index_matrix        = index_matrix,
+    fit_trimmed_loglik  = rep(NA_real_, n_runs),
+    eval_prop_inf       = rep(NA_real_, n_runs),
+    eval_trimmed_loglik = rep(NA_real_, n_runs),
+    eval_finite_loglik  = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
@@ -87,26 +87,30 @@ cv_lcd_summary <- function(
     }
     # load
     mat = readRDS(file_name)
-    CVmat[i, "L"]              <- mat$L
-    CVmat[i, "prop_inf"]       <- mat$prop_inf
-    CVmat[i, "trimmed_loglik"] <- mat$trimmed_loglik
-    CVmat[i, "finite_loglik"]  <- mat$finite_loglik
+    CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
+    CVmat[i, "eval_prop_inf "]      <- mat$eval_prop_inf 
+    CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
+    CVmat[i, "eval_finite_loglik"]  <- mat$eval_finite_loglik
   }
   
-  ## 4) Per-(alpha,theta,fold) maxima of trimmed_loglik (no sorting, no dedup)
-  mx <- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx + fold_idx,
-    data = CVmat,
-    FUN  = function(x) {
-      fx <- x[is.finite(x)]
-      if (length(fx) == 0L) NA_real_ else max(fx)
-    }
-  )
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
+  gid <- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
+  row_groups <- split(seq_len(nrow(CVmat)), gid)
+  
+  ftl <- CVmat$fit_trimmed_loglik
+  pick_idx <- vapply(row_groups, function(idx) {
+    v <- ftl[idx]
+#    v[!is.finite(v)] <- -Inf          # treat NA/NaN/Inf as -Inf so which.max works
+    if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
+    idx[which.max(v)]                 # pick the row index with max trimmed_loglik
+  }, integer(1L))
+  
+  selected <- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
   best_by_combo <- aggregate(
-    trimmed_loglik ~ alpha_idx + theta_idx,
-    data = mx,
+    eval_trimmed_loglik ~ alpha_idx + theta_idx,
+    data = selected,
     FUN  = function(x) mean(x, na.rm = TRUE)
   )
   names(best_by_combo)[3] <- "cv_score"
@@ -116,7 +120,7 @@ cv_lcd_summary <- function(
 
   ## 7) Count rows in CVmat with non-NA and finite trimmed_loglik per (alpha_idx, theta_idx)
   counts_df <- aggregate(
-    I(is.finite(trimmed_loglik)) ~ alpha_idx + theta_idx,
+    I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
     data = CVmat,
     FUN  = sum
   )
