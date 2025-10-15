@@ -164,14 +164,16 @@ refit_lcd_simul <- function(
 
   for (s in seq_len(num_sims)) {
     sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
-    L_vec     <- rep(-Inf, length(seeds))
+    L_vec     <- rep(NA_real_, length(seeds))
     
     for (i in seq_along(seeds)) {
       sd <- as.integer(seeds[i])
       file_name  <- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
-      L_vec[i]  <- obj$fit$L$trimmed_loglik
+      if (!is.null(obj$fit)) {
+        L_vec[i]  <- obj$fit$L$trimmed_loglik
+      }
     }
     
     if (all(!is.finite(L_vec))) next

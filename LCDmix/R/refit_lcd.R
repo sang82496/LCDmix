@@ -115,13 +115,15 @@ refit_lcd <- function(
   success <- unlist(res, use.names = FALSE)
   summary <- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
   
-  L_vec <- rep(NA, length(seeds))
+  L_vec <- rep(NA_real_, length(seeds))
   for (i in seq_along(seeds)) {
     sd <- as.integer(seeds[i])
     file_name <- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj <- readRDS(file_name)
-    L_vec[i]  <- obj$fit$L$trimmed_loglik
+    if (!is.null(obj$fit)) {
+      L_vec[i]  <- obj$fit$L$trimmed_loglik
+    }
   }
   
   if (all(!is.finite(L_vec))) {
