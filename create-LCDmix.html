@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-10-14">
+<meta name="date" content="2025-10-15">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-10-14</h4>
+<h4 class="date">2025-10-15</h4>
 
 </div>
 
@@ -3243,13 +3243,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   success &lt;- unlist(res, use.names = FALSE)
   summary &lt;- sprintf("Refit failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success) / length(success))
   
-  L_vec &lt;- rep(NA, length(seeds))
+  L_vec &lt;- rep(NA_real_, length(seeds))
   for (i in seq_along(seeds)) {
     sd &lt;- as.integer(seeds[i])
     file_name &lt;- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj &lt;- readRDS(file_name)
-    L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+    if (!is.null(obj$fit)) {
+      L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+    }
   }
   
   if (all(!is.finite(L_vec))) {
@@ -3427,14 +3429,16 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   for (s in seq_len(num_sims)) {
     sim_refit_dir &lt;- file.path(base_dir, sprintf("sim_%d", s), "refit")
-    L_vec     &lt;- rep(-Inf, length(seeds))
+    L_vec     &lt;- rep(NA_real_, length(seeds))
     
     for (i in seq_along(seeds)) {
       sd &lt;- as.integer(seeds[i])
       file_name  &lt;- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj &lt;- readRDS(file_name)
-      L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+      if (!is.null(obj$fit)) {
+        L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+      }
     }
     
     if (all(!is.finite(L_vec))) next
