@@ -53,30 +53,21 @@ refit_onejob <- function(
   log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
 
   # failure path
-    if (!is.list(fit) || !is.finite(fit$L$loglik)) {
+    if (!is.list(fit)) {
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
       saveRDS(list(
-        prop_inf       = NA_real_,
-        trimmed_loglik = NA_real_,
-        finite_loglik  = NA_real_,
-        L              = NA_real_,
-        theta_spars    = NA_real_,
-        alpha_spars    = NA_real_,
-        log_msg        = log_msg
+        fit      = NULL,
+        log_msg  = log_msg
       ), file = out_path)
       return(FALSE)
     }
-
-  trimmed_loglik <- as.numeric(fit$L$trimmed_loglik)
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", round(L, 6), "\n")
+  
+  fit_L <- as.numeric(fit$L$trimmed_loglik)
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
+                    round(fit_L, 6), "\n")
   saveRDS(list(
-      prop_inf       = prop_inf,
-      trimmed_loglik = trimmed_loglik,
-      finite_loglik  = finite_loglik,
-      L              = L,
-      theta_spars    = theta_spars,
-      alpha_spars    = alpha_spars,
-      log_msg        = log_msg
+      fit     = fit,
+      log_msg = log_msg
     ), file = out_path)
   return(TRUE)
 }

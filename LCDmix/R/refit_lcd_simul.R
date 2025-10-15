@@ -131,7 +131,7 @@ refit_lcd_simul <- function(
     # cached?
     if (file.exists(out_path)) {
       obj <- readRDS(out_path)
-      return(isTRUE(is.finite(obj$L)))
+      return(!is.null(obj$fit))
     }
     
     # load this simulation
@@ -171,7 +171,7 @@ refit_lcd_simul <- function(
       file_name  <- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
-      L_vec[i]  <- if (!is.na(obj$L)) as.numeric(obj$L)
+      L_vec[i]  <- obj$fit$L$trimmed_loglik
     }
     
     if (all(!is.finite(L_vec))) next

@@ -98,7 +98,7 @@ refit_lcd <- function(
     # Cached result?
     if (file.exists(out_path)) {
       obj <- readRDS(out_path)
-      return(isTRUE(is.finite(obj$L)))
+      return(!is.null(obj$fit))
     }
 
     # Run one refit (writes cache)
@@ -121,7 +121,7 @@ refit_lcd <- function(
     file_name <- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj <- readRDS(file_name)
-    L_vec[i]  <- obj$L
+    L_vec[i]  <- obj$fit$L$trimmed_loglik
   }
   
   if (all(!is.finite(L_vec))) {
