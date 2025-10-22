@@ -135,5 +135,6 @@ refit_lcd <- function(
       best_fit = obj$fit
     }
   return(list(summary = summary,
+              L_vec   = L_vec,
               best_fit = best_fit))
 }
