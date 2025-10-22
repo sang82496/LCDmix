@@ -130,6 +130,7 @@ main <- function(
     Y_bin    = Y_bin,
     X        = X,
     bin_mass = bin_mass,
+    K        = K,
     initial  = init_res,
     iter     = iter_res,
     L        = L

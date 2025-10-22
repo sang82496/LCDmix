@@ -198,6 +198,7 @@ main <- function(
     Y_bin    = Y_bin,
     X        = X,
     bin_mass = bin_mass,
+    K        = K,
     initial  = init_res,
     iter     = iter_res,
     L        = L
@@ -3103,6 +3104,7 @@ refit_lcd <- function(
       best_fit = obj$fit
     }
   return(list(summary = summary,
+              L_vec   = L_vec,
               best_fit = best_fit))
 }
 ```
@@ -3615,52 +3617,46 @@ mixture_metric <- function(
 ) {
   TT <- length(Y_bin)
   
-  ## 1) mixing proportions
-  if (!is.null(est_res$alpha_new)) {
+if (!is.null(est_res$alpha_new)) { # if LCDmix
     pi_est <- pi_k(X, est_res$alpha_new)
-  } else if (!is.null(est_res$alpha)) {
-    pi_est <- pi_k(X, est_res$alpha)
-  } else {
-    stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
-  }
-  
-  ## 2) component‐density function
-  if (!is.null(est_res$g_new)) {
     K <- length(est_res$g_new)
-    dens_est_fun <- function(t, y_mid) {
+    dens_est_fun <- function(t) {
       sapply(seq_len(K), function(k) {
-        mu <- est_res$theta0_new[[k]] + sum(X[t, ] * est_res$theta_new[[k]])
-        logcondens::evaluateLogConDens(y_mid - mu, est_res$g_new[[k]])[,3]
+        logcondens::evaluateLogConDens(est_res$resi_new[[t]][,k], est_res$g_new[[k]])[,3]
       })
     }
-  } else {
+    per_time <- numeric(TT)
+    for (t in seq_len(TT)) {
+      dens_est  <- dens_est_fun(t)
+      mix_est   <- dens_est %*% pi_est[t, ]
+      mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+      per_time[t] <- bin_mass[[t]] %*% abs(mix_est - mix_true)
+    }
+  } else if (!is.null(est_res$alpha)) { # if flowmix
+    pi_est <- pi_k(X, est_res$alpha)
     mn_arr <- est_res$mn
     sigma  <- as.numeric(est_res$sigma)
     K      <- dim(mn_arr)[3]
     dens_est_fun <- function(t, y_mid) {
       sapply(seq_len(K), function(k) {
-        stats::dnorm(y_mid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
+        dnorm(y_mid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
     }
+    per_time <- numeric(TT)
+    for (t in seq_len(TT)) {
+      dens_est  <- dens_est_fun(t, Y_bin[[t]])
+      mix_est   <- dens_est %*% pi_est[t, ]
+      mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+      per_time[t] <- bin_mass[[t]] %*% abs(mix_est - mix_true)
+    }
+  } else {
+    stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
   }
   
-  ## 3) compute per‐time L1
-  per_time <- numeric(TT)
-  for (t in seq_len(TT)) {
-    y_mid     <- as.numeric(Y_bin[[t]])
-    dens_est  <- dens_est_fun(t, y_mid)
-    mix_est   <- rowSums(pi_est[t, ] * dens_est)
-    mix_true  <- rowSums(true_res$prob[t, ] * true_res$dens_true[[t]])
-    dy        <- if (length(y_mid) > 1L) median(diff(sort(y_mid))) else 1
-    per_time[t] <- sum(abs(mix_est - mix_true)) * dy
-  }
-  
-  ## 4) biomass‐weighted average
   w_t      <- vapply(bin_mass, sum, numeric(1))
-  weighted <- sum(w_t * per_time) / sum(w_t)
-  
-  return(list(per_time = per_time, 
-              weighted = weighted))
+  weighted <- sum(per_time) / sum(w_t)
+
+  return(weighted)
 }
 ```
 
