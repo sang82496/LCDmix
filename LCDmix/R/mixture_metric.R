@@ -55,44 +55,39 @@ mixture_metric <- function(
 ) {
   TT <- length(Y_bin)
   
-if (!is.null(est_res$alpha_new)) { # if LCDmix
+  if (!is.null(est_res$alpha_new)) { # if LCDmix
     pi_est <- pi_k(X, est_res$alpha_new)
     K <- length(est_res$g_new)
-    dens_est_fun <- function(t) {
+    dens_est_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
-        logcondens::evaluateLogConDens(est_res$resi_new[[t]][,k], est_res$g_new[[k]])[,3]
+        mu <- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
+        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
       })
-    }
-    per_time <- numeric(TT)
-    for (t in seq_len(TT)) {
-      dens_est  <- dens_est_fun(t)
-      mix_est   <- dens_est %*% pi_est[t, ]
-      mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
-      per_time[t] <- bin_mass[[t]] %*% abs(mix_est - mix_true)
     }
   } else if (!is.null(est_res$alpha)) { # if flowmix
     pi_est <- pi_k(X, est_res$alpha)
     mn_arr <- est_res$mn
     sigma  <- as.numeric(est_res$sigma)
     K      <- dim(mn_arr)[3]
-    dens_est_fun <- function(t, y_mid) {
+    dens_est_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
-        dnorm(y_mid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
+        dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
-    }
-    per_time <- numeric(TT)
-    for (t in seq_len(TT)) {
-      dens_est  <- dens_est_fun(t, Y_bin[[t]])
-      mix_est   <- dens_est %*% pi_est[t, ]
-      mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
-      per_time[t] <- bin_mass[[t]] %*% abs(mix_est - mix_true)
     }
   } else {
     stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
   }
   
+  per_time <- numeric(TT)
+  for (t in seq_len(TT)) {
+    dens_est  <- dens_est_fun(t, Y_bin[[t]])
+    mix_est   <- dens_est %*% pi_est[t, ]
+    mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+    per_time[t] <- sum(abs(mix_est - mix_true))
+  }
+  
   w_t      <- vapply(bin_mass, sum, numeric(1))
-  weighted <- sum(per_time) / sum(w_t)
+  metric   <- sum(w_t * per_time) / sum(w_t)
 
-  return(weighted)
+  return(metric)
 }
