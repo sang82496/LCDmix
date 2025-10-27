@@ -16,8 +16,7 @@ refit_onejob(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir,
-  debug = FALSE
+  save_dir
 )
 }
 \description{
