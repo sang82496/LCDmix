@@ -85,9 +85,8 @@ mixture_metric <- function(
     mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
     per_time[t] <- sum(abs(mix_est - mix_true))
   }
-  
   w_t      <- vapply(bin_mass, sum, numeric(1))
   metric   <- sum(w_t * per_time) / sum(w_t)
-
+  
   return(metric)
 }

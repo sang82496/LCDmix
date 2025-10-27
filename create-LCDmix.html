@@ -3781,10 +3781,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     mix_true  &lt;- true_res$dens_true[[t]] %*% true_res$prob[t, ]
     per_time[t] &lt;- sum(abs(mix_est - mix_true))
   }
-  
   w_t      &lt;- vapply(bin_mass, sum, numeric(1))
   metric   &lt;- sum(w_t * per_time) / sum(w_t)
-
+  
   return(metric)
 }</code></pre>
 <pre class="r"><code>#' Simulate multiple skew‐normal mixture datasets and save to disk
