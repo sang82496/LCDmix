@@ -15,8 +15,7 @@ refit_onejob <- function(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir,
-  debug = FALSE
+  save_dir
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -44,7 +43,7 @@ refit_onejob <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = debug
+        debug           = TRUE
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -53,7 +52,7 @@ refit_onejob <- function(
   log_msg <- paste0(log_msg, paste(out_log, collapse = "\n"), "\n")
 
   # failure path
-    if (!is.list(fit)) {
+    if (!is.list(fit) | is.null(fit$iter)) {
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
       saveRDS(list(
         fit      = NULL,
