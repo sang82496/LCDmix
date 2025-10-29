@@ -3697,7 +3697,7 @@ simulate_and_save <- function(
   
   for (i in seq_len(nrow(combos))) {
     sc  <- combos[i, ]
-    sim <- generate_skewed_data(
+    sim <- gen_simul_data(
       sim_seed      = sc$sim_seed,
       nt            = nt,
       TT            = TT,
