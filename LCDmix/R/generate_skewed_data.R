@@ -128,28 +128,16 @@ generate_skewed_data <- function(
   21.11, -0.01592308, -0.0135, -0.01288889, -0.01535714, -0.01515789, -0.01415, -0.01206667,
   -0.01313333, -0.01109091, 1818.87, 1880.722
   )
-  par_smoothed <- stats::ksmooth(
-    x        = seq_along(par_raw),
-    y        = par_raw,
-    bandwidth = 5,
-    x.points  = seq_along(par_raw)
-  )$y
+  par_smoothed <- stats::ksmooth(x = seq_along(par_raw), y = par_raw, 
+                                 bandwidth = 5, x.points  = seq_along(par_raw))$y
   baseline <- scale(par_smoothed[1:n_time])
   
   # Change‐point indicator (0/1)
   cp <- c(rep(0, n_time / 2), rep(1, n_time / 2))
   
   # Additional noise covariates
-  noise_covs <- replicate(
-    n_covariates - 2,
-    stats::rnorm(n_time),
-    simplify = FALSE
-  )
-  X <- cbind(
-    baseline,
-    cp,
-    do.call(cbind, noise_covs)
-  )
+  noise_covs <- replicate(n_covariates - 2, rnorm(n_time), simplify = FALSE)
+  X <- cbind(baseline, cp, do.call(cbind, noise_covs))
   colnames(X) <- c("baseline", "cp", paste0("noise", seq_len(n_covariates - 2)))
   
   #— True model parameters —#
@@ -183,20 +171,10 @@ generate_skewed_data <- function(
   ylist <- vector("list", n_time)
   for (t in seq_len(n_time)) {
     # Sample cluster memberships
-    clust_ids <- sample(
-      seq_len(numclust),
-      size      = n_list[t],
-      replace   = TRUE,
-      prob      = pi_mat[t, ]
-    )
+    clust_ids <- sample(seq_len(numclust), size = n_list[t], replace = TRUE, prob = pi_mat[t, ])
     # True component means
     means_t <- mnmat[t, clust_ids]
-    noise_t <- sn::rsn(
-      n      = n_list[t],
-      xi     = 0,
-      omega  = omega,
-      alpha  = skew_alpha
-    ) - mn_shift
+    noise_t <- sn::rsn(n = n_list[t], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
     # Observations
     ylist[[t]] <- matrix(means_t + noise_t, ncol = 1)
   }
@@ -220,18 +198,12 @@ generate_skewed_data <- function(
     # build a n_t × numclust matrix
     sapply(seq_len(numclust), function(k) {
       resid <- y_mid - mnmat[t, k]
-      sn::dsn(resid + mn_shift,
-              xi    = 0,
-              omega = omega,
-              alpha = skew_alpha)
+      sn::dsn(resid + mn_shift, xi = 0, omega = omega, alpha = skew_alpha)
     })
   })
   
   #— Pack return object —#
-  mn_array <- array(
-    dim = c(n_time, 1, numclust),
-    data = as.vector(mnmat)
-  )
+  mn_array <- array(dim = c(n_time, 1, numclust), data = as.vector(mnmat))
  
   return(list(
     Y_bin       = ylist,
