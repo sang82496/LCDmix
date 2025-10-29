@@ -126,7 +126,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
+  trim_prob      = 0.03,
   calc_Q_every   = FALSE,
   debug          = FALSE
 ) {
@@ -1015,7 +1015,7 @@ comp_Q <- function(
 #' averaging.)
 #' @param trim_prob Numeric in [0,1). Fraction of observations (by weight)
 #' to trim from the lower tail of the per-observation log-likelihoods
-#' (after log-sum-exp across components). Default: \code{0.01}.
+#' (after log-sum-exp across components). Default: \code{0.03}.
 #'
 #' @details
 #' For each observation, the function forms
@@ -1055,7 +1055,7 @@ lcd_loglikelihood <- function(
   model,
   X,
   biomass,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   densities    <- model$g_new             # list length K (log-concave fits)
   slopes       <- model$theta_new         # penalized slopes (any shape)
@@ -2109,7 +2109,7 @@ weighted_quantile <- function(
 #'   Y_test       = Y_bin[test_idx],
 #'   X_test       = X[test_idx, , drop = FALSE],
 #'   biomass_test = bin_mass[test_idx],
-#'   trim_prob    = 0.01
+#'   trim_prob    = 0.03
 #' )
 #' res$trimmed_loglik
 #' }
@@ -2120,7 +2120,7 @@ eval_lcd <- function(
   Y_test,
   X_test,
   biomass_test,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   # Unpack fitted parameters
   densities     <- model$g_new
@@ -2434,7 +2434,7 @@ cv_lcd <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  trim_prob          = 0.01,
+  trim_prob          = 0.03,
   save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
@@ -2546,7 +2546,7 @@ cv_lcd <- function(
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{eval_lcd()}. Default \code{0.01}.
+#'   \code{eval_lcd()}. Default \code{0.03}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
@@ -2609,8 +2609,8 @@ cv_lcd_simul <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
-  blocksize      = 20,
+  trim_prob      = 0.03,
+  blocksize      = 10,
   base_dir       = "./cv_saves",
   n_cores        = "max"
 ) {
@@ -2987,7 +2987,7 @@ refit_onejob <- function(
 #' @param max_iter Integer; maximum EM iterations. Default \code{30}.
 #' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.03}.
 #' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
 #' @param debug Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.
@@ -3034,7 +3034,7 @@ refit_lcd <- function(
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max"
 ) {
@@ -3136,7 +3136,7 @@ refit_lcd <- function(
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-#'   Default \code{0.01}.
+#'   Default \code{0.03}.
 #' @param base_dir Character; base directory for outputs. Refit caches are written
 #'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
@@ -3184,7 +3184,7 @@ refit_lcd_simul <- function(
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max"
 ) {
@@ -3678,7 +3678,8 @@ gen_simul_data <- function(
 simulate_and_save <- function(
   sim_seeds,
   gaps,
-  skew_alphas,
+  is_heavytail = FALSE,
+  skew_alphas = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -3688,28 +3689,30 @@ simulate_and_save <- function(
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
-  combos <- expand.grid(
-    sim_seed      = sim_seeds,
-    gap           = gaps,
-    skew_alpha    = skew_alphas,
-    stringsAsFactors = FALSE
-  )
-  
-  for (i in seq_len(nrow(combos))) {
-    sc  <- combos[i, ]
-    sim <- gen_simul_data(
-      sim_seed      = sc$sim_seed,
-      nt            = nt,
-      TT            = TT,
-      beta_par      = beta_par,
-      p             = p,
-      B             = B,
-      is_heavytail  = FALSE,
-      df            = NULL,
-      skew_alpha    = sc$skew_alpha,
-      gap           = sc$gap
+  if (!is_heavytail){
+    combos <- expand.grid(
+      sim_seed      = sim_seeds,
+      gap           = gaps,
+      skew_alpha    = skew_alphas,
+      stringsAsFactors = FALSE
     )
-    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    
+    for (i in seq_len(nrow(combos))) {
+      sc  <- combos[i, ]
+      sim <- gen_simul_data(
+        sim_seed      = sc$sim_seed,
+        nt            = nt,
+        TT            = TT,
+        beta_par      = beta_par,
+        p             = p,
+        B             = B,
+        is_heavytail  = FALSE,
+        df            = NULL,
+        skew_alpha    = sc$skew_alpha,
+        gap           = sc$gap
+      )
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
   }
   return(combos)
 }
@@ -3766,13 +3769,23 @@ simulate_and_save <- function(
 #' }
 #' @export
 mixture_metric <- function(
-  Y_bin,
-  X,
-  bin_mass,
-  est_res,
-  true_res
+  sim,
+  est_res
 ) {
-  TT <- length(Y_bin)
+  Y_bin     = sim$Y_bin
+  X         = sim$X
+  bin_mass  = sim$bin_mass
+  TT        = length(Y_bin)
+  prob_true = pi_k(X, t(sim$alpha))
+  
+  if (sim$noisetype == 'skewed') {
+    dens_true_fun <- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    }
+  }
   
   if (!is.null(est_res$alpha_new)) { # if LCDmix
     pi_est <- pi_k(X, est_res$alpha_new)
@@ -3801,7 +3814,8 @@ mixture_metric <- function(
   for (t in seq_len(TT)) {
     dens_est  <- dens_est_fun(t, Y_bin[[t]])
     mix_est   <- dens_est %*% pi_est[t, ]
-    mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+    dens_true <- dens_true_fun(t, Y_bin[[t]])
+    mix_true  <- dens_true %*% prob_true[t, ]
     per_time[t] <- sum(abs(mix_est - mix_true))
   }
   w_t      <- vapply(bin_mass, sum, numeric(1))

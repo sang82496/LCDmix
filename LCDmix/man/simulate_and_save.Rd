@@ -7,7 +7,8 @@
 simulate_and_save(
   sim_seeds,
   gaps,
-  skew_alphas,
+  is_heavytail = FALSE,
+  skew_alphas = NULL,
   sim_dir = "sim_data",
   nt = 1000,
   TT = 100,

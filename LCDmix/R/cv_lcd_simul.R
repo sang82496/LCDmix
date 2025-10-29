@@ -27,7 +27,7 @@
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{eval_lcd()}. Default \code{0.01}.
+#'   \code{eval_lcd()}. Default \code{0.03}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
@@ -90,8 +90,8 @@ cv_lcd_simul <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
-  blocksize      = 20,
+  trim_prob      = 0.03,
+  blocksize      = 10,
   base_dir       = "./cv_saves",
   n_cores        = "max"
 ) {

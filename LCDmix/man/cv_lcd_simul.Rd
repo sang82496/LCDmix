@@ -15,8 +15,8 @@ cv_lcd_simul(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
-  trim_prob = 0.01,
-  blocksize = 20,
+  trim_prob = 0.03,
+  blocksize = 10,
   base_dir = "./cv_saves",
   n_cores = "max"
 )
@@ -49,7 +49,7 @@ surrogate objective. Default \code{1e-3}.}
 zeroed for stability. Default \code{1e-3}.}
 
 \item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used inside
-\code{eval_lcd()}. Default \code{0.01}.}
+\code{eval_lcd()}. Default \code{0.03}.}
 
 \item{blocksize}{Integer; block size for \code{flowmix::make_cv_folds()}.
 Default \code{20}.}

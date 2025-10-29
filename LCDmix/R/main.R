@@ -58,7 +58,7 @@ main <- function(
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
+  trim_prob      = 0.03,
   calc_Q_every   = FALSE,
   debug          = FALSE
 ) {

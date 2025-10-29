@@ -453,7 +453,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
+  trim_prob      = 0.03,
   calc_Q_every   = FALSE,
   debug          = FALSE
 ) {
@@ -1288,7 +1288,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' averaging.)
 #' @param trim_prob Numeric in [0,1). Fraction of observations (by weight)
 #' to trim from the lower tail of the per-observation log-likelihoods
-#' (after log-sum-exp across components). Default: \code{0.01}.
+#' (after log-sum-exp across components). Default: \code{0.03}.
 #'
 #' @details
 #' For each observation, the function forms
@@ -1328,7 +1328,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   model,
   X,
   biomass,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   densities    &lt;- model$g_new             # list length K (log-concave fits)
   slopes       &lt;- model$theta_new         # penalized slopes (any shape)
@@ -2324,7 +2324,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #'   Y_test       = Y_bin[test_idx],
 #'   X_test       = X[test_idx, , drop = FALSE],
 #'   biomass_test = bin_mass[test_idx],
-#'   trim_prob    = 0.01
+#'   trim_prob    = 0.03
 #' )
 #' res$trimmed_loglik
 #' }
@@ -2335,7 +2335,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   Y_test,
   X_test,
   biomass_test,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   # Unpack fitted parameters
   densities     &lt;- model$g_new
@@ -2625,7 +2625,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  trim_prob          = 0.01,
+  trim_prob          = 0.03,
   save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
@@ -2733,7 +2733,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()}. Default \code{0.01}.
+#'   \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()}. Default \code{0.03}.
 #' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
 #'   Default \code{20}.
 #' @param save_dir Character; base directory for outputs. Per-simulation results
@@ -2796,8 +2796,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   max_iter       = 30,
   iter_eta       = 1e-3,
   resp_threshold = 1e-3,
-  trim_prob      = 0.01,
-  blocksize      = 20,
+  trim_prob      = 0.03,
+  blocksize      = 10,
   base_dir       = "./cv_saves",
   n_cores        = "max"
 ) {
@@ -3147,7 +3147,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param max_iter Integer; maximum EM iterations. Default \code{30}.
 #' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} during fitting. Default \code{0.01}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} during fitting. Default \code{0.03}.
 #' @param save_dir Character; directory to write/read cached refits (\code{refit_&lt;seed&gt;.rds}). Default \code{"./refits"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
 #' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} for verbose diagnostics. Default \code{FALSE}.
@@ -3194,7 +3194,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max"
 ) {
@@ -3290,7 +3290,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-#'   Default \code{0.01}.
+#'   Default \code{0.03}.
 #' @param base_dir Character; base directory for outputs. Refit caches are written
 #'   under \code{base_dir/sim_&lt;s&gt;/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
@@ -3338,7 +3338,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max"
 ) {
@@ -3810,7 +3810,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <span id="simulate_and_save">simulate_and_save</span> &lt;- function(
   sim_seeds,
   gaps,
-  skew_alphas,
+  is_heavytail = FALSE,
+  skew_alphas = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -3820,28 +3821,30 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
-  combos &lt;- expand.grid(
-    sim_seed      = sim_seeds,
-    gap           = gaps,
-    skew_alpha    = skew_alphas,
-    stringsAsFactors = FALSE
-  )
-  
-  for (i in seq_len(nrow(combos))) {
-    sc  &lt;- combos[i, ]
-    sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(
-      sim_seed      = sc$sim_seed,
-      nt            = nt,
-      TT            = TT,
-      beta_par      = beta_par,
-      p             = p,
-      B             = B,
-      is_heavytail  = FALSE,
-      df            = NULL,
-      skew_alpha    = sc$skew_alpha,
-      gap           = sc$gap
+  if (!is_heavytail){
+    combos &lt;- expand.grid(
+      sim_seed      = sim_seeds,
+      gap           = gaps,
+      skew_alpha    = skew_alphas,
+      stringsAsFactors = FALSE
     )
-    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    
+    for (i in seq_len(nrow(combos))) {
+      sc  &lt;- combos[i, ]
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(
+        sim_seed      = sc$sim_seed,
+        nt            = nt,
+        TT            = TT,
+        beta_par      = beta_par,
+        p             = p,
+        B             = B,
+        is_heavytail  = FALSE,
+        df            = NULL,
+        skew_alpha    = sc$skew_alpha,
+        gap           = sc$gap
+      )
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
   }
   return(combos)
 }</code></pre>
@@ -3892,13 +3895,23 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' }
 #' @export
 <span id="mixture_metric">mixture_metric</span> &lt;- function(
-  Y_bin,
-  X,
-  bin_mass,
-  est_res,
-  true_res
+  sim,
+  est_res
 ) {
-  TT &lt;- length(Y_bin)
+  Y_bin     = sim$Y_bin
+  X         = sim$X
+  bin_mass  = sim$bin_mass
+  TT        = length(Y_bin)
+  prob_true = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(sim$alpha))
+  
+  if (sim$noisetype == 'skewed') {
+    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    }
+  }
   
   if (!is.null(est_res$alpha_new)) { # if LCDmix
     pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha_new)
@@ -3927,7 +3940,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   for (t in seq_len(TT)) {
     dens_est  &lt;- dens_est_fun(t, Y_bin[[t]])
     mix_est   &lt;- dens_est %*% pi_est[t, ]
-    mix_true  &lt;- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+    dens_true &lt;- <a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(t, Y_bin[[t]])
+    mix_true  &lt;- dens_true %*% prob_true[t, ]
     per_time[t] &lt;- sum(abs(mix_est - mix_true))
   }
   w_t      &lt;- vapply(bin_mass, sum, numeric(1))

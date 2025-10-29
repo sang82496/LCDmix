@@ -15,7 +15,7 @@ refit_lcd(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   save_dir = "./refits",
   n_cores = "max"
 )
@@ -42,7 +42,7 @@ The seeds will be \code{1:cv_reps}.}
 
 \item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.}
 
-\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.}
+\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.03}.}
 
 \item{save_dir}{Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.}
 

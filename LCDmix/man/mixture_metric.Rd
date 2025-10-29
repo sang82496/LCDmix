@@ -4,20 +4,20 @@
 \alias{mixture_metric}
 \title{Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures}
 \usage{
-mixture_metric(Y_bin, X, bin_mass, est_res, true_res)
+mixture_metric(sim, est_res)
 }
 \arguments{
-\item{Y_bin}{List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.}
-
-\item{X}{Numeric \code{TT × p} matrix of covariates (rows = time points).}
-
-\item{bin_mass}{List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.}
-
 \item{est_res}{A fitted model object:
 \describe{
 \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
 \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
 }}
+
+\item{Y_bin}{List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.}
+
+\item{X}{Numeric \code{TT × p} matrix of covariates (rows = time points).}
+
+\item{bin_mass}{List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.}
 
 \item{true_res}{A list with components:
 \describe{

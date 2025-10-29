@@ -19,7 +19,7 @@
 #' @param max_iter Integer; maximum EM iterations. Default \code{30}.
 #' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-3}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.01}.
+#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.03}.
 #' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
 #' @param debug Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.
@@ -66,7 +66,7 @@ refit_lcd <- function(
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max"
 ) {
