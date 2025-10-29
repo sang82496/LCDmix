@@ -3782,7 +3782,14 @@ mixture_metric <- function(
     dens_true_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+        sn::dsn(y_grid - mu, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    }
+  } else if (sim$noisetype == 'gaussian') {
+    dens_true_fun <- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dnorm(y_grid, mean = mu)
       })
     }
   }
