@@ -70,6 +70,13 @@ mixture_metric <- function(
         dnorm(y_grid, mean = mu)
       })
     }
+  } else { # if heavytail
+    dens_true_fun <- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dt((y_grid - mu) * sqrt(variance), df = sim$df) * sqrt(sim$variance)
+      })
+    }
   }
   
   if (!is.null(est_res$alpha_new)) { # if LCDmix

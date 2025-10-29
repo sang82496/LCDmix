@@ -32,8 +32,10 @@
 #' @export
 simulate_and_save <- function(
   sim_seeds,
+  datadir = '.',
   gaps,
   is_heavytail = FALSE,
+  df = NULL,
   skew_alphas = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
@@ -44,28 +46,24 @@ simulate_and_save <- function(
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
-  if (!is_heavytail){
-    combos <- expand.grid(
-      sim_seed      = sim_seeds,
-      gap           = gaps,
-      skew_alpha    = skew_alphas,
-      stringsAsFactors = FALSE
-    )
-    
+  if (is_heavytail){
+    combos <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+                          df = df, stringsAsFactors = F)
     for (i in seq_len(nrow(combos))) {
       sc  <- combos[i, ]
-      sim <- gen_simul_data(
-        sim_seed      = sc$sim_seed,
-        nt            = nt,
-        TT            = TT,
-        theta_par     = theta_par,
-        p             = p,
-        B             = B,
-        is_heavytail  = FALSE,
-        df            = NULL,
-        skew_alpha    = sc$skew_alpha,
-        gap           = sc$gap
-      )
+      sim <- gen_simul_data(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, 
+                            p, B, is_heavytail = T, df = sc$df, gap = sc$gap)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+    
+  } else { # if skewed
+    
+    combos <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+                          skew_alpha = skew_alphas, stringsAsFactors = F)
+    for (i in seq_len(nrow(combos))) {
+      sc  <- combos[i, ]
+      sim <- gen_simul_data(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, p, B, 
+                            is_heavytail = F, skew_alpha = sc$skew_alpha, gap = sc$gap)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }

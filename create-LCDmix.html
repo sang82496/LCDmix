@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-10-28">
+<meta name="date" content="2025-10-29">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-10-28</h4>
+<h4 class="date">2025-10-29</h4>
 
 </div>
 
@@ -3551,9 +3551,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
               alpha = alpha,
               theta = theta,
               skew_alpha = skew_alpha,
-              df = df,
               omega = omega,
               mn_shift = mn_shift,
+              df = df,
               variance = variance
               ))
 }</code></pre>
@@ -3589,8 +3589,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @export
 <span id="simulate_and_save">simulate_and_save</span> &lt;- function(
   sim_seeds,
+  datadir = '.',
   gaps,
   is_heavytail = FALSE,
+  df = NULL,
   skew_alphas = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
@@ -3601,28 +3603,24 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
-  if (!is_heavytail){
-    combos &lt;- expand.grid(
-      sim_seed      = sim_seeds,
-      gap           = gaps,
-      skew_alpha    = skew_alphas,
-      stringsAsFactors = FALSE
-    )
-    
+  if (is_heavytail){
+    combos &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+                          df = df, stringsAsFactors = F)
     for (i in seq_len(nrow(combos))) {
       sc  &lt;- combos[i, ]
-      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(
-        sim_seed      = sc$sim_seed,
-        nt            = nt,
-        TT            = TT,
-        theta_par     = theta_par,
-        p             = p,
-        B             = B,
-        is_heavytail  = FALSE,
-        df            = NULL,
-        skew_alpha    = sc$skew_alpha,
-        gap           = sc$gap
-      )
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, 
+                            p, B, is_heavytail = T, df = sc$df, gap = sc$gap)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+    
+  } else { # if skewed
+    
+    combos &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+                          skew_alpha = skew_alphas, stringsAsFactors = F)
+    for (i in seq_len(nrow(combos))) {
+      sc  &lt;- combos[i, ]
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, p, B, 
+                            is_heavytail = F, skew_alpha = sc$skew_alpha, gap = sc$gap)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }
@@ -3696,6 +3694,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
         dnorm(y_grid, mean = mu)
+      })
+    }
+  } else { # if heavytail
+    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dt((y_grid - mu) * sqrt(variance), df = sim$df) * sqrt(sim$variance)
       })
     }
   }

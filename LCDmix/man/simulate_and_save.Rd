@@ -6,8 +6,10 @@
 \usage{
 simulate_and_save(
   sim_seeds,
+  datadir = ".",
   gaps,
   is_heavytail = FALSE,
+  df = NULL,
   skew_alphas = NULL,
   sim_dir = "sim_data",
   nt = 1000,
