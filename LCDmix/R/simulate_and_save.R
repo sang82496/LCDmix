@@ -18,7 +18,7 @@
 #' @param nt             Number of observations per time‐point in the second half.
 #'                       Passed to \code{generate_skewed_data()}. Default: 1000.
 #' @param TT             Total number of time‐points to simulate. Default: 100.               
-#' @param beta_par       The slope magnitude for the “baseline” covariate.
+#' @param theta_par      The slope magnitude for the “baseline” covariate.
 #'                       Default: 0.5.
 #' @param p              Number of covariates (including baseline & change‐point).
 #'                       Default: 10.
@@ -38,7 +38,7 @@ simulate_and_save <- function(
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
-  beta_par   = 0.5,
+  theta_par  = 0.5,
   p          = 10,
   B          = 30
 ) {
@@ -58,7 +58,7 @@ simulate_and_save <- function(
         sim_seed      = sc$sim_seed,
         nt            = nt,
         TT            = TT,
-        beta_par      = beta_par,
+        theta_par     = theta_par,
         p             = p,
         B             = B,
         is_heavytail  = FALSE,

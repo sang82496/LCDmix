@@ -12,7 +12,7 @@ simulate_and_save(
   sim_dir = "sim_data",
   nt = 1000,
   TT = 100,
-  beta_par = 0.5,
+  theta_par = 0.5,
   p = 10,
   B = 30
 )
@@ -32,7 +32,7 @@ Passed to \code{generate_skewed_data()}. Default: 1000.}
 
 \item{TT}{Total number of time‐points to simulate. Default: 100.}
 
-\item{beta_par}{The slope magnitude for the “baseline” covariate.
+\item{theta_par}{The slope magnitude for the “baseline” covariate.
 Default: 0.5.}
 
 \item{p}{Number of covariates (including baseline & change‐point).
