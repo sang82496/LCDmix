@@ -3430,28 +3430,16 @@ generate_skewed_data <- function(
   21.11, -0.01592308, -0.0135, -0.01288889, -0.01535714, -0.01515789, -0.01415, -0.01206667,
   -0.01313333, -0.01109091, 1818.87, 1880.722
   )
-  par_smoothed <- stats::ksmooth(
-    x        = seq_along(par_raw),
-    y        = par_raw,
-    bandwidth = 5,
-    x.points  = seq_along(par_raw)
-  )$y
+  par_smoothed <- stats::ksmooth(x = seq_along(par_raw), y = par_raw, 
+                                 bandwidth = 5, x.points  = seq_along(par_raw))$y
   baseline <- scale(par_smoothed[1:n_time])
   
   # Change‐point indicator (0/1)
   cp <- c(rep(0, n_time / 2), rep(1, n_time / 2))
   
   # Additional noise covariates
-  noise_covs <- replicate(
-    n_covariates - 2,
-    stats::rnorm(n_time),
-    simplify = FALSE
-  )
-  X <- cbind(
-    baseline,
-    cp,
-    do.call(cbind, noise_covs)
-  )
+  noise_covs <- replicate(n_covariates - 2, rnorm(n_time), simplify = FALSE)
+  X <- cbind(baseline, cp, do.call(cbind, noise_covs))
   colnames(X) <- c("baseline", "cp", paste0("noise", seq_len(n_covariates - 2)))
   
   #— True model parameters —#
@@ -3485,20 +3473,10 @@ generate_skewed_data <- function(
   ylist <- vector("list", n_time)
   for (t in seq_len(n_time)) {
     # Sample cluster memberships
-    clust_ids <- sample(
-      seq_len(numclust),
-      size      = n_list[t],
-      replace   = TRUE,
-      prob      = pi_mat[t, ]
-    )
+    clust_ids <- sample(seq_len(numclust), size = n_list[t], replace = TRUE, prob = pi_mat[t, ])
     # True component means
     means_t <- mnmat[t, clust_ids]
-    noise_t <- sn::rsn(
-      n      = n_list[t],
-      xi     = 0,
-      omega  = omega,
-      alpha  = skew_alpha
-    ) - mn_shift
+    noise_t <- sn::rsn(n = n_list[t], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
     # Observations
     ylist[[t]] <- matrix(means_t + noise_t, ncol = 1)
   }
@@ -3522,18 +3500,12 @@ generate_skewed_data <- function(
     # build a n_t × numclust matrix
     sapply(seq_len(numclust), function(k) {
       resid <- y_mid - mnmat[t, k]
-      sn::dsn(resid + mn_shift,
-              xi    = 0,
-              omega = omega,
-              alpha = skew_alpha)
+      sn::dsn(resid + mn_shift, xi = 0, omega = omega, alpha = skew_alpha)
     })
   })
   
   #— Pack return object —#
-  mn_array <- array(
-    dim = c(n_time, 1, numclust),
-    data = as.vector(mnmat)
-  )
+  mn_array <- array(dim = c(n_time, 1, numclust), data = as.vector(mnmat))
  
   return(list(
     Y_bin       = ylist,
@@ -3553,6 +3525,196 @@ generate_skewed_data <- function(
   ))
 }
 ```
+
+
+
+```{r}
+#' @export
+gen_simul_data <- function(
+  sim_seed       = NULL,
+  nt             = 1000,
+  TT             = 100,
+  beta_par       = 0.5,
+  p              = 10,
+  B              = 30,
+  is_heavytail   = FALSE,
+  df             = NULL,
+  skew_alpha     = NULL,
+  gap            = 4
+) {
+
+  ## Setup and basic checks
+  assertthat::assert_that(nt %% 5 ==0)
+  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
+  K = 2
+  stopifnot(p >= 3)
+  if (is_heavytail){
+    assertthat::assert_that(!is.null(df))
+    noisetype = 'heavytail'
+  } else {
+    assertthat::assert_that(!is.null(skew_alpha))
+    if (skew_alpha == 0){
+      noisetype = 'gaussian'
+    } else {
+      noisetype = 'skewed'
+    }
+  }
+  if(!is.null(sim_seed)) set.seed(sim_seed)
+
+  ## Generate covariate
+  par = readRDS(file.path("simul_helper.rds"))
+
+  Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
+  X = cbind(scale(par[1:TT]), c(rep(0, TT/2), rep(1, TT/2)), Xrest)
+  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+
+  ## Beta coefficients
+  beta = matrix(0, ncol = K, nrow = p+1)
+  beta[0+1,1] = 0
+  beta[1+1,1] = beta_par
+  beta[0+1,2] = gap
+  beta[1+1,2] = -beta_par
+  colnames(beta) = paste0("clust", 1:K)
+  rownames(beta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  ## alpha coefficients
+  alpha = matrix(0, ncol = K, nrow = p+1)
+  alpha[0+1, 2] = -10
+  alpha[2+1, 2] = 10 + log(1/4)
+
+  colnames(alpha) = paste0("clust", 1:K)
+  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  ## Generate means and probabilities
+  mnmat = cbind(1, X) %*% beta
+  prob = exp(cbind(1,X) %*% alpha)
+  prob = prob/rowSums(prob)
+  
+  omega = NULL
+  mn_shift = NULL
+  variance = NULL
+
+  ## Samples |nt| memberships out of (1:K) according to the probs in prob.
+  ## Data is a probabilistic mixture from these two means, over time.
+  ylist = lapply(1:TT, function(tt){
+     draws = sample(1:K,
+                    size = ntlist[tt], replace = TRUE,
+                    prob = c(prob[tt,1], prob[tt,2]))
+     mns = mnmat[tt,]
+     means = mns[draws]
+
+     ## Add noise to obtain data points.
+     if (noisetype == 'gaussian') {
+       noise = rnorm(ntlist[tt], 0, 1)
+     } else if (noisetype == 'heavytail') {
+       assertthat::assert_that(df >= 3)
+       variance = df / (df - 2)
+       noise = rt(ntlist[tt], df = df) / sqrt(variance)
+     } else {
+       omega = sqrt(1/(1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
+       mn_shift = omega * skew_alpha * (1 / sqrt(1+skew_alpha^2)) * sqrt(2/pi)
+       noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
+     }
+     datapoints = means + noise
+     cbind(datapoints)
+   })
+
+  # Binning
+  biomass = vector("list", TT)
+  biomass = lapply(1:TT, function(t){biomass[[t]] = rep(1, length(ylist[[t]]))})
+  binned = LCDmix::binning(ylist, biomass, n_bins = B)
+
+  return(list(Y_bin = binned$Y_bin, 
+              X = X,
+              bin_mass = binned$bin_mass,
+              ## The true generating model:
+              noisetype = noisetype,
+              mnmat = mnmat,
+              prob = prob,
+              alpha = alpha,
+              beta = beta,
+              omega = omega,
+              mn_shift = mn_shift,
+              variance = variance
+              ))
+}
+```
+
+
+
+
+
+```{r}
+#' Simulate multiple skew‐normal mixture datasets and save to disk
+#'
+#' @description
+#' For each combination of \code{seed}, \code{intercept_gap}, and
+#' \code{skew_alpha}, this function calls \code{generate_skewed_data()}
+#' with the supplied simulation parameters and writes the result out
+#' (one list per file) as \code{sim_<i>.rds} in \code{sim_dir}.  
+#' It returns the data‐frame of all parameter combinations (in the same
+#' row‐order as the saved files).
+#'
+#' @param sim_seeds      Integer vector of random seeds.
+#' @param gaps           Numeric vector of change‐point intercept gaps.
+#' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
+#' @param sim_dir        Character; directory to hold \code{sim_<i>.rds} files.
+#'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
+#' @param nt             Number of observations per time‐point in the second half.
+#'                       Passed to \code{generate_skewed_data()}. Default: 1000.
+#' @param TT             Total number of time‐points to simulate. Default: 100.               
+#' @param beta_par       The slope magnitude for the “baseline” covariate.
+#'                       Default: 0.5.
+#' @param p              Number of covariates (including baseline & change‐point).
+#'                       Default: 10.
+#' @param B              Number of histogram bins for each time‐point.
+#'                       Default: 30.
+#' 
+#' @return A data.frame with columns \code{seed}, \code{intercept_gap},
+#'   \code{skew_alpha}, where each row \code{i} corresponds to file
+#'   \code{sim_dir/sim_i.rds}.
+#'
+#' @export
+simulate_and_save <- function(
+  sim_seeds,
+  gaps,
+  skew_alphas,
+  sim_dir    = "sim_data",
+  nt         = 1000,
+  TT         = 100,
+  beta_par   = 0.5,
+  p          = 10,
+  B          = 30
+) {
+  if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
+  
+  combos <- expand.grid(
+    sim_seed      = sim_seeds,
+    gap           = gaps,
+    skew_alpha    = skew_alphas,
+    stringsAsFactors = FALSE
+  )
+  
+  for (i in seq_len(nrow(combos))) {
+    sc  <- combos[i, ]
+    sim <- generate_skewed_data(
+      sim_seed      = sc$sim_seed,
+      nt            = nt,
+      TT            = TT,
+      beta_par      = beta_par,
+      p             = p,
+      B             = B,
+      is_heavytail  = FALSE,
+      df            = NULL,
+      skew_alpha    = sc$skew_alpha,
+      gap           = sc$gap
+    )
+    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+  }
+  return(combos)
+}
+```
+
 
 
 
@@ -3648,78 +3810,6 @@ mixture_metric <- function(
   return(metric)
 }
 ```
-
-
-
-```{r}
-#' Simulate multiple skew‐normal mixture datasets and save to disk
-#'
-#' @description
-#' For each combination of \code{seed}, \code{intercept_gap}, and
-#' \code{skew_alpha}, this function calls \code{generate_skewed_data()}
-#' with the supplied simulation parameters and writes the result out
-#' (one list per file) as \code{sim_<i>.rds} in \code{sim_dir}.  
-#' It returns the data‐frame of all parameter combinations (in the same
-#' row‐order as the saved files).
-#'
-#' @param seeds          Integer vector of random seeds.
-#' @param intercept_gaps Numeric vector of change‐point intercept gaps.
-#' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
-#' @param sim_dir       Character; directory to hold \code{sim_<i>.rds} files.
-#'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
-#' @param n_per_time     Number of observations per time‐point in the second half.
-#'                       Passed to \code{generate_skewed_data()}. Default: 1000.
-#' @param beta_par       The slope magnitude for the “baseline” covariate.
-#'                       Default: 0.5.
-#' @param n_covariates   Number of covariates (including baseline & change‐point).
-#'                       Default: 10.
-#' @param grid_size      Number of histogram bins for each time‐point.
-#'                       Default: 30.
-#' @param n_time         Total number of time‐points to simulate. Default: 100.
-#'
-#' @return A data.frame with columns \code{seed}, \code{intercept_gap},
-#'   \code{skew_alpha}, where each row \code{i} corresponds to file
-#'   \code{sim_dir/sim_i.rds}.
-#'
-#' @export
-simulate_and_save <- function(
-  seeds,
-  intercept_gaps,
-  skew_alphas,
-  sim_dir    = "sim_data",
-  n_per_time  = 1000,
-  beta_par    = 0.5,
-  n_covariates= 10,
-  grid_size   = 30,
-  n_time      = 100
-) {
-  combos <- expand.grid(
-    seed          = seeds,
-    intercept_gap = intercept_gaps,
-    skew_alpha    = skew_alphas,
-    stringsAsFactors = FALSE
-  )
-  if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
-
-  for (i in seq_len(nrow(combos))) {
-    sc  <- combos[i, ]
-    sim <- generate_skewed_data(
-      seed          = sc$seed,
-      intercept_gap = sc$intercept_gap,
-      skew_alpha    = sc$skew_alpha,
-      n_per_time    = n_per_time,
-      beta_par      = beta_par,
-      n_covariates  = n_covariates,
-      grid_size     = grid_size,
-      n_time        = n_time
-    )
-    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
-  }
-  return(combos)
-}
-```
-
-
 
 
 

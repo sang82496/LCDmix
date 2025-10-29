@@ -5,40 +5,40 @@
 \title{Simulate multiple skew‐normal mixture datasets and save to disk}
 \usage{
 simulate_and_save(
-  seeds,
-  intercept_gaps,
+  sim_seeds,
+  gaps,
   skew_alphas,
   sim_dir = "sim_data",
-  n_per_time = 1000,
+  nt = 1000,
+  TT = 100,
   beta_par = 0.5,
-  n_covariates = 10,
-  grid_size = 30,
-  n_time = 100
+  p = 10,
+  B = 30
 )
 }
 \arguments{
-\item{seeds}{Integer vector of random seeds.}
+\item{sim_seeds}{Integer vector of random seeds.}
 
-\item{intercept_gaps}{Numeric vector of change‐point intercept gaps.}
+\item{gaps}{Numeric vector of change‐point intercept gaps.}
 
 \item{skew_alphas}{Numeric vector of skew‐normal shape parameters.}
 
 \item{sim_dir}{Character; directory to hold \code{sim_<i>.rds} files.
 Will be created if it does not exist.  Default: \code{"sim_data"}.}
 
-\item{n_per_time}{Number of observations per time‐point in the second half.
+\item{nt}{Number of observations per time‐point in the second half.
 Passed to \code{generate_skewed_data()}. Default: 1000.}
+
+\item{TT}{Total number of time‐points to simulate. Default: 100.}
 
 \item{beta_par}{The slope magnitude for the “baseline” covariate.
 Default: 0.5.}
 
-\item{n_covariates}{Number of covariates (including baseline & change‐point).
+\item{p}{Number of covariates (including baseline & change‐point).
 Default: 10.}
 
-\item{grid_size}{Number of histogram bins for each time‐point.
+\item{B}{Number of histogram bins for each time‐point.
 Default: 30.}
-
-\item{n_time}{Total number of time‐points to simulate. Default: 100.}
 }
 \value{
 A data.frame with columns \code{seed}, \code{intercept_gap},
