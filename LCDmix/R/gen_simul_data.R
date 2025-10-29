@@ -105,9 +105,9 @@ gen_simul_data <- function(
               alpha = alpha,
               theta = theta,
               skew_alpha = skew_alpha,
-              df = df,
               omega = omega,
               mn_shift = mn_shift,
+              df = df,
               variance = variance
               ))
 }
