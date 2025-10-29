@@ -74,7 +74,7 @@ mixture_metric <- function(
     dens_true_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        dt((y_grid - mu) * sqrt(variance), df = sim$df) * sqrt(sim$variance)
+        dt((y_grid - mu) * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
       })
     }
   }
