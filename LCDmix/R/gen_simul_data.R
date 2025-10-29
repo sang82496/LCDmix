@@ -2,7 +2,7 @@
 
 #' @export
 gen_simul_data <- function(
-  seed           = NULL,
+  sim_seed       = NULL,
   datadir        = ".",
   nt             = 1000,
   TT             = 100,
@@ -30,7 +30,7 @@ gen_simul_data <- function(
       noisetype = 'skewed'
     }
   }
-  if(!is.null(seed)) set.seed(seed)
+  if(!is.null(sim_seed)) set.seed(sim_seed)
   ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
 
   ## Generate covariate
