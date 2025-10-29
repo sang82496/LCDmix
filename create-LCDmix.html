@@ -3908,7 +3908,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+        sn::dsn(y_grid - mu, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    }
+  } else if (sim$noisetype == 'gaussian') {
+    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dnorm(y_grid, mean = mu)
       })
     }
   }
@@ -3940,7 +3947,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   for (t in seq_len(TT)) {
     dens_est  &lt;- dens_est_fun(t, Y_bin[[t]])
     mix_est   &lt;- dens_est %*% pi_est[t, ]
-    dens_true &lt;- <a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(t, Y_bin[[t]])
+    dens_true &lt;- dens_true_fun(t, Y_bin[[t]])
     mix_true  &lt;- dens_true %*% prob_true[t, ]
     per_time[t] &lt;- sum(abs(mix_est - mix_true))
   }
