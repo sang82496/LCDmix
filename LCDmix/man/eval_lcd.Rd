@@ -4,7 +4,7 @@
 \alias{eval_lcd}
 \title{Evaluate held-out (penalized) log-likelihood for LCDmix}
 \usage{
-eval_lcd(model, Y_test, X_test, biomass_test, trim_prob = 0.01)
+eval_lcd(model, Y_test, X_test, biomass_test, trim_prob = 0.03)
 }
 \arguments{
 \item{model}{List; fitted LCDmix object containing at least:
@@ -60,7 +60,7 @@ res <- eval_lcd(
   Y_test       = Y_bin[test_idx],
   X_test       = X[test_idx, , drop = FALSE],
   biomass_test = bin_mass[test_idx],
-  trim_prob    = 0.01
+  trim_prob    = 0.03
 )
 res$trimmed_loglik
 }

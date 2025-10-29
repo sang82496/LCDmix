@@ -13,7 +13,7 @@ refit_lcd_simul(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max"
 )
@@ -42,7 +42,7 @@ Default \code{1e-3}.}
 zeroed for stability. Default \code{1e-3}.}
 
 \item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-Default \code{0.01}.}
+Default \code{0.03}.}
 
 \item{base_dir}{Character; base directory for outputs. Refit caches are written
 under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.}

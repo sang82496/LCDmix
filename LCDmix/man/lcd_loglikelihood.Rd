@@ -4,7 +4,7 @@
 \alias{lcd_loglikelihood}
 \title{Penalized and trimmed log-likelihood for LCDmix}
 \usage{
-lcd_loglikelihood(model, X, biomass, trim_prob = 0.01)
+lcd_loglikelihood(model, X, biomass, trim_prob = 0.03)
 }
 \arguments{
 \item{model}{A fitted LCDmix iteration/state object containing:
@@ -29,7 +29,7 @@ averaging.)}
 
 \item{trim_prob}{Numeric in [0,1). Fraction of observations (by weight)
 to trim from the lower tail of the per-observation log-likelihoods
-(after log-sum-exp across components). Default: \code{0.01}.}
+(after log-sum-exp across components). Default: \code{0.03}.}
 }
 \value{
 A list with:

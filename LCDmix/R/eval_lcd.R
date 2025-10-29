@@ -52,7 +52,7 @@
 #'   Y_test       = Y_bin[test_idx],
 #'   X_test       = X[test_idx, , drop = FALSE],
 #'   biomass_test = bin_mass[test_idx],
-#'   trim_prob    = 0.01
+#'   trim_prob    = 0.03
 #' )
 #' res$trimmed_loglik
 #' }
@@ -63,7 +63,7 @@ eval_lcd <- function(
   Y_test,
   X_test,
   biomass_test,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   # Unpack fitted parameters
   densities     <- model$g_new

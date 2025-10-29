@@ -16,7 +16,7 @@ main(
   max_iter = 30,
   iter_eta = 0.001,
   resp_threshold = 0.001,
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   calc_Q_every = FALSE,
   debug = FALSE
 )

@@ -47,13 +47,23 @@
 #' }
 #' @export
 mixture_metric <- function(
-  Y_bin,
-  X,
-  bin_mass,
-  est_res,
-  true_res
+  sim,
+  est_res
 ) {
-  TT <- length(Y_bin)
+  Y_bin     = sim$Y_bin
+  X         = sim$X
+  bin_mass  = sim$bin_mass
+  TT        = length(Y_bin)
+  prob_true = pi_k(X, t(sim$alpha))
+  
+  if (sim$noisetype == 'skewed') {
+    dens_true_fun <- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    }
+  }
   
   if (!is.null(est_res$alpha_new)) { # if LCDmix
     pi_est <- pi_k(X, est_res$alpha_new)
@@ -82,7 +92,8 @@ mixture_metric <- function(
   for (t in seq_len(TT)) {
     dens_est  <- dens_est_fun(t, Y_bin[[t]])
     mix_est   <- dens_est %*% pi_est[t, ]
-    mix_true  <- true_res$dens_true[[t]] %*% true_res$prob[t, ]
+    dens_true <- dens_true_fun(t, Y_bin[[t]])
+    mix_true  <- dens_true %*% prob_true[t, ]
     per_time[t] <- sum(abs(mix_est - mix_true))
   }
   w_t      <- vapply(bin_mass, sum, numeric(1))

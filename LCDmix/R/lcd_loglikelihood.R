@@ -29,7 +29,7 @@
 #' averaging.)
 #' @param trim_prob Numeric in [0,1). Fraction of observations (by weight)
 #' to trim from the lower tail of the per-observation log-likelihoods
-#' (after log-sum-exp across components). Default: \code{0.01}.
+#' (after log-sum-exp across components). Default: \code{0.03}.
 #'
 #' @details
 #' For each observation, the function forms
@@ -69,7 +69,7 @@ lcd_loglikelihood <- function(
   model,
   X,
   biomass,
-  trim_prob = 0.01
+  trim_prob = 0.03
 ) {
   densities    <- model$g_new             # list length K (log-concave fits)
   slopes       <- model$theta_new         # penalized slopes (any shape)

@@ -26,7 +26,7 @@
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-#'   Default \code{0.01}.
+#'   Default \code{0.03}.
 #' @param base_dir Character; base directory for outputs. Refit caches are written
 #'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
 #' @param n_cores Integer or \code{"max"}; number of workers for the single outer
@@ -74,7 +74,7 @@ refit_lcd_simul <- function(
   max_iter = 30, 
   iter_eta = 1e-3, 
   resp_threshold = 1e-3, 
-  trim_prob = 0.01,
+  trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max"
 ) {

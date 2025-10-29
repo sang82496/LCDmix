@@ -13,7 +13,7 @@ cv_lcd <- function(
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
-  trim_prob          = 0.01,
+  trim_prob          = 0.03,
   save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
