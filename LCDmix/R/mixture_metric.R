@@ -81,7 +81,7 @@ mixture_metric <- function(
     dens_true_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        dlaplace(y_grid - mu, scale = sim$scale) 
+        VGAM::dlaplace(y_grid - mu, scale = sim$scale) 
       })
     }
   } else {
