@@ -3819,7 +3819,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        dlaplace(y_grid - mu, scale = sim$scale) 
+        VGAM::dlaplace(y_grid - mu, scale = sim$scale) 
       })
     }
   } else {
