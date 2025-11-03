@@ -33,9 +33,10 @@
 simulate_and_save <- function(
   sim_seeds,
   gaps,
-  is_heavytail = FALSE,
-  df = NULL,
+  noisetype  = 'gaussian',
+  df         = NULL,
   skew_alphas = NULL,
+  scales     = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -46,26 +47,43 @@ simulate_and_save <- function(
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
-  if (is_heavytail){
+  if (noisetype == 'heavytail'){
     assertthat::assert_that(!is.null(df))
-    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
-                          df = df, stringsAsFactors = F)
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, df = df, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
-      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = T, 
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
                             df = row$df, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     
-  } else { # if skewed
-    
+  } else if (noisetype == 'skewed'){
     assertthat::assert_that(!is.null(skew_alphas))
     jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
                           skew_alpha = skew_alphas, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
-      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = F, 
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
                             skew_alpha = row$skew_alpha, gap = row$gap, sim_helper_dir = sim_helper_dir)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+    
+  } else if (noisetype == 'laplace'){
+    assertthat::assert_that(!is.null(scales))
+    jobs <- expand.grid(sim_seed = sim_seeds, scale = scales, stringsAsFactors = F)
+    for (i in seq_len(nrow(jobs))) {
+      row  <- jobs[i, ]
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
+                            scale = row$scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+    
+  } else { #gaussian
+    jobs <- expand.grid(sim_seed = sim_seeds, stringsAsFactors = F)
+    for (i in seq_len(nrow(jobs))) {
+      row  <- jobs[i, ]
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
+                            gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }

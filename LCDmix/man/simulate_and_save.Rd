@@ -7,9 +7,10 @@
 simulate_and_save(
   sim_seeds,
   gaps,
-  is_heavytail = FALSE,
+  noisetype = "gaussian",
   df = NULL,
   skew_alphas = NULL,
+  scales = NULL,
   sim_dir = "sim_data",
   nt = 1000,
   TT = 100,
