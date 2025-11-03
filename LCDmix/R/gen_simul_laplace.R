@@ -1,16 +1,14 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
 #' @export
-gen_simul_data <- function(
+gen_simul_laplace <- function(
   sim_seed       = NULL,
   nt             = 1000,
   TT             = 100,
   theta_par      = 0.5,
   p              = 10,
   B              = 30,
-  is_heavytail   = FALSE,
-  df             = NULL,
-  skew_alpha     = NULL,
+  scale          = 1,
   gap            = 4,
   sim_helper_dir = "."
 ) {
@@ -19,19 +17,9 @@ gen_simul_data <- function(
   assertthat::assert_that(nt %% 5 ==0)
   K = 2
   stopifnot(p >= 3)
-  if (is_heavytail){
-    assertthat::assert_that(!is.null(df))
-    noisetype = 'heavytail'
-  } else {
-    assertthat::assert_that(!is.null(skew_alpha))
-    if (skew_alpha == 0){
-      noisetype = 'gaussian'
-    } else {
-      noisetype = 'skewed'
-    }
-  }
   if(!is.null(sim_seed)) set.seed(sim_seed)
   ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
+  noisetype = 'laplace'
 
   ## Generate covariate
   par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
@@ -63,29 +51,14 @@ gen_simul_data <- function(
   
   ## Samples |nt| memberships out of (1:K) according to the probs in prob.
   ## Data is a probabilistic mixture from these two means, over time.
-  omega = NULL
-  mn_shift = NULL
-  variance = NULL
-  if (noisetype == 'heavytail') {
-     assertthat::assert_that(df >= 3)
-     variance = df / (df - 2)
-  } else if (noisetype == 'skewed') {
-      omega = sqrt(1/(1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
-      mn_shift = omega * skew_alpha * (1 / sqrt(1+skew_alpha^2)) * sqrt(2/pi)
-  }
+  
   ylist = lapply(1:TT, function(tt){
      draws = sample(1:K, size = ntlist[tt], replace = TRUE,
                     prob = c(prob[tt,1], prob[tt,2]))
      mns = mnmat[tt,]
      means = mns[draws]
      ## Add noise to obtain data points.
-     if (noisetype == 'gaussian') {
-       noise = rnorm(ntlist[tt], 0, 1)
-     } else if (noisetype == 'heavytail') {
-       noise = rt(ntlist[tt], df = df) / sqrt(variance)
-     } else {
-       noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
-     }
+     noise = rlaplace(ntlist[tt], 0, scale = scale)
      datapoints = means + noise
      cbind(datapoints)
    })
@@ -104,10 +77,6 @@ gen_simul_data <- function(
               prob = prob,
               alpha = alpha,
               theta = theta,
-              skew_alpha = skew_alpha,
-              omega = omega,
-              mn_shift = mn_shift,
-              df = df,
-              variance = variance
+              scale = scale
               ))
 }

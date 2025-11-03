@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-10-29">
+<meta name="date" content="2025-11-03">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-10-29</h4>
+<h4 class="date">2025-11-03</h4>
 
 </div>
 
@@ -368,6 +368,9 @@ usethis::use_package("flowmix")</code></pre>
 <pre class="r"><code>usethis::use_package("glmnet")</code></pre>
 <pre><code>## ✔ Adding glmnet to 'Imports' field in DESCRIPTION.</code></pre>
 <pre><code>## ☐ Refer to functions with `glmnet::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("VGAM")</code></pre>
+<pre><code>## ✔ Adding VGAM to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `VGAM::fun()`.</code></pre>
 <pre class="r"><code>usethis::use_package("Matrix")</code></pre>
 <pre><code>## ✔ Adding Matrix to 'Imports' field in DESCRIPTION.</code></pre>
 <pre><code>## ☐ Refer to functions with `Matrix::fun()`.</code></pre>
@@ -3449,16 +3452,16 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <pre class="r"><code>#' @export
 <span id="gen_simul_data">gen_simul_data</span> &lt;- function(
   sim_seed       = NULL,
-  datadir        = ".",
   nt             = 1000,
   TT             = 100,
-  theta_par       = 0.5,
+  theta_par      = 0.5,
   p              = 10,
   B              = 30,
-  is_heavytail   = TRUE,
+  is_heavytail   = FALSE,
   df             = NULL,
   skew_alpha     = NULL,
-  gap            = 4
+  gap            = 4,
+  sim_helper_dir = "."
 ) {
 
   ## Setup and basic checks
@@ -3480,7 +3483,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
 
   ## Generate covariate
-  par = readRDS(file.path(datadir, "simul_helper.rds"))
+  par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
 
   Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
   X = cbind(scale(par[1:TT]), c(rep(0, TT/2), rep(1, TT/2)), Xrest)
@@ -3589,7 +3592,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @export
 <span id="simulate_and_save">simulate_and_save</span> &lt;- function(
   sim_seeds,
-  datadir = '.',
   gaps,
   is_heavytail = FALSE,
   df = NULL,
@@ -3599,32 +3601,142 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   TT         = 100,
   theta_par  = 0.5,
   p          = 10,
-  B          = 30
+  B          = 30,
+  sim_helper_dir = '.'
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
   if (is_heavytail){
-    combos &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+    assertthat::assert_that(!is.null(df))
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
                           df = df, stringsAsFactors = F)
-    for (i in seq_len(nrow(combos))) {
-      sc  &lt;- combos[i, ]
-      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, 
-                            p, B, is_heavytail = T, df = sc$df, gap = sc$gap)
+    for (i in seq_len(nrow(jobs))) {
+      row  &lt;- jobs[i, ]
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = T, 
+                            df = row$df, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     
   } else { # if skewed
     
-    combos &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+    assertthat::assert_that(!is.null(skew_alphas))
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
                           skew_alpha = skew_alphas, stringsAsFactors = F)
-    for (i in seq_len(nrow(combos))) {
-      sc  &lt;- combos[i, ]
-      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, p, B, 
-                            is_heavytail = F, skew_alpha = sc$skew_alpha, gap = sc$gap)
+    for (i in seq_len(nrow(jobs))) {
+      row  &lt;- jobs[i, ]
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = F, 
+                            skew_alpha = row$skew_alpha, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }
-  return(combos)
+  return(jobs)
+}</code></pre>
+<pre class="r"><code>#' @export
+<span id="gen_simul_laplace">gen_simul_laplace</span> &lt;- function(
+  sim_seed       = NULL,
+  nt             = 1000,
+  TT             = 100,
+  theta_par      = 0.5,
+  p              = 10,
+  B              = 30,
+  scale          = 1,
+  gap            = 4,
+  sim_helper_dir = "."
+) {
+
+  ## Setup and basic checks
+  assertthat::assert_that(nt %% 5 ==0)
+  K = 2
+  stopifnot(p &gt;= 3)
+  if(!is.null(sim_seed)) set.seed(sim_seed)
+  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
+  noisetype = 'laplace'
+
+  ## Generate covariate
+  par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
+
+  Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
+  X = cbind(scale(par[1:TT]), c(rep(0, TT/2), rep(1, TT/2)), Xrest)
+  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+
+  ## theta coefficients
+  theta = matrix(0, ncol = K, nrow = p+1)
+  theta[0+1,1] = 0
+  theta[1+1,1] = theta_par
+  theta[0+1,2] = gap
+  theta[1+1,2] = -theta_par
+  colnames(theta) = paste0("clust", 1:K)
+  rownames(theta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  ## alpha coefficients
+  alpha = matrix(0, ncol = K, nrow = p+1)
+  alpha[0+1, 2] = -10
+  alpha[2+1, 2] = 10 + log(1/4)
+
+  colnames(alpha) = paste0("clust", 1:K)
+  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+
+  ## Generate means and probabilities
+  mnmat = cbind(1, X) %*% theta
+  prob = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha))
+  
+  ## Samples |nt| memberships out of (1:K) according to the probs in prob.
+  ## Data is a probabilistic mixture from these two means, over time.
+  
+  ylist = lapply(1:TT, function(tt){
+     draws = sample(1:K, size = ntlist[tt], replace = TRUE,
+                    prob = c(prob[tt,1], prob[tt,2]))
+     mns = mnmat[tt,]
+     means = mns[draws]
+     ## Add noise to obtain data points.
+     noise = rlaplace(ntlist[tt], 0, scale = scale)
+     datapoints = means + noise
+     cbind(datapoints)
+   })
+
+  # Binning
+  biomass = vector("list", TT)
+  biomass = lapply(1:TT, function(t){biomass[[t]] = rep(1, length(ylist[[t]]))})
+  binned = LCDmix::<a href="create-LCDmix.html#binning">binning</a>(ylist, biomass, n_bins = B)
+
+  return(list(Y_bin = binned$Y_bin, 
+              X = X,
+              bin_mass = binned$bin_mass,
+              ## The true generating model:
+              noisetype = noisetype,
+              mnmat = mnmat,
+              prob = prob,
+              alpha = alpha,
+              theta = theta,
+              scale = scale
+              ))
+}</code></pre>
+<pre class="r"><code>#' @export
+<span id="simulate_and_save_laplace">simulate_and_save_laplace</span> &lt;- function(
+  sim_seeds,
+  gaps,
+  scale      = NULL,
+  sim_dir    = "sim_data",
+  nt         = 1000,
+  TT         = 100,
+  theta_par  = 0.5,
+  p          = 10,
+  B          = 30,
+  sim_helper_dir = '.'
+) {
+  if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
+  
+  assertthat::assert_that(!is.null(scale))
+  jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+                        scale = scale, stringsAsFactors = F)
+  for (i in seq_len(nrow(jobs))) {
+    row  &lt;- jobs[i, ]
+    sim &lt;- <a href="create-LCDmix.html#gen_simul_laplace">gen_simul_laplace</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, 
+                             scale = row$scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+  }
+
+  return(jobs)
 }</code></pre>
 <pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
 #'
@@ -3696,13 +3808,22 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         dnorm(y_grid, mean = mu)
       })
     }
-  } else { # if heavytail
+  } else if (sim$noisetype == 'heavytail') { 
     <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
         dt((y_grid - mu) * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
       })
     }
+  } else if (sim$noisetype == 'laplace') {
+    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
+      sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dlaplace(y_grid - mu, scale = sim$scale) 
+      })
+    }
+  } else {
+    print('noisetype not found')
   }
   
   if (!is.null(est_res$alpha_new)) { # if LCDmix

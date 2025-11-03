@@ -6,7 +6,6 @@
 \usage{
 simulate_and_save(
   sim_seeds,
-  datadir = ".",
   gaps,
   is_heavytail = FALSE,
   df = NULL,
@@ -16,7 +15,8 @@ simulate_and_save(
   TT = 100,
   theta_par = 0.5,
   p = 10,
-  B = 30
+  B = 30,
+  sim_helper_dir = "."
 )
 }
 \arguments{

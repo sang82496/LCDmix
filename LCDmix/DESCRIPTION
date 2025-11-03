@@ -19,6 +19,7 @@ Imports:
     Matrix,
     parallel,
     sn,
-    stats
+    stats,
+    VGAM
 LitrVersionUsed: 0.9.2
-LitrId: 3725035fc4df40f58eece92e1c3f6754
+LitrId: 4553e7fe7a01d618c5f6cabc6c0456df
