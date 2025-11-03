@@ -70,7 +70,7 @@ simulate_and_save <- function(
     
   } else if (noisetype == 'laplace'){
     assertthat::assert_that(!is.null(laplace_scales))
-    jobs <- expand.grid(sim_seed = sim_seeds, laplace_scale = laplace_scales, stringsAsFactors = F)
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, laplace_scale = laplace_scales, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
       sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
@@ -79,7 +79,7 @@ simulate_and_save <- function(
     }
     
   } else { #gaussian
-    jobs <- expand.grid(sim_seed = sim_seeds, stringsAsFactors = F)
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
       sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
