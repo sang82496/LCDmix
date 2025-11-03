@@ -32,7 +32,6 @@
 #' @export
 simulate_and_save <- function(
   sim_seeds,
-  datadir = '.',
   gaps,
   is_heavytail = FALSE,
   df = NULL,
@@ -42,30 +41,33 @@ simulate_and_save <- function(
   TT         = 100,
   theta_par  = 0.5,
   p          = 10,
-  B          = 30
+  B          = 30,
+  sim_helper_dir = '.'
 ) {
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
   if (is_heavytail){
-    combos <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+    assertthat::assert_that(!is.null(df))
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
                           df = df, stringsAsFactors = F)
-    for (i in seq_len(nrow(combos))) {
-      sc  <- combos[i, ]
-      sim <- gen_simul_data(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, 
-                            p, B, is_heavytail = T, df = sc$df, gap = sc$gap)
+    for (i in seq_len(nrow(jobs))) {
+      row  <- jobs[i, ]
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = T, 
+                            df = row$df, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     
   } else { # if skewed
     
-    combos <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
+    assertthat::assert_that(!is.null(skew_alphas))
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, 
                           skew_alpha = skew_alphas, stringsAsFactors = F)
-    for (i in seq_len(nrow(combos))) {
-      sc  <- combos[i, ]
-      sim <- gen_simul_data(sim_seed = sc$sim_seed, datadir = '.', nt, TT, theta_par, p, B, 
-                            is_heavytail = F, skew_alpha = sc$skew_alpha, gap = sc$gap)
+    for (i in seq_len(nrow(jobs))) {
+      row  <- jobs[i, ]
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, is_heavytail = F, 
+                            skew_alpha = row$skew_alpha, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }
-  return(combos)
+  return(jobs)
 }
