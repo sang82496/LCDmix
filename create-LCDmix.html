@@ -3460,7 +3460,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   noisetype      = NULL,
   df             = NULL,
   skew_alpha     = NULL,
-  scale          = NULL,
+  laplace_scale  = NULL,
   gap            = 4,
   sim_helper_dir = "."
 ) {
@@ -3475,7 +3475,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   } else if (noisetype == 'skewed') {
     assertthat::assert_that(!is.null(skew_alpha))
   } else if (noisetype == 'laplace') {
-    assertthat::assert_that(!is.null(scale))
+    assertthat::assert_that(!is.null(laplace_scale))
   }
   
   if(!is.null(sim_seed)) set.seed(sim_seed)
@@ -3531,7 +3531,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, scale = scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, laplace_scale = laplace_scale)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -3558,7 +3558,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
               mn_shift = mn_shift,
               df = df,
               variance = variance,
-              scale = scale
+              laplace_scale = laplace_scale
               ))
 }</code></pre>
 <pre class="r"><code>#' Simulate multiple skew‐normal mixture datasets and save to disk
@@ -3597,7 +3597,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   noisetype  = 'gaussian',
   df         = NULL,
   skew_alphas = NULL,
-  scales     = NULL,
+  laplace_scales     = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -3630,12 +3630,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     }
     
   } else if (noisetype == 'laplace'){
-    assertthat::assert_that(!is.null(scales))
-    jobs &lt;- expand.grid(sim_seed = sim_seeds, scale = scales, stringsAsFactors = F)
+    assertthat::assert_that(!is.null(laplace_scales))
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, laplace_scale = laplace_scales, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  &lt;- jobs[i, ]
       sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
-                            scale = row$scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+                            laplace_scale = row$laplace_scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     
