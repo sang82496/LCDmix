@@ -8,28 +8,27 @@ gen_simul_data <- function(
   theta_par      = 0.5,
   p              = 10,
   B              = 30,
-  is_heavytail   = FALSE,
+  noisetype      = NULL,
   df             = NULL,
   skew_alpha     = NULL,
+  scale          = NULL,
   gap            = 4,
   sim_helper_dir = "."
 ) {
-
   ## Setup and basic checks
   assertthat::assert_that(nt %% 5 ==0)
+  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'gaussian'))
   K = 2
   stopifnot(p >= 3)
-  if (is_heavytail){
+  if (noisetype == 'heavytail') {
     assertthat::assert_that(!is.null(df))
-    noisetype = 'heavytail'
-  } else {
+    assertthat::assert_that(df >= 3)
+  } else if (noisetype == 'skewed') {
     assertthat::assert_that(!is.null(skew_alpha))
-    if (skew_alpha == 0){
-      noisetype = 'gaussian'
-    } else {
-      noisetype = 'skewed'
-    }
+  } else if (noisetype == 'laplace') {
+    assertthat::assert_that(!is.null(scale))
   }
+  
   if(!is.null(sim_seed)) set.seed(sim_seed)
   ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
 
@@ -67,7 +66,6 @@ gen_simul_data <- function(
   mn_shift = NULL
   variance = NULL
   if (noisetype == 'heavytail') {
-     assertthat::assert_that(df >= 3)
      variance = df / (df - 2)
   } else if (noisetype == 'skewed') {
       omega = sqrt(1/(1 - 2 * (1/pi) * skew_alpha^2 / (1 + skew_alpha^2)))
@@ -79,13 +77,15 @@ gen_simul_data <- function(
      mns = mnmat[tt,]
      means = mns[draws]
      ## Add noise to obtain data points.
-     if (noisetype == 'gaussian') {
-       noise = rnorm(ntlist[tt], 0, 1)
-     } else if (noisetype == 'heavytail') {
+     if (noisetype == 'heavytail') {
        noise = rt(ntlist[tt], df = df) / sqrt(variance)
-     } else {
+     } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
-     }
+     } else if (noisetype == 'laplace'){
+       noise = VGAM::rlaplace(ntlist[tt], 0, scale = scale)
+     } else { # gaussian
+       noise = rnorm(ntlist[tt], 0, 1)
+     } 
      datapoints = means + noise
      cbind(datapoints)
    })
@@ -108,6 +108,7 @@ gen_simul_data <- function(
               omega = omega,
               mn_shift = mn_shift,
               df = df,
-              variance = variance
+              variance = variance,
+              scale = scale
               ))
 }
