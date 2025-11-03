@@ -82,7 +82,7 @@ gen_simul_data <- function(
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, laplace_scale = laplace_scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, scale = laplace_scale)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
