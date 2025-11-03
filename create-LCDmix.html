@@ -3631,7 +3631,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     
   } else if (noisetype == 'laplace'){
     assertthat::assert_that(!is.null(laplace_scales))
-    jobs &lt;- expand.grid(sim_seed = sim_seeds, laplace_scale = laplace_scales, stringsAsFactors = F)
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, laplace_scale = laplace_scales, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  &lt;- jobs[i, ]
       sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
@@ -3640,7 +3640,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     }
     
   } else { #gaussian
-    jobs &lt;- expand.grid(sim_seed = sim_seeds, stringsAsFactors = F)
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  &lt;- jobs[i, ]
       sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
