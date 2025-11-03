@@ -36,7 +36,7 @@ simulate_and_save <- function(
   noisetype  = 'gaussian',
   df         = NULL,
   skew_alphas = NULL,
-  scales     = NULL,
+  laplace_scales     = NULL,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -69,12 +69,12 @@ simulate_and_save <- function(
     }
     
   } else if (noisetype == 'laplace'){
-    assertthat::assert_that(!is.null(scales))
-    jobs <- expand.grid(sim_seed = sim_seeds, scale = scales, stringsAsFactors = F)
+    assertthat::assert_that(!is.null(laplace_scales))
+    jobs <- expand.grid(sim_seed = sim_seeds, laplace_scale = laplace_scales, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
       sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
-                            scale = row$scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+                            laplace_scale = row$laplace_scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     

@@ -11,7 +11,7 @@ gen_simul_data <- function(
   noisetype      = NULL,
   df             = NULL,
   skew_alpha     = NULL,
-  scale          = NULL,
+  laplace_scale  = NULL,
   gap            = 4,
   sim_helper_dir = "."
 ) {
@@ -26,7 +26,7 @@ gen_simul_data <- function(
   } else if (noisetype == 'skewed') {
     assertthat::assert_that(!is.null(skew_alpha))
   } else if (noisetype == 'laplace') {
-    assertthat::assert_that(!is.null(scale))
+    assertthat::assert_that(!is.null(laplace_scale))
   }
   
   if(!is.null(sim_seed)) set.seed(sim_seed)
@@ -82,7 +82,7 @@ gen_simul_data <- function(
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, scale = scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, laplace_scale = laplace_scale)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -109,6 +109,6 @@ gen_simul_data <- function(
               mn_shift = mn_shift,
               df = df,
               variance = variance,
-              scale = scale
+              laplace_scale = laplace_scale
               ))
 }
