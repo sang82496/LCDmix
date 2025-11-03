@@ -58,7 +58,7 @@ gen_simul_laplace <- function(
      mns = mnmat[tt,]
      means = mns[draws]
      ## Add noise to obtain data points.
-     noise = rlaplace(ntlist[tt], 0, scale = scale)
+     noise = VGAM::rlaplace(ntlist[tt], 0, scale = scale)
      datapoints = means + noise
      cbind(datapoints)
    })
