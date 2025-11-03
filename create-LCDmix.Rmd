@@ -3383,7 +3383,7 @@ gen_simul_data <- function(
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, laplace_scale = laplace_scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, scale = laplace_scale)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -3712,7 +3712,7 @@ mixture_metric <- function(
     dens_true_fun <- function(t, y_grid) {
       sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        VGAM::dlaplace(y_grid - mu, scale = sim$scale) 
+        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
       })
     }
   } else {
