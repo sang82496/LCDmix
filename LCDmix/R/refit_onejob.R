@@ -16,7 +16,7 @@ refit_onejob <- function(
   resp_threshold,
   trim_prob,
   save_dir,
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -62,7 +62,7 @@ refit_onejob <- function(
       return(FALSE)
     }
   
-  if (trimmed){
+  if (cv_by_trimmed){
     fit_L <- as.numeric(fit$L$trimmed_loglik)
     log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
                       round(fit_L, 6), "\n")

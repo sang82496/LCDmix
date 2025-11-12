@@ -2034,9 +2034,7 @@ eval_lcd <- function(
   # Trim over all rows, with ties kept (>=)
   threshold    <- weighted_quantile(loglikes, weights, prob = trim_prob)
   keep_idx     <- loglikes >= threshold
-  trimmed_ll   <- loglikes[keep_idx]
-  trimmed_w    <- weights[keep_idx]
-  base_trimmed <- sum(trimmed_ll * trimmed_w) / sum(trimmed_w)
+  base_trimmed <- sum(loglikes[keep_idx] * weights[keep_idx]) / sum(weights[keep_idx])
 
   # L1 penalties (exclude α intercept column)
   l1_alpha  <- sum(abs(alpha[, -1]))
@@ -2629,7 +2627,7 @@ cv_lcd_simul <- function(
 cv_lcd_summary <- function(
   index_matrix,
   save_dir = "./cv_saves",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -2673,7 +2671,7 @@ cv_lcd_summary <- function(
   gid <- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
   row_groups <- split(seq_len(nrow(CVmat)), gid)
   
-  if (trimmed) {
+  if (cv_by_trimmed) {
     pick <- CVmat$fit_trimmed_loglik
   } else {
     pick <- CVmat$fit_med_loglik
@@ -2688,7 +2686,7 @@ cv_lcd_summary <- function(
   selected <- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
-  if (trimmed) {
+  if (cv_by_trimmed) {
     best_by_combo <- aggregate(
     eval_trimmed_loglik ~ alpha_idx + theta_idx,
     data = selected,
@@ -2705,7 +2703,7 @@ cv_lcd_summary <- function(
   unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
 
   ## 7) Count rows in CVmat with non-NA and finite loglik per (alpha_idx, theta_idx)
-  if (trimmed) {
+  if (cv_by_trimmed) {
     counts_df <- aggregate(
       I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
       data = CVmat,
@@ -2743,12 +2741,12 @@ cv_lcd_summary <- function(
 
 ```{r}
 #' @export
-cv_lcd_summary_simul <- function(base_dir, num_sims, trimmed = T) {
+cv_lcd_summary_simul <- function(base_dir, num_sims, cv_by_trimmed = T) {
   out <- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
     sim_dir <- file.path(base_dir, sprintf("sim_%d", s))
     idx <- readRDS(file.path(sim_dir, "index_matrix.rds"))
-    out[[s]] <- cv_lcd_summary(idx, save_dir = sim_dir, trimmed = trimmed)
+    out[[s]] <- cv_lcd_summary(idx, save_dir = sim_dir, cv_by_trimmed = cv_by_trimmed)
   }
   return(out)
 }
@@ -2776,7 +2774,7 @@ refit_onejob <- function(
   resp_threshold,
   trim_prob,
   save_dir,
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2822,7 +2820,7 @@ refit_onejob <- function(
       return(FALSE)
     }
   
-  if (trimmed){
+  if (cv_by_trimmed){
     fit_L <- as.numeric(fit$L$trimmed_loglik)
     log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
                       round(fit_L, 6), "\n")
@@ -2914,7 +2912,7 @@ refit_lcd <- function(
   trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -2932,7 +2930,7 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "trimmed"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "cv_by_trimmed"),
     envir = environment()
   )
 
@@ -2952,7 +2950,7 @@ refit_lcd <- function(
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, trimmed = trimmed)
+      save_dir = save_dir, cv_by_trimmed = cv_by_trimmed)
     return(res_ii)
   })
 
@@ -2966,7 +2964,7 @@ refit_lcd <- function(
     if (!file.exists(file_name)) next
     obj <- readRDS(file_name)
     if (!is.null(obj$fit)) {
-      if (trimmed) {
+      if (cv_by_trimmed) {
         L_vec[i]  <- obj$fit$L$trimmed_loglik
       } else {
         L_vec[i]  <- obj$fit$L$med_loglik
@@ -2984,7 +2982,7 @@ refit_lcd <- function(
       best_fit = obj$fit
   }
   
-  if (trimmed) {
+  if (cv_by_trimmed) {
     return(list(summary = summary,
               trimmed_loglik   = L_vec,
               best_fit = best_fit))
@@ -3077,7 +3075,7 @@ refit_lcd_simul <- function(
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -3113,7 +3111,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir","trimmed"),
+                "resp_threshold","trim_prob","base_dir","cv_by_trimmed"),
     envir = environment()
   )
 
@@ -3146,7 +3144,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, trimmed = trimmed)
+      save_dir = sim_refit_dir, cv_by_trimmed = cv_by_trimmed)
     return(res_ii)
     })
   
@@ -3172,7 +3170,7 @@ refit_lcd_simul <- function(
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
       if (!is.null(obj$fit)) {
-        if (trimmed) {
+        if (cv_by_trimmed) {
           L_vec[i]  <- obj$fit$L$trimmed_loglik
         } else {
           L_vec[i]  <- obj$fit$L$med_loglik
@@ -3184,7 +3182,7 @@ refit_lcd_simul <- function(
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
     best_table$loglike[s]  <- max(L_vec)
   }
-  if (trimmed) {
+  if (cv_by_trimmed) {
     colnames(best_table)[5] = 'trimmed_loglik'
   } else {
     colnames(best_table)[5] = 'med_loglik'

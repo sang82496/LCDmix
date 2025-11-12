@@ -131,9 +131,7 @@ eval_lcd <- function(
   # Trim over all rows, with ties kept (>=)
   threshold    <- weighted_quantile(loglikes, weights, prob = trim_prob)
   keep_idx     <- loglikes >= threshold
-  trimmed_ll   <- loglikes[keep_idx]
-  trimmed_w    <- weights[keep_idx]
-  base_trimmed <- sum(trimmed_ll * trimmed_w) / sum(trimmed_w)
+  base_trimmed <- sum(loglikes[keep_idx] * weights[keep_idx]) / sum(weights[keep_idx])
 
   # L1 penalties (exclude α intercept column)
   l1_alpha  <- sum(abs(alpha[, -1]))

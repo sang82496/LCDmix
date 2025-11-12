@@ -2255,9 +2255,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # Trim over all rows, with ties kept (&gt;=)
   threshold    &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglikes, weights, prob = trim_prob)
   keep_idx     &lt;- loglikes &gt;= threshold
-  trimmed_ll   &lt;- loglikes[keep_idx]
-  trimmed_w    &lt;- weights[keep_idx]
-  base_trimmed &lt;- sum(trimmed_ll * trimmed_w) / sum(trimmed_w)
+  base_trimmed &lt;- sum(loglikes[keep_idx] * weights[keep_idx]) / sum(weights[keep_idx])
 
   # L1 penalties (exclude α intercept column)
   l1_alpha  &lt;- sum(abs(alpha[, -1]))
@@ -2817,7 +2815,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <span id="cv_lcd_summary">cv_lcd_summary</span> &lt;- function(
   index_matrix,
   save_dir = "./cv_saves",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   n_runs &lt;- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -2861,7 +2859,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   gid &lt;- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
   row_groups &lt;- split(seq_len(nrow(CVmat)), gid)
   
-  if (trimmed) {
+  if (cv_by_trimmed) {
     pick &lt;- CVmat$fit_trimmed_loglik
   } else {
     pick &lt;- CVmat$fit_med_loglik
@@ -2876,7 +2874,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   selected &lt;- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
-  if (trimmed) {
+  if (cv_by_trimmed) {
     best_by_combo &lt;- aggregate(
     eval_trimmed_loglik ~ alpha_idx + theta_idx,
     data = selected,
@@ -2893,7 +2891,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   unique_lams &lt;- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
 
   ## 7) Count rows in CVmat with non-NA and finite loglik per (alpha_idx, theta_idx)
-  if (trimmed) {
+  if (cv_by_trimmed) {
     counts_df &lt;- aggregate(
       I(is.finite(eval_trimmed_loglik) &amp; is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
       data = CVmat,
@@ -2924,12 +2922,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   ))
 }</code></pre>
 <pre class="r"><code>#' @export
-<span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims, trimmed = T) {
+<span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims, cv_by_trimmed = T) {
   out &lt;- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
     sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
     idx &lt;- readRDS(file.path(sim_dir, "index_matrix.rds"))
-    out[[s]] &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx, save_dir = sim_dir, trimmed = trimmed)
+    out[[s]] &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx, save_dir = sim_dir, cv_by_trimmed = cv_by_trimmed)
   }
   return(out)
 }</code></pre>
@@ -2949,7 +2947,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold,
   trim_prob,
   save_dir,
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   seed_int &lt;- as.integer(seed)
   out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2995,7 +2993,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       return(FALSE)
     }
   
-  if (trimmed){
+  if (cv_by_trimmed){
     fit_L &lt;- as.numeric(fit$L$trimmed_loglik)
     log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
                       round(fit_L, 6), "\n")
@@ -3080,7 +3078,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3098,7 +3096,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "trimmed"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "cv_by_trimmed"),
     envir = environment()
   )
 
@@ -3118,7 +3116,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, trimmed = trimmed)
+      save_dir = save_dir, cv_by_trimmed = cv_by_trimmed)
     return(res_ii)
   })
 
@@ -3132,7 +3130,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     if (!file.exists(file_name)) next
     obj &lt;- readRDS(file_name)
     if (!is.null(obj$fit)) {
-      if (trimmed) {
+      if (cv_by_trimmed) {
         L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
       } else {
         L_vec[i]  &lt;- obj$fit$L$med_loglik
@@ -3150,7 +3148,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       best_fit = obj$fit
   }
   
-  if (trimmed) {
+  if (cv_by_trimmed) {
     return(list(summary = summary,
               trimmed_loglik   = L_vec,
               best_fit = best_fit))
@@ -3237,7 +3235,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3273,7 +3271,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir","trimmed"),
+                "resp_threshold","trim_prob","base_dir","cv_by_trimmed"),
     envir = environment()
   )
 
@@ -3306,7 +3304,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, trimmed = trimmed)
+      save_dir = sim_refit_dir, cv_by_trimmed = cv_by_trimmed)
     return(res_ii)
     })
   
@@ -3332,7 +3330,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       if (!file.exists(file_name)) next
       obj &lt;- readRDS(file_name)
       if (!is.null(obj$fit)) {
-        if (trimmed) {
+        if (cv_by_trimmed) {
           L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
         } else {
           L_vec[i]  &lt;- obj$fit$L$med_loglik
@@ -3344,7 +3342,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     best_table$best_idx[s] &lt;- seeds[which.max(L_vec)]
     best_table$loglike[s]  &lt;- max(L_vec)
   }
-  if (trimmed) {
+  if (cv_by_trimmed) {
     colnames(best_table)[5] = 'trimmed_loglik'
   } else {
     colnames(best_table)[5] = 'med_loglik'

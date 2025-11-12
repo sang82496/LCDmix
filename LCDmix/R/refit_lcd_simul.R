@@ -77,7 +77,7 @@ refit_lcd_simul <- function(
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -113,7 +113,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir","trimmed"),
+                "resp_threshold","trim_prob","base_dir","cv_by_trimmed"),
     envir = environment()
   )
 
@@ -146,7 +146,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, trimmed = trimmed)
+      save_dir = sim_refit_dir, cv_by_trimmed = cv_by_trimmed)
     return(res_ii)
     })
   
@@ -172,7 +172,7 @@ refit_lcd_simul <- function(
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
       if (!is.null(obj$fit)) {
-        if (trimmed) {
+        if (cv_by_trimmed) {
           L_vec[i]  <- obj$fit$L$trimmed_loglik
         } else {
           L_vec[i]  <- obj$fit$L$med_loglik
@@ -184,7 +184,7 @@ refit_lcd_simul <- function(
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
     best_table$loglike[s]  <- max(L_vec)
   }
-  if (trimmed) {
+  if (cv_by_trimmed) {
     colnames(best_table)[5] = 'trimmed_loglik'
   } else {
     colnames(best_table)[5] = 'med_loglik'
