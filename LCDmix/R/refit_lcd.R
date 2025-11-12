@@ -137,8 +137,15 @@ refit_lcd <- function(
       file_name <- file.path(save_dir, sprintf("refit_%d.rds", seeds[which.max(L_vec)]))
       obj <- readRDS(file_name)
       best_fit = obj$fit
-    }
-  return(list(summary = summary,
-              L_vec   = L_vec,
+  }
+  
+  if (trimmed) {
+    return(list(summary = summary,
+              trimmed_loglik   = L_vec,
               best_fit = best_fit))
+  } else {
+    return(list(summary = summary,
+              med_loglik    = L_vec,
+              best_fit = best_fit))
+  }
 }

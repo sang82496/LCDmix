@@ -158,6 +158,7 @@ refit_lcd_simul <- function(
     lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
     lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
     best_idx       = NA_integer_,
+    loglike        = NA_real_,
     stringsAsFactors = FALSE
   )
 
@@ -181,6 +182,12 @@ refit_lcd_simul <- function(
     
     if (all(!is.finite(L_vec))) next
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
+    best_table$loglike[s]  <- max(L_vec)
+  }
+  if (trimmed) {
+    colnames(best_table)[5] = 'trimmed_loglik'
+  } else {
+    colnames(best_table)[5] = 'med_loglik'
   }
 
   return(list(grand_jobs = grand_jobs,
