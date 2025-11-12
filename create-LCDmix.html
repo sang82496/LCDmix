@@ -2420,12 +2420,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         eval_prop_inf       = NA_real_,
         eval_trimmed_loglik = NA_real_,
         eval_finite_loglik  = NA_real_,
+        eval_med_loglik     = NA_real_,
         fit_trimmed_loglik  = NA_real_,
+        fit_med_loglik      = NA_real_,
         theta_spars         = NA_real_,
         alpha_spars         = NA_real_,
         log_msg             = log_msg
       ),
-      
       file = out_path
     )
     return(FALSE)
@@ -2439,11 +2440,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     biomass_test = bin_mass[test_i],
     trim_prob    = trim_prob
   )
-
-  eval_prop_inf       &lt;- eval_res$prop_inf
-  eval_trimmed_loglik &lt;- eval_res$trimmed_loglik
-  eval_finite_loglik  &lt;- eval_res$finite_loglik
-  fit_trimmed_loglik  &lt;- fit$L$trimmed_loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
@@ -2458,10 +2454,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   saveRDS(
     list(
-      eval_prop_inf       = eval_prop_inf,
-      eval_trimmed_loglik = eval_trimmed_loglik,
-      eval_finite_loglik  = eval_finite_loglik,
-      fit_trimmed_loglik  = fit_trimmed_loglik,
+      eval_prop_inf       = eval_res$prop_inf,
+      eval_trimmed_loglik = eval_res$trimmed_loglik,
+      eval_finite_loglik  = eval_res$finite_loglik,
+      eval_med_loglik     = eval_res$med_loglik,
+      fit_trimmed_loglik  = fit$L$trimmed_loglik,
+      fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
       alpha_spars         = alpha_spars,
       log_msg             = log_msg
@@ -2818,16 +2816,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @export
 <span id="cv_lcd_summary">cv_lcd_summary</span> &lt;- function(
   index_matrix,
-  save_dir = "./cv_saves"
+  save_dir = "./cv_saves",
+  trimmed = T
 ) {
   n_runs &lt;- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat &lt;- cbind(
     index_matrix        = index_matrix,
     fit_trimmed_loglik  = rep(NA_real_, n_runs),
+    fit_med_loglik      = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
-    eval_finite_loglik  = rep(NA_real_, n_runs)
+    eval_med_loglik     = rep(NA_real_, n_runs)
   )
   CVmat &lt;- as.data.frame(CVmat)
   
@@ -2851,19 +2851,24 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     # load
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  &lt;- mat$fit_trimmed_loglik
+    CVmat[i, "fit_med_loglik"]      &lt;- mat$fit_med_loglik
     CVmat[i, "eval_prop_inf"]       &lt;- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] &lt;- mat$eval_trimmed_loglik
-    CVmat[i, "eval_finite_loglik"]  &lt;- mat$eval_finite_loglik
+    CVmat[i, "eval_med_loglik"]     &lt;- mat$eval_med_loglik
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
   gid &lt;- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
   row_groups &lt;- split(seq_len(nrow(CVmat)), gid)
   
-  ftl &lt;- CVmat$fit_trimmed_loglik
+  if (trimmed) {
+    pick &lt;- CVmat$fit_trimmed_loglik
+  } else {
+    pick &lt;- CVmat$fit_med_loglik
+  }
+
   pick_idx &lt;- vapply(row_groups, function(idx) {
-    v &lt;- ftl[idx]
-#    v[!is.finite(v)] &lt;- -Inf          # treat NA/NaN/Inf as -Inf so which.max works
+    v &lt;- pick[idx]
     if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
     idx[which.max(v)]                 # pick the row index with max trimmed_loglik
   }, integer(1L))
@@ -2871,22 +2876,34 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   selected &lt;- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
-  best_by_combo &lt;- aggregate(
+  if (trimmed) {
+    best_by_combo &lt;- aggregate(
     eval_trimmed_loglik ~ alpha_idx + theta_idx,
     data = selected,
-    FUN  = function(x) mean(x, na.rm = TRUE)
-  )
+    FUN  = function(x) mean(x, na.rm = TRUE)) 
+  } else {
+    best_by_combo &lt;- aggregate(
+    eval_med_loglik ~ alpha_idx + theta_idx,
+    data = selected,
+    FUN  = function(x) mean(x, na.rm = TRUE)) 
+  }
   names(best_by_combo)[3] &lt;- "cv_score"
   
   ## 6) Unique lambda values per combo (from the original matrix)
   unique_lams &lt;- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
 
-  ## 7) Count rows in CVmat with non-NA and finite trimmed_loglik per (alpha_idx, theta_idx)
-  counts_df &lt;- aggregate(
-    I(is.finite(eval_trimmed_loglik) &amp; is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
-    data = CVmat,
-    FUN  = sum
-  )
+  ## 7) Count rows in CVmat with non-NA and finite loglik per (alpha_idx, theta_idx)
+  if (trimmed) {
+    counts_df &lt;- aggregate(
+      I(is.finite(eval_trimmed_loglik) &amp; is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
+      data = CVmat,
+      FUN  = sum)
+  } else {
+    counts_df &lt;- aggregate(
+      I(is.finite(eval_med_loglik) &amp; is.finite(fit_med_loglik)) ~ alpha_idx + theta_idx,
+      data = CVmat,
+      FUN  = sum)
+  }
   names(counts_df)[3] &lt;- "counts"
   
   ## 8) Merge &amp; sort  (unchanged except for the new column name)
@@ -2907,12 +2924,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   ))
 }</code></pre>
 <pre class="r"><code>#' @export
-<span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims) {
+<span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims, trimmed = T) {
   out &lt;- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
     sim_dir &lt;- file.path(base_dir, sprintf("sim_%d", s))
     idx &lt;- readRDS(file.path(sim_dir, "index_matrix.rds"))
-    out[[s]] &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx, save_dir = sim_dir)
+    out[[s]] &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(idx, save_dir = sim_dir, trimmed = trimmed)
   }
   return(out)
 }</code></pre>
@@ -2931,7 +2948,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir
+  save_dir,
+  trimmed = T
 ) {
   seed_int &lt;- as.integer(seed)
   out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2977,9 +2995,16 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       return(FALSE)
     }
   
-  fit_L &lt;- as.numeric(fit$L$trimmed_loglik)
-  log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
-                    round(fit_L, 6), "\n")
+  if (trimmed){
+    fit_L &lt;- as.numeric(fit$L$trimmed_loglik)
+    log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
+                      round(fit_L, 6), "\n")
+  } else {
+    fit_L &lt;- as.numeric(fit$L$med_loglik)
+    log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final med loglikelihood = ", 
+                      round(fit_L, 6), "\n")
+  }
+  
   saveRDS(list(
       fit     = fit,
       log_msg = log_msg
@@ -3054,7 +3079,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
-  n_cores = "max"
+  n_cores = "max",
+  trimmed = T
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3072,7 +3098,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "trimmed"),
     envir = environment()
   )
 
@@ -3092,7 +3118,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir)
+      save_dir = save_dir, trimmed = trimmed)
     return(res_ii)
   })
 
@@ -3106,7 +3132,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     if (!file.exists(file_name)) next
     obj &lt;- readRDS(file_name)
     if (!is.null(obj$fit)) {
-      L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+      if (trimmed) {
+        L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+      } else {
+        L_vec[i]  &lt;- obj$fit$L$med_loglik
+      }
+      
     }
   }
   
@@ -3198,7 +3229,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max"
+  n_cores = "max",
+  trimmed = T
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3234,7 +3266,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir"),
+                "resp_threshold","trim_prob","base_dir","trimmed"),
     envir = environment()
   )
 
@@ -3267,7 +3299,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir)
+      save_dir = sim_refit_dir, trimmed = trimmed)
     return(res_ii)
     })
   
@@ -3292,7 +3324,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       if (!file.exists(file_name)) next
       obj &lt;- readRDS(file_name)
       if (!is.null(obj$fit)) {
-        L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+        if (trimmed) {
+          L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
+        } else {
+          L_vec[i]  &lt;- obj$fit$L$med_loglik
+        }
       }
     }
     
@@ -3503,113 +3539,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
   }
-  return(jobs)
-}</code></pre>
-<pre class="r"><code>#' @export
-<span id="gen_simul_laplace">gen_simul_laplace</span> &lt;- function(
-  sim_seed       = NULL,
-  nt             = 1000,
-  TT             = 100,
-  theta_par      = 0.5,
-  p              = 10,
-  B              = 30,
-  scale          = 1,
-  gap            = 4,
-  sim_helper_dir = "."
-) {
-
-  ## Setup and basic checks
-  assertthat::assert_that(nt %% 5 ==0)
-  K = 2
-  stopifnot(p &gt;= 3)
-  if(!is.null(sim_seed)) set.seed(sim_seed)
-  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
-  noisetype = 'laplace'
-
-  ## Generate covariate
-  par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
-
-  Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
-  X = cbind(scale(par[1:TT]), c(rep(0, TT/2), rep(1, TT/2)), Xrest)
-  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
-
-  ## theta coefficients
-  theta = matrix(0, ncol = K, nrow = p+1)
-  theta[0+1,1] = 0
-  theta[1+1,1] = theta_par
-  theta[0+1,2] = gap
-  theta[1+1,2] = -theta_par
-  colnames(theta) = paste0("clust", 1:K)
-  rownames(theta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
-
-  ## alpha coefficients
-  alpha = matrix(0, ncol = K, nrow = p+1)
-  alpha[0+1, 2] = -10
-  alpha[2+1, 2] = 10 + log(1/4)
-
-  colnames(alpha) = paste0("clust", 1:K)
-  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
-
-  ## Generate means and probabilities
-  mnmat = cbind(1, X) %*% theta
-  prob = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha))
-  
-  ## Samples |nt| memberships out of (1:K) according to the probs in prob.
-  ## Data is a probabilistic mixture from these two means, over time.
-  
-  ylist = lapply(1:TT, function(tt){
-     draws = sample(1:K, size = ntlist[tt], replace = TRUE,
-                    prob = c(prob[tt,1], prob[tt,2]))
-     mns = mnmat[tt,]
-     means = mns[draws]
-     ## Add noise to obtain data points.
-     noise = VGAM::rlaplace(ntlist[tt], 0, scale = scale)
-     datapoints = means + noise
-     cbind(datapoints)
-   })
-
-  # Binning
-  biomass = vector("list", TT)
-  biomass = lapply(1:TT, function(t){biomass[[t]] = rep(1, length(ylist[[t]]))})
-  binned = LCDmix::<a href="create-LCDmix.html#binning">binning</a>(ylist, biomass, n_bins = B)
-
-  return(list(Y_bin = binned$Y_bin, 
-              X = X,
-              bin_mass = binned$bin_mass,
-              ## The true generating model:
-              noisetype = noisetype,
-              mnmat = mnmat,
-              prob = prob,
-              alpha = alpha,
-              theta = theta,
-              scale = scale
-              ))
-}</code></pre>
-<pre class="r"><code>#' @export
-<span id="simulate_and_save_laplace">simulate_and_save_laplace</span> &lt;- function(
-  sim_seeds,
-  gaps,
-  scale      = NULL,
-  sim_dir    = "sim_data",
-  nt         = 1000,
-  TT         = 100,
-  theta_par  = 0.5,
-  p          = 10,
-  B          = 30,
-  sim_helper_dir = '.'
-) {
-  if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
-  
-  assertthat::assert_that(!is.null(scale))
-  jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, 
-                        scale = scale, stringsAsFactors = F)
-  for (i in seq_len(nrow(jobs))) {
-    row  &lt;- jobs[i, ]
-    sim &lt;- <a href="create-LCDmix.html#gen_simul_laplace">gen_simul_laplace</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, 
-                             scale = row$scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
-    saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
-  }
-
   return(jobs)
 }</code></pre>
 <pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures

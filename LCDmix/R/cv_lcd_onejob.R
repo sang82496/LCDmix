@@ -86,12 +86,13 @@ cv_lcd_onejob <- function(
         eval_prop_inf       = NA_real_,
         eval_trimmed_loglik = NA_real_,
         eval_finite_loglik  = NA_real_,
+        eval_med_loglik     = NA_real_,
         fit_trimmed_loglik  = NA_real_,
+        fit_med_loglik      = NA_real_,
         theta_spars         = NA_real_,
         alpha_spars         = NA_real_,
         log_msg             = log_msg
       ),
-      
       file = out_path
     )
     return(FALSE)
@@ -105,11 +106,6 @@ cv_lcd_onejob <- function(
     biomass_test = bin_mass[test_i],
     trim_prob    = trim_prob
   )
-
-  eval_prop_inf       <- eval_res$prop_inf
-  eval_trimmed_loglik <- eval_res$trimmed_loglik
-  eval_finite_loglik  <- eval_res$finite_loglik
-  fit_trimmed_loglik  <- fit$L$trimmed_loglik
   
   # Coefficient sparsity
   # θ: use all components (including the first); bind to p × K
@@ -124,10 +120,12 @@ cv_lcd_onejob <- function(
 
   saveRDS(
     list(
-      eval_prop_inf       = eval_prop_inf,
-      eval_trimmed_loglik = eval_trimmed_loglik,
-      eval_finite_loglik  = eval_finite_loglik,
-      fit_trimmed_loglik  = fit_trimmed_loglik,
+      eval_prop_inf       = eval_res$prop_inf,
+      eval_trimmed_loglik = eval_res$trimmed_loglik,
+      eval_finite_loglik  = eval_res$finite_loglik,
+      eval_med_loglik     = eval_res$med_loglik,
+      fit_trimmed_loglik  = fit$L$trimmed_loglik,
+      fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
       alpha_spars         = alpha_spars,
       log_msg             = log_msg
