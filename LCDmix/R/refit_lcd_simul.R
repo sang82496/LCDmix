@@ -76,7 +76,8 @@ refit_lcd_simul <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max"
+  n_cores = "max",
+  trimmed = T
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -112,7 +113,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir"),
+                "resp_threshold","trim_prob","base_dir","trimmed"),
     envir = environment()
   )
 
@@ -145,7 +146,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir)
+      save_dir = sim_refit_dir, trimmed = trimmed)
     return(res_ii)
     })
   
@@ -170,7 +171,11 @@ refit_lcd_simul <- function(
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
       if (!is.null(obj$fit)) {
-        L_vec[i]  <- obj$fit$L$trimmed_loglik
+        if (trimmed) {
+          L_vec[i]  <- obj$fit$L$trimmed_loglik
+        } else {
+          L_vec[i]  <- obj$fit$L$med_loglik
+        }
       }
     }
     

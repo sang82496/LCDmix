@@ -55,16 +55,18 @@
 #' @export
 cv_lcd_summary <- function(
   index_matrix,
-  save_dir = "./cv_saves"
+  save_dir = "./cv_saves",
+  trimmed = T
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
   CVmat <- cbind(
     index_matrix        = index_matrix,
     fit_trimmed_loglik  = rep(NA_real_, n_runs),
+    fit_med_loglik      = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
-    eval_finite_loglik  = rep(NA_real_, n_runs)
+    eval_med_loglik     = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
@@ -88,19 +90,24 @@ cv_lcd_summary <- function(
     # load
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
+    CVmat[i, "fit_med_loglik"]      <- mat$fit_med_loglik
     CVmat[i, "eval_prop_inf"]       <- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
-    CVmat[i, "eval_finite_loglik"]  <- mat$eval_finite_loglik
+    CVmat[i, "eval_med_loglik"]     <- mat$eval_med_loglik
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
   gid <- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
   row_groups <- split(seq_len(nrow(CVmat)), gid)
   
-  ftl <- CVmat$fit_trimmed_loglik
+  if (trimmed) {
+    pick <- CVmat$fit_trimmed_loglik
+  } else {
+    pick <- CVmat$fit_med_loglik
+  }
+
   pick_idx <- vapply(row_groups, function(idx) {
-    v <- ftl[idx]
-#    v[!is.finite(v)] <- -Inf          # treat NA/NaN/Inf as -Inf so which.max works
+    v <- pick[idx]
     if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
     idx[which.max(v)]                 # pick the row index with max trimmed_loglik
   }, integer(1L))
@@ -108,22 +115,34 @@ cv_lcd_summary <- function(
   selected <- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
-  best_by_combo <- aggregate(
+  if (trimmed) {
+    best_by_combo <- aggregate(
     eval_trimmed_loglik ~ alpha_idx + theta_idx,
     data = selected,
-    FUN  = function(x) mean(x, na.rm = TRUE)
-  )
+    FUN  = function(x) mean(x, na.rm = TRUE)) 
+  } else {
+    best_by_combo <- aggregate(
+    eval_med_loglik ~ alpha_idx + theta_idx,
+    data = selected,
+    FUN  = function(x) mean(x, na.rm = TRUE)) 
+  }
   names(best_by_combo)[3] <- "cv_score"
   
   ## 6) Unique lambda values per combo (from the original matrix)
   unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
 
-  ## 7) Count rows in CVmat with non-NA and finite trimmed_loglik per (alpha_idx, theta_idx)
-  counts_df <- aggregate(
-    I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
-    data = CVmat,
-    FUN  = sum
-  )
+  ## 7) Count rows in CVmat with non-NA and finite loglik per (alpha_idx, theta_idx)
+  if (trimmed) {
+    counts_df <- aggregate(
+      I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
+      data = CVmat,
+      FUN  = sum)
+  } else {
+    counts_df <- aggregate(
+      I(is.finite(eval_med_loglik) & is.finite(fit_med_loglik)) ~ alpha_idx + theta_idx,
+      data = CVmat,
+      FUN  = sum)
+  }
   names(counts_df)[3] <- "counts"
   
   ## 8) Merge & sort  (unchanged except for the new column name)

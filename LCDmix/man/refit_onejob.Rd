@@ -16,7 +16,8 @@ refit_onejob(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir
+  save_dir,
+  trimmed = T
 )
 }
 \description{
