@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-11-03">
+<meta name="date" content="2025-11-11">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-11-03</h4>
+<h4 class="date">2025-11-11</h4>
 
 </div>
 
@@ -514,12 +514,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   message("✔ Iterations complete")
   
   #— Step 4: Compute loglikelihood —#
-  
-  L = <a href="create-LCDmix.html#lcd_loglikelihood">lcd_loglikelihood</a>(
-    model     = iter_res,
-    X         = X,
-    biomass   = bin_mass,
-    trim_prob = trim_prob
+  L = <a href="create-LCDmix.html#eval_lcd">eval_lcd</a>(
+    model         = iter_res,
+    Y_test        = Y_bin,
+    X_test        = X,
+    biomass_test  = bin_mass,
+    trim_prob     = trim_prob
   )
   message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
   
@@ -1261,157 +1261,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   Q_val &lt;- total_ll / N_total - pen_total
 
   return(Q_val)
-}</code></pre>
-<pre class="r"><code>#' Penalized and trimmed log-likelihood for LCDmix
-#'
-#' @description
-#' Computes the penalized average log-likelihood for an LCDmix model and a
-#' quantile-trimmed variant. Quantile trimming removes a user-specified
-#' fraction of the lowest per-observation log-likelihoods (after the
-#' log-sum-exp over components) before averaging. L1 penalties are applied to
-#' \eqn{\alpha} (excluding its intercept column) and to all slope parameters
-#' \eqn{\theta}.
-#'
-#' @param model A fitted LCDmix iteration/state object containing:
-#' \itemize{
-#' \item \code{g_new}: list of length \eqn{K} with log-concave fits
-#' for each component; compatible with
-#' \code{logcondens::evaluateLogConDens()}.
-#' \item \code{theta_new}: slopes used for the \eqn{L_1} penalty.
-#' \item \code{alpha_new}: \eqn{K \times (p+1)} mixture-weight coefficients
-#' (first column is the intercept; not penalized).
-#' \item \code{resi_new}: list of length \eqn{TT}; element \eqn{t} is an
-#' \eqn{n_t \times K} matrix of residuals at time \eqn{t}.
-#' \item \code{lambda_alpha}, \code{lambda_theta}: nonnegative penalty
-#' weights for \eqn{\alpha} and \eqn{\theta}.
-#' }
-#' @param X A \eqn{TT \times p} covariate matrix (rows are time points).
-#' @param biomass List of length \eqn{TT}; element \eqn{t} is a numeric vector
-#' of bin masses (weights) of length \eqn{n_t}. (Required for weighted
-#' averaging.)
-#' @param trim_prob Numeric in [0,1). Fraction of observations (by weight)
-#' to trim from the lower tail of the per-observation log-likelihoods
-#' (after log-sum-exp across components). Default: \code{0.03}.
-#'
-#' @details
-#' For each observation, the function forms
-#' \deqn{\log \sum_{k=1}^K \pi_{t,k}(X), f_k(\text{residual}{t,k}),}
-#' computed via a stable rowwise log-sum-exp. The untrimmed average is
-#' taken over all rows; if any row is \code{-Inf}, the untrimmed average is set
-#' to \code{-Inf}. The trimmed average discards the lowest
-#' \code{trim_prob} fraction (by weight) of the per-row log-likelihoods and then
-#' averages the remainder. Both figures are then reduced by the L1 penalties:
-#' \deqn{\lambda\alpha |\alpha_{\text{no-int}}|1 +
-#' \lambda\theta |\theta|_1.}
-#'
-#' Warnings from \code{logcondens::evaluateLogConDens()} when evaluating outside
-#' support are suppressed (these yield \code{-Inf} log-densities).
-#'
-#' @return A list with:
-#' \describe{
-#' \item{\code{loglik}}{Penalized average log-likelihood using all rows
-#' (\code{-Inf} if any row is non-finite before penalization).}
-#' \item{\code{trimmed_loglik}}{Penalized quantile-trimmed average
-#' log-likelihood (lower \code{trim_prob} fraction removed).}
-#' \item{\code{prop_inf}}{Proportion of rows with non-finite per-row
-#' log-likelihoods.}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' out &lt;- <a href="create-LCDmix.html#lcd_loglikelihood">lcd_loglikelihood</a>(model = fit$iter, X = X, biomass = bin_mass, trim_prob = 0.05)
-#' out$loglik
-#' out$trimmed_loglik
-#' out$prop_inf
-#' }
-#'
-#' @seealso \code{\link{pi_k}}, \code{logcondens::evaluateLogConDens}
-#' @export
-<span id="lcd_loglikelihood">lcd_loglikelihood</span> &lt;- function(
-  model,
-  X,
-  biomass,
-  trim_prob = 0.03
-) {
-  densities    &lt;- model$g_new             # list length K (log-concave fits)
-  slopes       &lt;- model$theta_new         # penalized slopes (any shape)
-  alpha        &lt;- model$alpha_new         # K × (p+1)
-  resi         &lt;- model$resi_new          # list length TT; each n_t × K residuals
-  lambda_alpha &lt;- model$lambda_alpha
-  lambda_theta &lt;- model$lambda_theta
-
-  TT &lt;- nrow(X)
-  K  &lt;- nrow(alpha)
-
-  # 1) π_{t,k} and log π
-  pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)                # TT × K
-  log_pi &lt;- log(pi_mat)
-
-  # 2) Build per-observation log-terms (N × K after rbind)
-  log_terms_list &lt;- vector("list", TT)
-  for (t in seq_len(TT)) {
-    res_t &lt;- resi[[t]]                    # n_t × K
-    n_t   &lt;- nrow(res_t)
-    lt    &lt;- matrix(NA_real_, n_t, K)
-    for (k in seq_len(K)) {
-      # evaluateLogConDens(...)[,2] gives log-density; out-of-support → -Inf (with warnings)
-      ldens &lt;- suppressWarnings(
-        logcondens::evaluateLogConDens(res_t[, k], densities[[k]])[, 2]
-      )
-      lt[, k] &lt;- log_pi[t, k] + ldens
-    }
-    log_terms_list[[t]] &lt;- lt
-  }
-  log_terms &lt;- do.call(rbind, log_terms_list)   # N × K
-
-  # 3) Weights
-  weights &lt;- unlist(biomass)
-
-  # 4) Stable rowwise log-sum-exp
-  any_finite_comp &lt;- rowSums(is.finite(log_terms)) &gt; 0
-  loglikes        &lt;- rep(-Inf, nrow(log_terms))
-  if (any(any_finite_comp)) {
-    M &lt;- apply(log_terms[any_finite_comp, , drop = FALSE], 1, max)
-    loglikes[any_finite_comp] &lt;-
-      M + log(rowSums(exp(log_terms[any_finite_comp, , drop = FALSE] - M)))
-  }
-
-  # 5) Base and trimmed summaries
-  finite_mask &lt;- is.finite(loglikes)
-  prop_inf    &lt;- mean(!finite_mask)
-
-  ## actual (untrimmed): if any non-finite exists → -Inf
-  if (any(!finite_mask)) {
-    base_ll &lt;- -Inf
-  } else {
-    base_ll &lt;- sum(weights * loglikes) / sum(weights)
-  }
-
-  ## trimmed:
-  if (any(finite_mask)) {
-    threshold  &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglikes, weights, prob = trim_prob)
-    keep_idx   &lt;- loglikes &gt;= threshold
-    trimmed_ll &lt;- loglikes[keep_idx]
-    trimmed_w  &lt;- weights[keep_idx]
-    
-    trim_ll_base &lt;- sum(trimmed_ll * trimmed_w) / sum(trimmed_w)
-  } else {
-    trim_ll_base &lt;- -Inf
-  }
-  
-  # 6) L1 penalties (α intercept column is the first; K &gt;= 2 assumed)
-  l1_alpha  &lt;- sum(abs(alpha[, -1]))
-  l1_theta  &lt;- sum(abs(unlist(slopes)))
-  pen_total &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
-
-  loglik         &lt;- base_ll      - pen_total
-  trimmed_loglik &lt;- trim_ll_base - pen_total
-
-  return(list(
-    loglik          = loglik,     # penalized, using all rows; -Inf if any -Inf present
-    trimmed_loglik  = trimmed_loglik,    # penalized, trimmed
-    prop_inf        = prop_inf
-  ))
 }</code></pre>
 <pre class="r"><code>#' Run EM-style iterations for log-concave mixture-of-experts model
 #'
@@ -2360,17 +2209,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # Per-observation log-likelihoods
   loglikes &lt;- vector("list", TT)
   for (t in seq_len(TT)) {
-    y_t &lt;- as.numeric(Y_test[[t]])
-    n_t &lt;- length(y_t)
+    nt &lt;- length(Y_test[[t]])
     lt  &lt;- matrix(NA_real_, n_t, K)
 
     # Component-wise densities f_k(r_{t,i,k})
     for (k in seq_len(K)) {
       pred_tk   &lt;- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
-      resi_tk   &lt;- y_t - pred_tk
       # Column 3 = density; out-of-support → 0 (log -&gt; -Inf)
       dens_vals &lt;- suppressWarnings(
-        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 3]
+        logcondens::evaluateLogConDens(Y_test[[t]] - pred_tk, densities[[k]])[, 3]
       )
       lt[, k] &lt;- dens_vals * pi_mat[t, k]
     }
@@ -2383,23 +2230,30 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   # Proportion of non-finite rows
   finite_mask &lt;- is.finite(loglikes)
-  #prop_inf    &lt;- mean(!finite_mask)
   prop_inf    &lt;- sum(weights[!finite_mask])/sum(weights)
 
   # All -Inf → return early
   if (!any(finite_mask)) {
     return(list(
       prop_inf       = 1,
+      loglik         = -Inf,
       finite_loglik  = -Inf,
+      med_loglik     = -Inf,
       trimmed_loglik = -Inf
     ))
   }
 
+  # Untrimmed weighted average
+  base_ll  &lt;- sum(weights * loglikes) / sum(weights)
+  
   # Untrimmed weighted average over finite rows
-  base_ll &lt;- sum(weights[finite_mask] * loglikes[finite_mask]) /
+  base_finite &lt;- sum(weights[finite_mask] * loglikes[finite_mask]) /
              sum(weights[finite_mask])
+  
+  # Median_loglikelihood
+  base_med &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglikes, weights, prob = 0.5)
 
-  # Trim over all rows (including -Inf), with ties kept (&gt;=)
+  # Trim over all rows, with ties kept (&gt;=)
   threshold    &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglikes, weights, prob = trim_prob)
   keep_idx     &lt;- loglikes &gt;= threshold
   trimmed_ll   &lt;- loglikes[keep_idx]
@@ -2413,8 +2267,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(list(
     prop_inf       = prop_inf,
-    finite_loglik  = base_ll       - pen_total,
-    trimmed_loglik = base_trimmed  - pen_total
+    loglik         = base_ll - pen_total,
+    finite_loglik  = base_finite - pen_total,
+    med_loglik     = base_med - pen_total,
+    trimmed_loglik = base_trimmed - pen_total
   ))
 }</code></pre>
 <pre class="r"><code>#' Create a cross-validation index matrix (folds × seeds × penalty grids)
@@ -3902,7 +3758,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 ## Writing 'initialization.Rd'
 ## Writing 'is_increasing.Rd'
 ## Writing 'iteration.Rd'
-## Writing 'lcd_loglikelihood.Rd'
 ## Writing 'main.Rd'
 ## Writing 'mixture_metric.Rd'
 ## Writing 'modified_logcondens.Rd'

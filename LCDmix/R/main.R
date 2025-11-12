@@ -116,12 +116,12 @@ main <- function(
   message("✔ Iterations complete")
   
   #— Step 4: Compute loglikelihood —#
-  
-  L = lcd_loglikelihood(
-    model     = iter_res,
-    X         = X,
-    biomass   = bin_mass,
-    trim_prob = trim_prob
+  L = eval_lcd(
+    model         = iter_res,
+    Y_test        = Y_bin,
+    X_test        = X,
+    biomass_test  = bin_mass,
+    trim_prob     = trim_prob
   )
   message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
   
