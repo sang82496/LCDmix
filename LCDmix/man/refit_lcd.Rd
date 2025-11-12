@@ -18,7 +18,7 @@ refit_lcd(
   trim_prob = 0.03,
   save_dir = "./refits",
   n_cores = "max",
-  trimmed = T
+  cv_by_trimmed = T
 )
 }
 \arguments{
