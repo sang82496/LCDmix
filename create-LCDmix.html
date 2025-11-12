@@ -2210,8 +2210,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   loglikes &lt;- vector("list", TT)
   for (t in seq_len(TT)) {
     nt &lt;- length(Y_test[[t]])
-    lt  &lt;- matrix(NA_real_, n_t, K)
-
+    lt  &lt;- matrix(NA_real_, nt, K)
     # Component-wise densities f_k(r_{t,i,k})
     for (k in seq_len(K)) {
       pred_tk   &lt;- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
