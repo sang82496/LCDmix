@@ -1989,8 +1989,7 @@ eval_lcd <- function(
   loglikes <- vector("list", TT)
   for (t in seq_len(TT)) {
     nt <- length(Y_test[[t]])
-    lt  <- matrix(NA_real_, n_t, K)
-
+    lt  <- matrix(NA_real_, nt, K)
     # Component-wise densities f_k(r_{t,i,k})
     for (k in seq_len(K)) {
       pred_tk   <- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
