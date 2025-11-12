@@ -85,17 +85,15 @@ eval_lcd <- function(
   # Per-observation log-likelihoods
   loglikes <- vector("list", TT)
   for (t in seq_len(TT)) {
-    y_t <- as.numeric(Y_test[[t]])
-    n_t <- length(y_t)
+    nt <- length(Y_test[[t]])
     lt  <- matrix(NA_real_, n_t, K)
 
     # Component-wise densities f_k(r_{t,i,k})
     for (k in seq_len(K)) {
       pred_tk   <- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
-      resi_tk   <- y_t - pred_tk
       # Column 3 = density; out-of-support → 0 (log -> -Inf)
       dens_vals <- suppressWarnings(
-        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 3]
+        logcondens::evaluateLogConDens(Y_test[[t]] - pred_tk, densities[[k]])[, 3]
       )
       lt[, k] <- dens_vals * pi_mat[t, k]
     }
@@ -108,23 +106,30 @@ eval_lcd <- function(
 
   # Proportion of non-finite rows
   finite_mask <- is.finite(loglikes)
-  #prop_inf    <- mean(!finite_mask)
   prop_inf    <- sum(weights[!finite_mask])/sum(weights)
 
   # All -Inf → return early
   if (!any(finite_mask)) {
     return(list(
       prop_inf       = 1,
+      loglik         = -Inf,
       finite_loglik  = -Inf,
+      med_loglik     = -Inf,
       trimmed_loglik = -Inf
     ))
   }
 
+  # Untrimmed weighted average
+  base_ll  <- sum(weights * loglikes) / sum(weights)
+  
   # Untrimmed weighted average over finite rows
-  base_ll <- sum(weights[finite_mask] * loglikes[finite_mask]) /
+  base_finite <- sum(weights[finite_mask] * loglikes[finite_mask]) /
              sum(weights[finite_mask])
+  
+  # Median_loglikelihood
+  base_med <- weighted_quantile(loglikes, weights, prob = 0.5)
 
-  # Trim over all rows (including -Inf), with ties kept (>=)
+  # Trim over all rows, with ties kept (>=)
   threshold    <- weighted_quantile(loglikes, weights, prob = trim_prob)
   keep_idx     <- loglikes >= threshold
   trimmed_ll   <- loglikes[keep_idx]
@@ -138,7 +143,9 @@ eval_lcd <- function(
 
   return(list(
     prop_inf       = prop_inf,
-    finite_loglik  = base_ll       - pen_total,
-    trimmed_loglik = base_trimmed  - pen_total
+    loglik         = base_ll - pen_total,
+    finite_loglik  = base_finite - pen_total,
+    med_loglik     = base_med - pen_total,
+    trimmed_loglik = base_trimmed - pen_total
   ))
 }
