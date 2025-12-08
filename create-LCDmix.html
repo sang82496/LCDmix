@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-11-11">
+<meta name="date" content="2025-12-07">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-11-11</h4>
+<h4 class="date">2025-12-07</h4>
 
 </div>
 
@@ -521,7 +521,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     biomass_test  = bin_mass,
     trim_prob     = trim_prob
   )
-  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
+  message(paste0("✔ Calculating loglikelihood complete: L = ", round(L$loglik, 6)) )
   
   #— Return all key results —#
   return(list(
@@ -2946,8 +2946,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir,
-  cv_by_trimmed = T
+  save_dir
 ) {
   seed_int &lt;- as.integer(seed)
   out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2988,23 +2987,18 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       log_msg &lt;- paste0(log_msg, "✖ Refit failed: ", err_msg)
       saveRDS(list(
         fit      = NULL,
+        fit_L    = NULL,
         log_msg  = log_msg
       ), file = out_path)
       return(FALSE)
     }
-  
-  if (cv_by_trimmed){
-    fit_L &lt;- as.numeric(fit$L$trimmed_loglik)
-    log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
+  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
-  } else {
-    fit_L &lt;- as.numeric(fit$L$med_loglik)
-    log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final med loglikelihood = ", 
-                      round(fit_L, 6), "\n")
-  }
   
   saveRDS(list(
       fit     = fit,
+      fit_L   = fit_L,
       log_msg = log_msg
     ), file = out_path)
   return(TRUE)
@@ -3077,8 +3071,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3096,7 +3089,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "cv_by_trimmed"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir"),
     envir = environment()
   )
 
@@ -3116,7 +3109,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, cv_by_trimmed = cv_by_trimmed)
+      save_dir = save_dir)
     return(res_ii)
   })
 
@@ -3129,13 +3122,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     file_name &lt;- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj &lt;- readRDS(file_name)
-    if (!is.null(obj$fit)) {
-      if (cv_by_trimmed) {
-        L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
-      } else {
-        L_vec[i]  &lt;- obj$fit$L$med_loglik
-      }
-      
+    if (!is.null(obj$fit_L)) {
+      L_vec[i]  &lt;- obj$fit_L
     }
   }
   
@@ -3148,15 +3136,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       best_fit = obj$fit
   }
   
-  if (cv_by_trimmed) {
-    return(list(summary = summary,
-              trimmed_loglik   = L_vec,
+  return(list(summary = summary,
+              loglik   = L_vec,
               best_fit = best_fit))
-  } else {
-    return(list(summary = summary,
-              med_loglik    = L_vec,
-              best_fit = best_fit))
-  }
 }</code></pre>
 <pre class="r"><code>#' Refit LCDmix across many simulations and record best files (no rereads)
 #'
@@ -3234,8 +3216,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3271,7 +3252,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir","cv_by_trimmed"),
+                "resp_threshold","trim_prob","base_dir"),
     envir = environment()
   )
 
@@ -3304,7 +3285,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, cv_by_trimmed = cv_by_trimmed)
+      save_dir = sim_refit_dir)
     return(res_ii)
     })
   
@@ -3329,12 +3310,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       file_name  &lt;- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj &lt;- readRDS(file_name)
-      if (!is.null(obj$fit)) {
-        if (cv_by_trimmed) {
-          L_vec[i]  &lt;- obj$fit$L$trimmed_loglik
-        } else {
-          L_vec[i]  &lt;- obj$fit$L$med_loglik
-        }
+      if (!is.null(obj$fit_L)) {
+        L_vec[i]  &lt;- fit_L
       }
     }
     
@@ -3342,11 +3319,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     best_table$best_idx[s] &lt;- seeds[which.max(L_vec)]
     best_table$loglike[s]  &lt;- max(L_vec)
   }
-  if (cv_by_trimmed) {
-    colnames(best_table)[5] = 'trimmed_loglik'
-  } else {
-    colnames(best_table)[5] = 'med_loglik'
-  }
+  colnames(best_table)[5] = 'loglik'
 
   return(list(grand_jobs = grand_jobs,
               summary    = summary,

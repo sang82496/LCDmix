@@ -15,8 +15,7 @@ refit_lcd_simul(
   resp_threshold = 0.001,
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 )
 }
 \arguments{

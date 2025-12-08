@@ -15,8 +15,7 @@ refit_onejob <- function(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir,
-  cv_by_trimmed = T
+  save_dir
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -57,23 +56,18 @@ refit_onejob <- function(
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
       saveRDS(list(
         fit      = NULL,
+        fit_L    = NULL,
         log_msg  = log_msg
       ), file = out_path)
       return(FALSE)
     }
-  
-  if (cv_by_trimmed){
-    fit_L <- as.numeric(fit$L$trimmed_loglik)
-    log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
+  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
-  } else {
-    fit_L <- as.numeric(fit$L$med_loglik)
-    log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final med loglikelihood = ", 
-                      round(fit_L, 6), "\n")
-  }
   
   saveRDS(list(
       fit     = fit,
+      fit_L   = fit_L,
       log_msg = log_msg
     ), file = out_path)
   return(TRUE)
