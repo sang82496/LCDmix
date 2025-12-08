@@ -159,6 +159,7 @@ cv_lcd_summary <- function(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
-    max_prop_inf = max(CVmat[, "eval_prop_inf"], na.rm = TRUE)
+    max_prop_inf = max(CVmat[, "eval_prop_inf"], na.rm = TRUE),
+    cv_by_trimmed = cv_by_trimmed
   ))
 }
