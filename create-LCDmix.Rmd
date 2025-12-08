@@ -2730,7 +2730,8 @@ cv_lcd_summary <- function(
     CVmat        = CVmat,
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
-    max_prop_inf = max(CVmat[, "eval_prop_inf"], na.rm = TRUE)
+    max_prop_inf = max(CVmat[, "eval_prop_inf"], na.rm = TRUE),
+    cv_by_trimmed = cv_by_trimmed
   ))
 }
 ```
@@ -3151,7 +3152,7 @@ refit_lcd_simul <- function(
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
       if (!is.null(obj$fit_L)) {
-        L_vec[i]  <- fit_L
+        L_vec[i]  <- obj$fit_L
       }
     }
     

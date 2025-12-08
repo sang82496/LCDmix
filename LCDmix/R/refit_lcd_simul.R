@@ -171,7 +171,7 @@ refit_lcd_simul <- function(
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
       if (!is.null(obj$fit_L)) {
-        L_vec[i]  <- fit_L
+        L_vec[i]  <- obj$fit_L
       }
     }
     
