@@ -68,8 +68,7 @@ refit_lcd <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -87,7 +86,7 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "cv_by_trimmed"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir"),
     envir = environment()
   )
 
@@ -107,7 +106,7 @@ refit_lcd <- function(
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, cv_by_trimmed = cv_by_trimmed)
+      save_dir = save_dir)
     return(res_ii)
   })
 
@@ -120,13 +119,8 @@ refit_lcd <- function(
     file_name <- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj <- readRDS(file_name)
-    if (!is.null(obj$fit)) {
-      if (cv_by_trimmed) {
-        L_vec[i]  <- obj$fit$L$trimmed_loglik
-      } else {
-        L_vec[i]  <- obj$fit$L$med_loglik
-      }
-      
+    if (!is.null(obj$fit_L)) {
+      L_vec[i]  <- obj$fit_L
     }
   }
   
@@ -139,13 +133,7 @@ refit_lcd <- function(
       best_fit = obj$fit
   }
   
-  if (cv_by_trimmed) {
-    return(list(summary = summary,
-              trimmed_loglik   = L_vec,
+  return(list(summary = summary,
+              loglik   = L_vec,
               best_fit = best_fit))
-  } else {
-    return(list(summary = summary,
-              med_loglik    = L_vec,
-              best_fit = best_fit))
-  }
 }

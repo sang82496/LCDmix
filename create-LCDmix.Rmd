@@ -192,7 +192,7 @@ main <- function(
     biomass_test  = bin_mass,
     trim_prob     = trim_prob
   )
-  message(paste0("✔ Calculating loglikelihood complete: trimmed L = ", round(L$trimmed_loglik, 6)) )
+  message(paste0("✔ Calculating loglikelihood complete: L = ", round(L$loglik, 6)) )
   
   #— Return all key results —#
   return(list(
@@ -2773,8 +2773,7 @@ refit_onejob <- function(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir,
-  cv_by_trimmed = T
+  save_dir
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2815,23 +2814,18 @@ refit_onejob <- function(
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
       saveRDS(list(
         fit      = NULL,
+        fit_L    = NULL,
         log_msg  = log_msg
       ), file = out_path)
       return(FALSE)
     }
-  
-  if (cv_by_trimmed){
-    fit_L <- as.numeric(fit$L$trimmed_loglik)
-    log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final trimmed loglikelihood = ", 
+  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
-  } else {
-    fit_L <- as.numeric(fit$L$med_loglik)
-    log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final med loglikelihood = ", 
-                      round(fit_L, 6), "\n")
-  }
   
   saveRDS(list(
       fit     = fit,
+      fit_L   = fit_L,
       log_msg = log_msg
     ), file = out_path)
   return(TRUE)
@@ -2911,8 +2905,7 @@ refit_lcd <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -2930,7 +2923,7 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "cv_by_trimmed"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir"),
     envir = environment()
   )
 
@@ -2950,7 +2943,7 @@ refit_lcd <- function(
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, cv_by_trimmed = cv_by_trimmed)
+      save_dir = save_dir)
     return(res_ii)
   })
 
@@ -2963,13 +2956,8 @@ refit_lcd <- function(
     file_name <- file.path(save_dir, sprintf("refit_%d.rds", sd))
     if (!file.exists(file_name)) next
     obj <- readRDS(file_name)
-    if (!is.null(obj$fit)) {
-      if (cv_by_trimmed) {
-        L_vec[i]  <- obj$fit$L$trimmed_loglik
-      } else {
-        L_vec[i]  <- obj$fit$L$med_loglik
-      }
-      
+    if (!is.null(obj$fit_L)) {
+      L_vec[i]  <- obj$fit_L
     }
   }
   
@@ -2982,15 +2970,9 @@ refit_lcd <- function(
       best_fit = obj$fit
   }
   
-  if (cv_by_trimmed) {
-    return(list(summary = summary,
-              trimmed_loglik   = L_vec,
+  return(list(summary = summary,
+              loglik   = L_vec,
               best_fit = best_fit))
-  } else {
-    return(list(summary = summary,
-              med_loglik    = L_vec,
-              best_fit = best_fit))
-  }
 }
 ```
 
@@ -3074,8 +3056,7 @@ refit_lcd_simul <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max",
-  cv_by_trimmed = T
+  n_cores = "max"
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -3111,7 +3092,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir","cv_by_trimmed"),
+                "resp_threshold","trim_prob","base_dir"),
     envir = environment()
   )
 
@@ -3144,7 +3125,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, cv_by_trimmed = cv_by_trimmed)
+      save_dir = sim_refit_dir)
     return(res_ii)
     })
   
@@ -3169,12 +3150,8 @@ refit_lcd_simul <- function(
       file_name  <- file.path(sim_refit_dir, sprintf("refit_%d.rds", sd))
       if (!file.exists(file_name)) next
       obj <- readRDS(file_name)
-      if (!is.null(obj$fit)) {
-        if (cv_by_trimmed) {
-          L_vec[i]  <- obj$fit$L$trimmed_loglik
-        } else {
-          L_vec[i]  <- obj$fit$L$med_loglik
-        }
+      if (!is.null(obj$fit_L)) {
+        L_vec[i]  <- fit_L
       }
     }
     
@@ -3182,11 +3159,7 @@ refit_lcd_simul <- function(
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
     best_table$loglike[s]  <- max(L_vec)
   }
-  if (cv_by_trimmed) {
-    colnames(best_table)[5] = 'trimmed_loglik'
-  } else {
-    colnames(best_table)[5] = 'med_loglik'
-  }
+  colnames(best_table)[5] = 'loglik'
 
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
