@@ -64,6 +64,7 @@ cv_lcd_summary <- function(
     index_matrix        = index_matrix,
     fit_trimmed_loglik  = rep(NA_real_, n_runs),
     fit_med_loglik      = rep(NA_real_, n_runs),
+    fit_loglik          = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
     eval_med_loglik     = rep(NA_real_, n_runs)
@@ -91,6 +92,7 @@ cv_lcd_summary <- function(
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
     CVmat[i, "fit_med_loglik"]      <- mat$fit_med_loglik
+    CVmat[i, "fit_loglik"]          <- mat$fit_loglik
     CVmat[i, "eval_prop_inf"]       <- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
     CVmat[i, "eval_med_loglik"]     <- mat$eval_med_loglik

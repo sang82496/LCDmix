@@ -124,6 +124,7 @@ cv_lcd_onejob <- function(
       eval_trimmed_loglik = eval_res$trimmed_loglik,
       eval_finite_loglik  = eval_res$finite_loglik,
       eval_med_loglik     = eval_res$med_loglik,
+      fit_loglik          = fit$L$loglik,
       fit_trimmed_loglik  = fit$L$trimmed_loglik,
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,

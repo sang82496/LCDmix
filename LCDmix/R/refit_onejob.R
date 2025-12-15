@@ -61,7 +61,7 @@ refit_onejob <- function(
       ), file = out_path)
       return(FALSE)
     }
-  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  fit_L = as.numeric(fit$L$loglik)
   log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
   
