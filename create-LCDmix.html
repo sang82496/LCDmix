@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-12-07">
+<meta name="date" content="2025-12-14">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-12-07</h4>
+<h4 class="date">2025-12-14</h4>
 
 </div>
 
@@ -2456,6 +2456,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       eval_trimmed_loglik = eval_res$trimmed_loglik,
       eval_finite_loglik  = eval_res$finite_loglik,
       eval_med_loglik     = eval_res$med_loglik,
+      fit_loglik          = fit$L$loglik,
       fit_trimmed_loglik  = fit$L$trimmed_loglik,
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
@@ -2823,6 +2824,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     index_matrix        = index_matrix,
     fit_trimmed_loglik  = rep(NA_real_, n_runs),
     fit_med_loglik      = rep(NA_real_, n_runs),
+    fit_loglik          = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
     eval_med_loglik     = rep(NA_real_, n_runs)
@@ -2850,6 +2852,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  &lt;- mat$fit_trimmed_loglik
     CVmat[i, "fit_med_loglik"]      &lt;- mat$fit_med_loglik
+    CVmat[i, "fit_loglik"]          &lt;- mat$fit_loglik
     CVmat[i, "eval_prop_inf"]       &lt;- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] &lt;- mat$eval_trimmed_loglik
     CVmat[i, "eval_med_loglik"]     &lt;- mat$eval_med_loglik
@@ -2993,7 +2996,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       ), file = out_path)
       return(FALSE)
     }
-  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  fit_L = as.numeric(fit$L$loglik)
   log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
   
@@ -3301,6 +3304,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     loglike        = NA_real_,
     stringsAsFactors = FALSE
   )
+  loglik_lst = list()
 
   for (s in seq_len(num_sims)) {
     sim_refit_dir &lt;- file.path(base_dir, sprintf("sim_%d", s), "refit")
@@ -3315,6 +3319,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         L_vec[i]  &lt;- obj$fit_L
       }
     }
+    loglik_lst[[s]] = L_vec
     
     if (all(!is.finite(L_vec))) next
     best_table$best_idx[s] &lt;- seeds[which.max(L_vec)]
@@ -3324,6 +3329,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
+              loglik_lst = loglik_lst,
               best_table = best_table))
 }</code></pre>
 <pre class="r"><code>#' @export

@@ -160,6 +160,7 @@ refit_lcd_simul <- function(
     loglike        = NA_real_,
     stringsAsFactors = FALSE
   )
+  loglik_lst = list()
 
   for (s in seq_len(num_sims)) {
     sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
@@ -174,6 +175,7 @@ refit_lcd_simul <- function(
         L_vec[i]  <- obj$fit_L
       }
     }
+    loglik_lst[[s]] = L_vec
     
     if (all(!is.finite(L_vec))) next
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
@@ -183,5 +185,6 @@ refit_lcd_simul <- function(
 
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
+              loglik_lst = loglik_lst,
               best_table = best_table))
 }

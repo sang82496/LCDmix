@@ -2252,6 +2252,7 @@ cv_lcd_onejob <- function(
       eval_trimmed_loglik = eval_res$trimmed_loglik,
       eval_finite_loglik  = eval_res$finite_loglik,
       eval_med_loglik     = eval_res$med_loglik,
+      fit_loglik          = fit$L$loglik,
       fit_trimmed_loglik  = fit$L$trimmed_loglik,
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
@@ -2635,6 +2636,7 @@ cv_lcd_summary <- function(
     index_matrix        = index_matrix,
     fit_trimmed_loglik  = rep(NA_real_, n_runs),
     fit_med_loglik      = rep(NA_real_, n_runs),
+    fit_loglik          = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
     eval_med_loglik     = rep(NA_real_, n_runs)
@@ -2662,6 +2664,7 @@ cv_lcd_summary <- function(
     mat = readRDS(file_name)
     CVmat[i, "fit_trimmed_loglik"]  <- mat$fit_trimmed_loglik
     CVmat[i, "fit_med_loglik"]      <- mat$fit_med_loglik
+    CVmat[i, "fit_loglik"]          <- mat$fit_loglik
     CVmat[i, "eval_prop_inf"]       <- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
     CVmat[i, "eval_med_loglik"]     <- mat$eval_med_loglik
@@ -2820,7 +2823,7 @@ refit_onejob <- function(
       ), file = out_path)
       return(FALSE)
     }
-  fit_L = as.numeric(tail(fit$iter$Q, 1))
+  fit_L = as.numeric(fit$L$loglik)
   log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
   
@@ -3141,6 +3144,7 @@ refit_lcd_simul <- function(
     loglike        = NA_real_,
     stringsAsFactors = FALSE
   )
+  loglik_lst = list()
 
   for (s in seq_len(num_sims)) {
     sim_refit_dir <- file.path(base_dir, sprintf("sim_%d", s), "refit")
@@ -3155,6 +3159,7 @@ refit_lcd_simul <- function(
         L_vec[i]  <- obj$fit_L
       }
     }
+    loglik_lst[[s]] = L_vec
     
     if (all(!is.finite(L_vec))) next
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
@@ -3164,6 +3169,7 @@ refit_lcd_simul <- function(
 
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
+              loglik_lst = loglik_lst,
               best_table = best_table))
 }
 ```
