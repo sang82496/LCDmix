@@ -87,6 +87,7 @@ cv_lcd_onejob <- function(
         eval_trimmed_loglik = NA_real_,
         eval_finite_loglik  = NA_real_,
         eval_med_loglik     = NA_real_,
+        fit_loglik          = NA_real_,
         fit_trimmed_loglik  = NA_real_,
         fit_med_loglik      = NA_real_,
         theta_spars         = NA_real_,
