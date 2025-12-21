@@ -67,7 +67,10 @@ cv_lcd_summary <- function(
     fit_loglik          = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
-    eval_med_loglik     = rep(NA_real_, n_runs)
+    eval_med_loglik     = rep(NA_real_, n_runs),
+    eval_penalty        = rep(NA_real_, n_runs),
+    eval_w              = rep(NA_real_, n_runs),
+    eval_trimmed_w      = rep(NA_real_, n_runs)
   )
   CVmat <- as.data.frame(CVmat)
   
@@ -96,6 +99,9 @@ cv_lcd_summary <- function(
     CVmat[i, "eval_prop_inf"]       <- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] <- mat$eval_trimmed_loglik
     CVmat[i, "eval_med_loglik"]     <- mat$eval_med_loglik
+    CVmat[i, "eval_penalty"]        <- mat$eval_penalty
+    CVmat[i, "eval_w"]              <- mat$eval_w
+    CVmat[i, "eval_trimmed_w"]      <- mat$eval_trimmed_w
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik

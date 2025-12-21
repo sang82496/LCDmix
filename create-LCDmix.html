@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2025-12-14">
+<meta name="date" content="2025-12-20">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2025-12-14</h4>
+<h4 class="date">2025-12-20</h4>
 
 </div>
 
@@ -2234,11 +2234,14 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # All -Inf → return early
   if (!any(finite_mask)) {
     return(list(
-      prop_inf       = 1,
-      loglik         = -Inf,
-      finite_loglik  = -Inf,
-      med_loglik     = -Inf,
-      trimmed_loglik = -Inf
+      prop_inf        = 1,
+      loglik          = -Inf,
+      finite_loglik   = -Inf,
+      med_loglik      = -Inf,
+      trimmed_loglik  = -Inf,
+      penalty         = NA_real_,
+      sum_w           = NA_real_,
+      sum_trimmed_w   = NA_real_,
     ))
   }
 
@@ -2260,14 +2263,17 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   # L1 penalties (exclude α intercept column)
   l1_alpha  &lt;- sum(abs(alpha[, -1]))
   l1_theta  &lt;- sum(abs(unlist(slopes)))
-  pen_total &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+  penalty &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
   return(list(
-    prop_inf       = prop_inf,
-    loglik         = base_ll - pen_total,
-    finite_loglik  = base_finite - pen_total,
-    med_loglik     = base_med - pen_total,
-    trimmed_loglik = base_trimmed - pen_total
+    prop_inf            = prop_inf,
+    loglik              = base_ll - penalty,
+    finite_loglik       = base_finite - penalty,
+    med_loglik          = base_med - penalty,
+    trimmed_loglik      = base_trimmed - penalty,
+    penalty             = penalty,
+    sum_w               = sum(weights),
+    sum_trimmed_w       = sum(weights[keep_idx])
   ))
 }</code></pre>
 <pre class="r"><code>#' Create a cross-validation index matrix (folds × seeds × penalty grids)
@@ -2419,6 +2425,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         eval_trimmed_loglik = NA_real_,
         eval_finite_loglik  = NA_real_,
         eval_med_loglik     = NA_real_,
+        eval_penalty        = NA_real_,
+        eval_w              = NA_real_,
+        eval_trimmed_w      = NA_real_,
         fit_loglik          = NA_real_,
         fit_trimmed_loglik  = NA_real_,
         fit_med_loglik      = NA_real_,
@@ -2454,9 +2463,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   saveRDS(
     list(
       eval_prop_inf       = eval_res$prop_inf,
-      eval_trimmed_loglik = eval_res$trimmed_loglik,
-      eval_finite_loglik  = eval_res$finite_loglik,
-      eval_med_loglik     = eval_res$med_loglik,
+      eval_trimmed_loglik = eval_res$trimmed_loglik + eval_res$penalty,
+      eval_finite_loglik  = eval_res$finite_loglik + eval_res$penalty,
+      eval_med_loglik     = eval_res$med_loglik + eval_res$penalty,
+      eval_penalty        = eval_res$penalty,
+      eval_w              = eval_res$sum_w,
+      eval_trimmed_w      = eval_res$sum_trimmed_w,
       fit_loglik          = fit$L$loglik,
       fit_trimmed_loglik  = fit$L$trimmed_loglik,
       fit_med_loglik      = fit$L$med_loglik,
@@ -2828,7 +2840,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     fit_loglik          = rep(NA_real_, n_runs),
     eval_prop_inf       = rep(NA_real_, n_runs),
     eval_trimmed_loglik = rep(NA_real_, n_runs),
-    eval_med_loglik     = rep(NA_real_, n_runs)
+    eval_med_loglik     = rep(NA_real_, n_runs),
+    eval_penalty        = rep(NA_real_, n_runs),
+    eval_w              = rep(NA_real_, n_runs),
+    eval_trimmed_w      = rep(NA_real_, n_runs)
   )
   CVmat &lt;- as.data.frame(CVmat)
   
@@ -2857,6 +2872,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     CVmat[i, "eval_prop_inf"]       &lt;- mat$eval_prop_inf 
     CVmat[i, "eval_trimmed_loglik"] &lt;- mat$eval_trimmed_loglik
     CVmat[i, "eval_med_loglik"]     &lt;- mat$eval_med_loglik
+    CVmat[i, "eval_penalty"]        &lt;- mat$eval_penalty
+    CVmat[i, "eval_w"]              &lt;- mat$eval_w
+    CVmat[i, "eval_trimmed_w"]      &lt;- mat$eval_trimmed_w
   }
   
   ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
@@ -2997,7 +3015,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       ), file = out_path)
       return(FALSE)
     }
-  fit_L = as.numeric(fit$L$loglik)
+  fit_L = as.numeric(fit$L$loglik + fit$L$penalty) # unpenalized loglik
   log_msg &lt;- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
                       round(fit_L, 6), "\n")
   
@@ -3323,6 +3341,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     loglik_lst[[s]] = L_vec
     
     if (all(!is.finite(L_vec))) next
+    
+    L_vec[!is.finite(L_vec)] &lt;- -Inf   # handles NA and NaN
     best_table$best_idx[s] &lt;- seeds[which.max(L_vec)]
     best_table$loglike[s]  &lt;- max(L_vec)
   }

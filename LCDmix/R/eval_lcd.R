@@ -110,11 +110,14 @@ eval_lcd <- function(
   # All -Inf → return early
   if (!any(finite_mask)) {
     return(list(
-      prop_inf       = 1,
-      loglik         = -Inf,
-      finite_loglik  = -Inf,
-      med_loglik     = -Inf,
-      trimmed_loglik = -Inf
+      prop_inf        = 1,
+      loglik          = -Inf,
+      finite_loglik   = -Inf,
+      med_loglik      = -Inf,
+      trimmed_loglik  = -Inf,
+      penalty         = NA_real_,
+      sum_w           = NA_real_,
+      sum_trimmed_w   = NA_real_,
     ))
   }
 
@@ -136,13 +139,16 @@ eval_lcd <- function(
   # L1 penalties (exclude α intercept column)
   l1_alpha  <- sum(abs(alpha[, -1]))
   l1_theta  <- sum(abs(unlist(slopes)))
-  pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+  penalty <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
   return(list(
-    prop_inf       = prop_inf,
-    loglik         = base_ll - pen_total,
-    finite_loglik  = base_finite - pen_total,
-    med_loglik     = base_med - pen_total,
-    trimmed_loglik = base_trimmed - pen_total
+    prop_inf            = prop_inf,
+    loglik              = base_ll - penalty,
+    finite_loglik       = base_finite - penalty,
+    med_loglik          = base_med - penalty,
+    trimmed_loglik      = base_trimmed - penalty,
+    penalty             = penalty,
+    sum_w               = sum(weights),
+    sum_trimmed_w       = sum(weights[keep_idx])
   ))
 }
