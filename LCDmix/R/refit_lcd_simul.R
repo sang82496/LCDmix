@@ -178,6 +178,8 @@ refit_lcd_simul <- function(
     loglik_lst[[s]] = L_vec
     
     if (all(!is.finite(L_vec))) next
+    
+    L_vec[!is.finite(L_vec)] <- -Inf   # handles NA and NaN
     best_table$best_idx[s] <- seeds[which.max(L_vec)]
     best_table$loglike[s]  <- max(L_vec)
   }
