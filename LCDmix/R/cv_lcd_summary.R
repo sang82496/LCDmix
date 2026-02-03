@@ -56,7 +56,8 @@
 cv_lcd_summary <- function(
   index_matrix,
   save_dir = "./cv_saves",
-  cv_by_trimmed = T
+  cv_by_trimmed = T,
+  equal_w = T
 ) {
   n_runs <- nrow(index_matrix)
   # Initialize CV matrix with placeholders
@@ -103,8 +104,7 @@ cv_lcd_summary <- function(
     CVmat[i, "eval_w"]              <- mat$eval_w
     CVmat[i, "eval_trimmed_w"]      <- mat$eval_trimmed_w
   }
-  
-  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_trimmed_loglik
+  ## 4) For each (alpha_idx, theta_idx, fold_idx), keep the row with largest fit_loglik
   gid <- interaction(CVmat$alpha_idx, CVmat$theta_idx, CVmat$fold_idx, drop = TRUE)
   row_groups <- split(seq_len(nrow(CVmat)), gid)
   
@@ -117,24 +117,37 @@ cv_lcd_summary <- function(
   pick_idx <- vapply(row_groups, function(idx) {
     v <- pick[idx]
     if (all(!is.finite(v))) return(NA_integer_)  # no usable value in this group
-    idx[which.max(v)]                 # pick the row index with max trimmed_loglik
+    idx[which.max(v)]                 # pick the row index with max loglik
   }, integer(1L))
   
   selected <- CVmat[pick_idx[!is.na(pick_idx)], , drop = FALSE]
   
+  # Group selected rows by (alpha_idx, theta_idx)
+  gid2 <- interaction(selected$alpha_idx, selected$theta_idx, drop = TRUE)
+  row_groups2 <- split(seq_len(nrow(selected)), gid2)
+
   ## 5) Average those per-fold maxima across folds → cv_score per (alpha,theta)
-  if (cv_by_trimmed) {
-    best_by_combo <- aggregate(
-    eval_trimmed_loglik ~ alpha_idx + theta_idx,
-    data = selected,
-    FUN  = function(x) mean(x, na.rm = TRUE)) 
-  } else {
-    best_by_combo <- aggregate(
-    eval_med_loglik ~ alpha_idx + theta_idx,
-    data = selected,
-    FUN  = function(x) mean(x, na.rm = TRUE)) 
-  }
-  names(best_by_combo)[3] <- "cv_score"
+  cv_score <- vapply(row_groups2, function(idx) {
+    if (equal_w) {
+      if (cv_by_trimmed) {
+        mean(selected$eval_trimmed_loglik[idx], na.rm = TRUE)
+      } else {
+        mean(selected$eval_med_loglik[idx], na.rm = TRUE)
+      }
+    } else {
+      if (cv_by_trimmed) {
+        weighted.mean(selected$eval_trimmed_loglik[idx], selected$eval_trimmed_w[idx], na.rm = TRUE)
+      } else {
+        weighted.mean(selected$eval_med_loglik[idx], selected$eval_w[idx], na.rm = TRUE)
+      }
+    }
+  }, double(1L))
+  
+  mat <- cbind(
+    do.call(rbind, lapply(strsplit(names(row_groups2), "[.]"), as.numeric)),
+    cv_score
+  )
+  colnames(mat)[1:2] <- c("alpha_idx", "theta_idx")
   
   ## 6) Unique lambda values per combo (from the original matrix)
   unique_lams <- unique(CVmat[, c("alpha_idx","theta_idx","lambda_alpha","lambda_theta")])
@@ -143,25 +156,22 @@ cv_lcd_summary <- function(
   if (cv_by_trimmed) {
     counts_df <- aggregate(
       I(is.finite(eval_trimmed_loglik) & is.finite(fit_trimmed_loglik)) ~ alpha_idx + theta_idx,
-      data = CVmat,
-      FUN  = sum)
+      data = CVmat, FUN  = sum)
   } else {
     counts_df <- aggregate(
       I(is.finite(eval_med_loglik) & is.finite(fit_med_loglik)) ~ alpha_idx + theta_idx,
-      data = CVmat,
-      FUN  = sum)
+      data = CVmat, FUN  = sum)
   }
   names(counts_df)[3] <- "counts"
   
-  ## 8) Merge & sort  (unchanged except for the new column name)
-  reduced_mat <- merge(unique_lams, best_by_combo, by = c("alpha_idx","theta_idx"), all.x = TRUE)
+  ## 8) cbind
+  reduced_mat <- merge(unique_lams, mat, by = c("alpha_idx","theta_idx"), all.x = TRUE)
   reduced_mat <- merge(reduced_mat, counts_df, by = c("alpha_idx","theta_idx"), all.x = TRUE)
-
+  
   ## 9) Pick optimal lambdas
   score_vec <- reduced_mat$cv_score
   score_vec[!is.finite(score_vec)] <- -Inf   # handles NA and NaN
-  opt_row <- which.max(score_vec)
-  opt_lambdas <- as.numeric(reduced_mat[opt_row, c("lambda_alpha", "lambda_theta")])
+  opt_lambdas <- as.numeric(reduced_mat[which.max(score_vec), c("lambda_alpha", "lambda_theta")])
 
   return(list(
     CVmat        = CVmat,
