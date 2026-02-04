@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-02-02">
+<meta name="date" content="2026-02-04">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-02-02</h4>
+<h4 class="date">2026-02-04</h4>
 
 </div>
 
@@ -2951,7 +2951,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     reduced_mat  = as.matrix(reduced_mat),
     opt_lambdas  = opt_lambdas,
     max_prop_inf = max(CVmat[, "eval_prop_inf"], na.rm = TRUE),
-    cv_by_trimmed = cv_by_trimmed
+    cv_by_trimmed = cv_by_trimmed,
+    equal_w       = equal_w
   ))
 }</code></pre>
 <pre class="r"><code>#' @export
