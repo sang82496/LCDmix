@@ -93,7 +93,8 @@ cv_lcd_simul <- function(
   trim_prob      = 0.03,
   blocksize      = 10,
   base_dir       = "./cv_saves",
-  n_cores        = "max"
+  n_cores        = "max",
+  lp_time_limit  = 600
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -178,17 +179,18 @@ cv_lcd_simul <- function(
 
     # run one CV job; cv_lcd_onejob writes its own RDS and returns a log string
     res_ii = cv_lcd_onejob(
-        job        = job,
-        Y_bin      = Y_bin,
-        X          = X,
-        bin_mass   = bin_mass,
-        folds      = folds,
-        K          = K,
-        max_iter   = max_iter,
-        iter_eta   = iter_eta,
+        job            = job,
+        Y_bin          = Y_bin,
+        X              = X,
+        bin_mass       = bin_mass,
+        folds          = folds,
+        K              = K,
+        max_iter       = max_iter,
+        iter_eta       = iter_eta,
         resp_threshold = resp_threshold,
-        trim_prob  = trim_prob,
-        save_dir   = sim_dir
+        trim_prob      = trim_prob,
+        save_dir       = sim_dir,
+        lp_time_limit  = lp_time_limit
       )
       return(res_ii)
   })

@@ -55,7 +55,8 @@ mstep_theta <- function(
   idx,
   intercepts,
   slopes,
-  lambda_theta
+  lambda_theta,
+  lp_time_limit = 3600
 ) {
   K <- length(densities)
   theta0_new <- vector("list", K)
@@ -72,7 +73,8 @@ mstep_theta <- function(
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
-      component           = k
+      component           = k,
+      lp_time_limit       = lp_time_limit
     )
     theta0_new[[k]] <- tmp$theta0_k
     theta_new[[k]]  <- tmp$theta_k

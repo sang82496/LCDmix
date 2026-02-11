@@ -15,7 +15,8 @@ iteration(
   max_iter = 30,
   resp_threshold = 0.001,
   calc_Q_every = FALSE,
-  debug = FALSE
+  debug = FALSE,
+  lp_time_limit = 3600
 )
 }
 \arguments{

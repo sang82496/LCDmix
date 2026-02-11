@@ -129,7 +129,8 @@ main <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,
-  debug          = FALSE
+  debug          = FALSE,
+  lp_time_limit  = 3600
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -166,7 +167,8 @@ main <- function(
     max_iter,
     resp_threshold,
     calc_Q_every,
-    debug
+    debug,
+    lp_time_limit
   )
   
   if (debug && !is.null(iter_res$error)) {
@@ -1040,7 +1042,8 @@ iteration <- function(
   max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
-  debug          = FALSE
+  debug          = FALSE,
+  lp_time_limit  = 3600
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -1117,7 +1120,8 @@ iteration <- function(
       idx                 = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
-      lambda_theta        = lambda_theta
+      lambda_theta        = lambda_theta,
+      lp_time_limit       = lp_time_limit
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta
@@ -1482,7 +1486,8 @@ mstep_theta <- function(
   idx,
   intercepts,
   slopes,
-  lambda_theta
+  lambda_theta,
+  lp_time_limit = 3600
 ) {
   K <- length(densities)
   theta0_new <- vector("list", K)
@@ -1499,7 +1504,8 @@ mstep_theta <- function(
       intercept_k         = intercepts[[k]],
       slopes_k            = slopes[[k]],
       lambda_theta        = lambda_theta,
-      component           = k
+      component           = k,
+      lp_time_limit       = lp_time_limit
     )
     theta0_new[[k]] <- tmp$theta0_k
     theta_new[[k]]  <- tmp$theta_k
@@ -1556,7 +1562,8 @@ mstep_theta_lp <- function(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component
+  component,
+  lp_time_limit = 3600
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -1656,7 +1663,7 @@ mstep_theta_lp <- function(
     dir = const_dir, 
     rhs = const_vec,  
     max = TRUE,
-    time_limit = 3600)
+    time_limit = lp_time_limit)
   
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
@@ -2159,6 +2166,7 @@ cv_lcd_onejob <- function(
   resp_threshold, 
   trim_prob,
   save_dir,
+  lp_time_limit = 3600,
   sparsity_eps = 1e-6
 ) {
   alpha_idx     <- job[["alpha_idx"]]
@@ -2204,7 +2212,8 @@ cv_lcd_onejob <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE
+        debug           = TRUE,
+        lp_time_limit   = lp_time_limit
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -2300,7 +2309,8 @@ cv_lcd <- function(
   save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 20
+  blocksize          = 20,
+  lp_time_limit      = 3600
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -2355,17 +2365,18 @@ cv_lcd <- function(
       }
 
       res_ii = cv_lcd_onejob(
-        job       = job,
-        Y_bin     = Y_bin,
-        X         = X,
-        bin_mass  = bin_mass,
-        folds     = folds,
-        K         = K,
-        max_iter  = max_iter,
-        iter_eta  = iter_eta,
+        job            = job,
+        Y_bin          = Y_bin,
+        X              = X,
+        bin_mass       = bin_mass,
+        folds          = folds,
+        K              = K,
+        max_iter       = max_iter,
+        iter_eta       = iter_eta,
         resp_threshold = resp_threshold,
-        trim_prob = trim_prob,
-        save_dir  = save_dir
+        trim_prob      = trim_prob,
+        save_dir       = save_dir,
+        lp_time_limit  = lp_time_limit
       )
       return(res_ii)
     }
@@ -2474,7 +2485,8 @@ cv_lcd_simul <- function(
   trim_prob      = 0.03,
   blocksize      = 10,
   base_dir       = "./cv_saves",
-  n_cores        = "max"
+  n_cores        = "max",
+  lp_time_limit  = 600
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -2559,17 +2571,18 @@ cv_lcd_simul <- function(
 
     # run one CV job; cv_lcd_onejob writes its own RDS and returns a log string
     res_ii = cv_lcd_onejob(
-        job        = job,
-        Y_bin      = Y_bin,
-        X          = X,
-        bin_mass   = bin_mass,
-        folds      = folds,
-        K          = K,
-        max_iter   = max_iter,
-        iter_eta   = iter_eta,
+        job            = job,
+        Y_bin          = Y_bin,
+        X              = X,
+        bin_mass       = bin_mass,
+        folds          = folds,
+        K              = K,
+        max_iter       = max_iter,
+        iter_eta       = iter_eta,
         resp_threshold = resp_threshold,
-        trim_prob  = trim_prob,
-        save_dir   = sim_dir
+        trim_prob      = trim_prob,
+        save_dir       = sim_dir,
+        lp_time_limit  = lp_time_limit
       )
       return(res_ii)
   })
@@ -2807,7 +2820,8 @@ refit_onejob <- function(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir
+  save_dir,
+  lp_time_limit
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -2835,7 +2849,8 @@ refit_onejob <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE
+        debug           = TRUE,
+        lp_time_limit   = lp_time_limit
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -2939,7 +2954,8 @@ refit_lcd <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
-  n_cores = "max"
+  n_cores = "max",
+  lp_time_limit = 3600
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -2977,7 +2993,7 @@ refit_lcd <- function(
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir)
+      save_dir = save_dir, lp_time_limit = lp_time_limit)
     return(res_ii)
   })
 
@@ -3090,7 +3106,8 @@ refit_lcd_simul <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max"
+  n_cores = "max",
+  lp_time_limit = 600
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -3159,7 +3176,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit)
     return(res_ii)
     })
   
@@ -3367,7 +3384,7 @@ simulate_and_save <- function(
   noisetype  = 'gaussian',
   df         = NULL,
   skew_alphas = NULL,
-  laplace_scales     = NULL,
+  laplace_scales     = 1,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -3400,7 +3417,6 @@ simulate_and_save <- function(
     }
     
   } else if (noisetype == 'laplace'){
-    assertthat::assert_that(!is.null(laplace_scales))
     jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, laplace_scale = laplace_scales, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]

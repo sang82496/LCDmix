@@ -76,7 +76,8 @@ refit_lcd_simul <- function(
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
-  n_cores = "max"
+  n_cores = "max",
+  lp_time_limit = 600
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -145,7 +146,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit)
     return(res_ii)
     })
   

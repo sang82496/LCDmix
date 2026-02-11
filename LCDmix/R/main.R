@@ -60,7 +60,8 @@ main <- function(
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,
-  debug          = FALSE
+  debug          = FALSE,
+  lp_time_limit  = 3600
 ) {
   #— Step 1: Binning (if needed) —#
   if (binned) {
@@ -97,7 +98,8 @@ main <- function(
     max_iter,
     resp_threshold,
     calc_Q_every,
-    debug
+    debug,
+    lp_time_limit
   )
   
   if (debug && !is.null(iter_res$error)) {

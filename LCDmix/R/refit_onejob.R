@@ -15,7 +15,8 @@ refit_onejob <- function(
   iter_eta,
   resp_threshold,
   trim_prob,
-  save_dir
+  save_dir,
+  lp_time_limit
 ) {
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
@@ -43,7 +44,8 @@ refit_onejob <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE
+        debug           = TRUE,
+        lp_time_limit   = lp_time_limit
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),

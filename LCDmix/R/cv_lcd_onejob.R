@@ -25,6 +25,7 @@ cv_lcd_onejob <- function(
   resp_threshold, 
   trim_prob,
   save_dir,
+  lp_time_limit = 3600,
   sparsity_eps = 1e-6
 ) {
   alpha_idx     <- job[["alpha_idx"]]
@@ -70,7 +71,8 @@ cv_lcd_onejob <- function(
         iter_eta        = iter_eta,
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
-        debug           = TRUE
+        debug           = TRUE,
+        lp_time_limit   = lp_time_limit
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),

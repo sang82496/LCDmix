@@ -17,7 +17,8 @@ cv_lcd <- function(
   save_dir           = "./cv_saves",
   n_cores            = "max",
   cv_reps            = NULL,
-  blocksize          = 20
+  blocksize          = 20,
+  lp_time_limit      = 3600
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -72,17 +73,18 @@ cv_lcd <- function(
       }
 
       res_ii = cv_lcd_onejob(
-        job       = job,
-        Y_bin     = Y_bin,
-        X         = X,
-        bin_mass  = bin_mass,
-        folds     = folds,
-        K         = K,
-        max_iter  = max_iter,
-        iter_eta  = iter_eta,
+        job            = job,
+        Y_bin          = Y_bin,
+        X              = X,
+        bin_mass       = bin_mass,
+        folds          = folds,
+        K              = K,
+        max_iter       = max_iter,
+        iter_eta       = iter_eta,
         resp_threshold = resp_threshold,
-        trim_prob = trim_prob,
-        save_dir  = save_dir
+        trim_prob      = trim_prob,
+        save_dir       = save_dir,
+        lp_time_limit  = lp_time_limit
       )
       return(res_ii)
     }

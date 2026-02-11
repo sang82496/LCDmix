@@ -14,7 +14,8 @@ mstep_theta_lp(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component
+  component,
+  lp_time_limit = 3600
 )
 }
 \arguments{
