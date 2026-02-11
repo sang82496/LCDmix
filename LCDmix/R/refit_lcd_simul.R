@@ -113,7 +113,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir"),
+                "resp_threshold","trim_prob","base_dir", "lp_time_limit"),
     envir = environment()
   )
 

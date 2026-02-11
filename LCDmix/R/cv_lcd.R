@@ -46,7 +46,7 @@ cv_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","folds","index_matrix"),
+                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit"),
     envir = environment()
   )
 

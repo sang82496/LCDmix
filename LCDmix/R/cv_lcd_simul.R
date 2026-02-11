@@ -136,7 +136,7 @@ cv_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
-                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold"),
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit"),
     envir = environment()
   )
 
