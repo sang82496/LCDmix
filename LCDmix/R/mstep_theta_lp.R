@@ -36,7 +36,8 @@ mstep_theta_lp <- function(
   intercept_k,
   slopes_k,
   lambda_theta,
-  component
+  component,
+  lp_time_limit = 3600
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -136,7 +137,7 @@ mstep_theta_lp <- function(
     dir = const_dir, 
     rhs = const_vec,  
     max = TRUE,
-    time_limit = 3600)
+    time_limit = lp_time_limit)
   
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")

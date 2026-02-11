@@ -51,7 +51,8 @@ iteration <- function(
   max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
-  debug          = FALSE
+  debug          = FALSE,
+  lp_time_limit  = 3600
 ) {
   TT <- nrow(X)
   p  <- ncol(X)
@@ -128,7 +129,8 @@ iteration <- function(
       idx                 = idx_old,
       intercepts          = theta0_old,
       slopes              = theta_old,
-      lambda_theta        = lambda_theta
+      lambda_theta        = lambda_theta,
+      lp_time_limit       = lp_time_limit
     )
     theta0_new <- theta_lp$theta0
     theta_new  <- theta_lp$theta

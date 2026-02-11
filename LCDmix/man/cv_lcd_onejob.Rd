@@ -16,6 +16,7 @@ cv_lcd_onejob(
   resp_threshold,
   trim_prob,
   save_dir,
+  lp_time_limit = 3600,
   sparsity_eps = 1e-06
 )
 }

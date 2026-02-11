@@ -18,7 +18,8 @@ cv_lcd_simul(
   trim_prob = 0.03,
   blocksize = 10,
   base_dir = "./cv_saves",
-  n_cores = "max"
+  n_cores = "max",
+  lp_time_limit = 600
 )
 }
 \arguments{
