@@ -87,7 +87,7 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit"),
     envir = environment()
   )
 
