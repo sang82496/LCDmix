@@ -54,69 +54,20 @@ mixture_metric <- function(
   X         = sim$X
   bin_mass  = sim$bin_mass
   TT        = length(Y_bin)
-  prob_true = pi_k(X, t(sim$alpha))
-  
-  if (sim$noisetype == 'skewed') {
-    dens_true_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        sn::dsn(y_grid - mu, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
-      })
-    }
-  } else if (sim$noisetype == 'gaussian') {
-    dens_true_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        dnorm(y_grid, mean = mu)
-      })
-    }
-  } else if (sim$noisetype == 'heavytail') { 
-    dens_true_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        dt((y_grid - mu) * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
-      })
-    }
-  } else if (sim$noisetype == 'laplace') {
-    dens_true_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
-      })
-    }
-  } else {
-    print('noisetype not found')
-  }
-  
-  if (!is.null(est_res$alpha_new)) { # if LCDmix
-    pi_est <- pi_k(X, est_res$alpha_new)
-    K <- length(est_res$g_new)
-    dens_est_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu <- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
-        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
-      })
-    }
-  } else if (!is.null(est_res$alpha)) { # if flowmix
-    pi_est <- pi_k(X, est_res$alpha)
-    mn_arr <- est_res$mn
-    sigma  <- as.numeric(est_res$sigma)
-    K      <- dim(mn_arr)[3]
-    dens_est_fun <- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
-      })
-    }
-  } else {
-    stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
-  }
-  
+  pi_true = pi_k(X, t(sim$alpha))
   per_time <- numeric(TT)
+  
+  if (!is.null(est_res$alpha_new)) { # if LCDmix 
+    pi_est <- pi_k(X, est_res$alpha_new)
+  } else { # if flowmix
+    pi_est <- pi_k(X, est_res$alpha)
+  }
+  
   for (t in seq_len(TT)) {
-    dens_est  <- dens_est_fun(t, Y_bin[[t]])
+    dens_est  <- dens_est_fun(est_res, t, Y_bin[[t]])
     mix_est   <- dens_est %*% pi_est[t, ]
-    dens_true <- dens_true_fun(t, Y_bin[[t]])
-    mix_true  <- dens_true %*% prob_true[t, ]
+    dens_true <- dens_true_fun(sim, t, Y_bin[[t]])
+    mix_true  <- dens_true %*% pi_true[t, ]
     per_time[t] <- sum(abs(mix_est - mix_true))
   }
   w_t      <- vapply(bin_mass, sum, numeric(1))

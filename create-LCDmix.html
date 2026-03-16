@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-02-10">
+<meta name="date" content="2026-03-16">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-02-10</h4>
+<h4 class="date">2026-03-16</h4>
 
 </div>
 
@@ -1812,7 +1812,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   slopes_k,
   lambda_theta,
   component,
-  lp_time_limit = 3600
+  lp_time_limit
 ) {
   TT &lt;- length(Y_bin)
   p  &lt;- ncol(X)
@@ -3581,6 +3581,57 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   return(jobs)
 }</code></pre>
+<pre class="r"><code>#' @export
+<span id="dens_true_fun">dens_true_fun</span> &lt;- function(
+  sim,
+  t,
+  y_grid
+) {
+  if (sim$noisetype == 'skewed') {
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        sn::dsn(y_grid - mu, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+      })
+    } else if (sim$noisetype == 'heavytail') { 
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dt((y_grid - mu) * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
+      })
+    } else if (sim$noisetype == 'laplace') {
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
+      })
+    } else { # Gaussian
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dnorm(y_grid, mean = mu)
+      })
+    }
+  return(res)
+}</code></pre>
+<pre class="r"><code>#' @export
+<span id="dens_est_fun">dens_est_fun</span> &lt;- function(
+  est_res,
+  t,
+  y_grid
+) {
+  if (!is.null(est_res$alpha_new)) { # if LCDmix 
+    K &lt;- length(est_res$g_new)
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu &lt;- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
+        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
+      })
+    } else { # if flowmix
+    mn_arr &lt;- est_res$mn
+    sigma  &lt;- as.numeric(est_res$sigma)
+    K      &lt;- dim(mn_arr)[3]
+    res &lt;- sapply(seq_len(K), function(k) {
+        dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
+      })
+    }
+  return(res)
+}</code></pre>
 <pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
 #'
 #' @description
@@ -3635,69 +3686,20 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   X         = sim$X
   bin_mass  = sim$bin_mass
   TT        = length(Y_bin)
-  prob_true = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(sim$alpha))
-  
-  if (sim$noisetype == 'skewed') {
-    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        sn::dsn(y_grid - mu, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
-      })
-    }
-  } else if (sim$noisetype == 'gaussian') {
-    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        dnorm(y_grid, mean = mu)
-      })
-    }
-  } else if (sim$noisetype == 'heavytail') { 
-    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        dt((y_grid - mu) * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
-      })
-    }
-  } else if (sim$noisetype == 'laplace') {
-    <span id="dens_true_fun">dens_true_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu = sim$mnmat[t,k]
-        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
-      })
-    }
-  } else {
-    print('noisetype not found')
-  }
-  
-  if (!is.null(est_res$alpha_new)) { # if LCDmix
-    pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha_new)
-    K &lt;- length(est_res$g_new)
-    <span id="dens_est_fun">dens_est_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        mu &lt;- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
-        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
-      })
-    }
-  } else if (!is.null(est_res$alpha)) { # if flowmix
-    pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha)
-    mn_arr &lt;- est_res$mn
-    sigma  &lt;- as.numeric(est_res$sigma)
-    K      &lt;- dim(mn_arr)[3]
-    <span id="dens_est_fun">dens_est_fun</span> &lt;- function(t, y_grid) {
-      sapply(seq_len(K), function(k) {
-        dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
-      })
-    }
-  } else {
-    stop("`est_res` must contain either `alpha_new` (LCDmix) or `alpha` (flowmix).")
-  }
-  
+  pi_true = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(sim$alpha))
   per_time &lt;- numeric(TT)
+  
+  if (!is.null(est_res$alpha_new)) { # if LCDmix 
+    pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha_new)
+  } else { # if flowmix
+    pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha)
+  }
+  
   for (t in seq_len(TT)) {
-    dens_est  &lt;- dens_est_fun(t, Y_bin[[t]])
+    dens_est  &lt;- <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>(est_res, t, Y_bin[[t]])
     mix_est   &lt;- dens_est %*% pi_est[t, ]
-    dens_true &lt;- dens_true_fun(t, Y_bin[[t]])
-    mix_true  &lt;- dens_true %*% prob_true[t, ]
+    dens_true &lt;- <a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(sim, t, Y_bin[[t]])
+    mix_true  &lt;- dens_true %*% pi_true[t, ]
     per_time[t] &lt;- sum(abs(mix_est - mix_true))
   }
   w_t      &lt;- vapply(bin_mass, sum, numeric(1))

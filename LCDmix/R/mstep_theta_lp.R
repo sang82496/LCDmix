@@ -37,7 +37,7 @@ mstep_theta_lp <- function(
   slopes_k,
   lambda_theta,
   component,
-  lp_time_limit = 3600
+  lp_time_limit
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
