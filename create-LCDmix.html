@@ -3582,6 +3582,22 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   return(jobs)
 }</code></pre>
 <pre class="r"><code>#' @export
+<span id="err_true_fun">err_true_fun</span> &lt;- function(
+  sim,
+  y_grid
+) {
+  if (sim$noisetype == 'skewed') {
+    res &lt;- sn::dsn(y_grid, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+  } else if (sim$noisetype == 'heavytail') { 
+    res &lt;- dt(y_grid  * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
+  } else if (sim$noisetype == 'laplace') {
+    res &lt;- VGAM::dlaplace(y_grid, scale = sim$laplace_scale) 
+  } else { # Gaussian
+    res &lt;- dnorm(y_grid, mean = 0)
+  }
+  return(res)
+}</code></pre>
+<pre class="r"><code>#' @export
 <span id="dens_true_fun">dens_true_fun</span> &lt;- function(
   sim,
   t,
