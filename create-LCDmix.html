@@ -3588,7 +3588,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   } else if (sim$noisetype == 'heavytail') { 
     res &lt;- dt(y_grid  * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
   } else if (sim$noisetype == 'laplace') {
-    res &lt;- VGAM::dlaplace(y_grid, scale = sim$laplace_scale) 
+    res &lt;- VGAM::dlaplace(y_grid, scale = 1) 
+  } else if (sim$noisetype == 'exponential') {
+    res &lt;- dexp(y_grid) 
   } else { # Gaussian
     res &lt;- dnorm(y_grid, mean = 0)
   }

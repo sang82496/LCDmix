@@ -3447,7 +3447,9 @@ err_true_fun <- function(
   } else if (sim$noisetype == 'heavytail') { 
     res <- dt(y_grid  * sqrt(sim$variance), df = sim$df) * sqrt(sim$variance)
   } else if (sim$noisetype == 'laplace') {
-    res <- VGAM::dlaplace(y_grid, scale = sim$laplace_scale) 
+    res <- VGAM::dlaplace(y_grid, scale = 1) 
+  } else if (sim$noisetype == 'exponential') {
+    res <- dexp(y_grid) 
   } else { # Gaussian
     res <- dnorm(y_grid, mean = 0)
   }
