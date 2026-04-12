@@ -10,7 +10,6 @@ simulate_and_save(
   noisetype = "gaussian",
   df = NULL,
   skew_alphas = NULL,
-  laplace_scales = 1,
   sim_dir = "sim_data",
   nt = 1000,
   TT = 100,

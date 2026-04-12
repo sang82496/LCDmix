@@ -20,7 +20,12 @@ dens_true_fun <- function(
     } else if (sim$noisetype == 'laplace') {
     res <- sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
+        VGAM::dlaplace(y_grid - mu, scale = 1) 
+      })
+    } else if (sim$noisetype == 'exponential') {
+    res <- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dexp(y_grid - mu) 
       })
     } else { # Gaussian
     res <- sapply(seq_len(K), function(k) {
