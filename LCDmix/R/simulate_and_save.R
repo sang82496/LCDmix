@@ -36,7 +36,6 @@ simulate_and_save <- function(
   noisetype  = 'gaussian',
   df         = NULL,
   skew_alphas = NULL,
-  laplace_scales     = 1,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -45,6 +44,10 @@ simulate_and_save <- function(
   B          = 30,
   sim_helper_dir = '.'
 ) {
+  ## Setup and basic checks
+  assertthat::assert_that(nt %% 5 == 0)
+  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'exponential', 'gaussian'))
+
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
   if (noisetype == 'heavytail'){
@@ -69,11 +72,20 @@ simulate_and_save <- function(
     }
     
   } else if (noisetype == 'laplace'){
-    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, laplace_scale = laplace_scales, stringsAsFactors = F)
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  <- jobs[i, ]
       sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
-                            laplace_scale = row$laplace_scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+                            gap = row$gap, sim_helper_dir = sim_helper_dir)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+  
+  } else if (noisetype == 'exponential'){
+    jobs <- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
+    for (i in seq_len(nrow(jobs))) {
+      row  <- jobs[i, ]
+      sim <- gen_simul_data(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
+                            gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     

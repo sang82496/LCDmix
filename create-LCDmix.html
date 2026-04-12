@@ -3376,16 +3376,15 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   theta_par      = 0.5,
   p              = 10,
   B              = 30,
-  noisetype      = NULL,
+  noisetype      = 'gaussian',
   df             = NULL,
   skew_alpha     = NULL,
-  laplace_scale  = NULL,
   gap            = 4,
   sim_helper_dir = "."
 ) {
   ## Setup and basic checks
-  assertthat::assert_that(nt %% 5 ==0)
-  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'gaussian'))
+  assertthat::assert_that(nt %% 5 == 0)
+  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'exponential', 'gaussian'))
   K = 2
   stopifnot(p &gt;= 3)
   if (noisetype == 'heavytail') {
@@ -3393,8 +3392,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     assertthat::assert_that(df &gt;= 3)
   } else if (noisetype == 'skewed') {
     assertthat::assert_that(!is.null(skew_alpha))
-  } else if (noisetype == 'laplace') {
-    assertthat::assert_that(!is.null(laplace_scale))
   }
   
   if(!is.null(sim_seed)) set.seed(sim_seed)
@@ -3450,7 +3447,9 @@ litr::render("create-LCDmix.Rmd")</code></pre>
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, scale = laplace_scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, 1)
+     } else if (noisetype == 'exponential'){
+       noise = rexp(ntlist[tt], 1)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -3476,8 +3475,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
               omega = omega,
               mn_shift = mn_shift,
               df = df,
-              variance = variance,
-              laplace_scale = laplace_scale
+              variance = variance
               ))
 }</code></pre>
 <pre class="r"><code>#' Simulate multiple skew‐normal mixture datasets and save to disk
@@ -3516,7 +3514,6 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   noisetype  = 'gaussian',
   df         = NULL,
   skew_alphas = NULL,
-  laplace_scales     = 1,
   sim_dir    = "sim_data",
   nt         = 1000,
   TT         = 100,
@@ -3525,6 +3522,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   B          = 30,
   sim_helper_dir = '.'
 ) {
+  ## Setup and basic checks
+  assertthat::assert_that(nt %% 5 == 0)
+  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'exponential', 'gaussian'))
+
   if (!dir.exists(sim_dir)) dir.create(sim_dir, recursive = TRUE)
   
   if (noisetype == 'heavytail'){
@@ -3549,11 +3550,20 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     }
     
   } else if (noisetype == 'laplace'){
-    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, laplace_scale = laplace_scales, stringsAsFactors = F)
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
     for (i in seq_len(nrow(jobs))) {
       row  &lt;- jobs[i, ]
       sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
-                            laplace_scale = row$laplace_scale, gap = row$gap, sim_helper_dir = sim_helper_dir)
+                            gap = row$gap, sim_helper_dir = sim_helper_dir)
+      saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
+    }
+  
+  } else if (noisetype == 'exponential'){
+    jobs &lt;- expand.grid(sim_seed = sim_seeds, gap = gaps, stringsAsFactors = F)
+    for (i in seq_len(nrow(jobs))) {
+      row  &lt;- jobs[i, ]
+      sim &lt;- <a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>(sim_seed = row$sim_seed, nt, TT, theta_par, p, B, noisetype = noisetype, 
+                            gap = row$gap, sim_helper_dir = sim_helper_dir)
       saveRDS(sim, file = file.path(sim_dir, paste0("sim_", i, ".rds")))
     }
     
@@ -3604,7 +3614,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     } else if (sim$noisetype == 'laplace') {
     res &lt;- sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        VGAM::dlaplace(y_grid - mu, scale = sim$laplace_scale) 
+        VGAM::dlaplace(y_grid - mu, scale = 1) 
+      })
+    } else if (sim$noisetype == 'exponential') {
+    res &lt;- sapply(seq_len(K), function(k) {
+        mu = sim$mnmat[t,k]
+        dexp(y_grid - mu) 
       })
     } else { # Gaussian
     res &lt;- sapply(seq_len(K), function(k) {

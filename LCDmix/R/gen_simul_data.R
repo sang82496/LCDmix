@@ -8,16 +8,15 @@ gen_simul_data <- function(
   theta_par      = 0.5,
   p              = 10,
   B              = 30,
-  noisetype      = NULL,
+  noisetype      = 'gaussian',
   df             = NULL,
   skew_alpha     = NULL,
-  laplace_scale  = NULL,
   gap            = 4,
   sim_helper_dir = "."
 ) {
   ## Setup and basic checks
-  assertthat::assert_that(nt %% 5 ==0)
-  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'gaussian'))
+  assertthat::assert_that(nt %% 5 == 0)
+  assertthat::assert_that(noisetype %in% c('heavytail', 'skewed', 'laplace', 'exponential', 'gaussian'))
   K = 2
   stopifnot(p >= 3)
   if (noisetype == 'heavytail') {
@@ -25,8 +24,6 @@ gen_simul_data <- function(
     assertthat::assert_that(df >= 3)
   } else if (noisetype == 'skewed') {
     assertthat::assert_that(!is.null(skew_alpha))
-  } else if (noisetype == 'laplace') {
-    assertthat::assert_that(!is.null(laplace_scale))
   }
   
   if(!is.null(sim_seed)) set.seed(sim_seed)
@@ -82,7 +79,9 @@ gen_simul_data <- function(
      } else if (noisetype == 'skewed'){
        noise = sn::rsn(ntlist[tt], xi = 0, omega = omega, alpha = skew_alpha) - mn_shift
      } else if (noisetype == 'laplace'){
-       noise = VGAM::rlaplace(ntlist[tt], 0, scale = laplace_scale)
+       noise = VGAM::rlaplace(ntlist[tt], 0, 1)
+     } else if (noisetype == 'exponential'){
+       noise = rexp(ntlist[tt], 1)
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -108,7 +107,6 @@ gen_simul_data <- function(
               omega = omega,
               mn_shift = mn_shift,
               df = df,
-              variance = variance,
-              laplace_scale = laplace_scale
+              variance = variance
               ))
 }
