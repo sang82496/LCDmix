@@ -4,7 +4,8 @@
 dens_est_fun <- function(
   est_res,
   t,
-  y_grid
+  y_grid,
+  X = X
 ) {
   if (!is.null(est_res$alpha_new)) { # if LCDmix 
     K <- length(est_res$g_new)

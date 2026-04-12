@@ -28,33 +28,20 @@ weighted_quantile <- function(
   w,
   prob = 0.05
 ) {
-  #— Validate inputs —#
-  if (!is.numeric(x) || !is.numeric(w)) {
-    stop("`x` and `w` must both be numeric vectors")
-  }
-  if (length(x) != length(w)) {
-    stop("`x` and `w` must have the same length")
-  }
-  if (any(w < 0)) {
-    stop("`w` must be nonnegative")
-  }
-  if (!is.numeric(prob) || length(prob) != 1 || prob < 0 || prob > 1) {
-    stop("`prob` must be a single numeric value between 0 and 1")
-  }
-
-  #— Sort by x —#
+  # Sort by x
   o     <- order(x)
-  x_ord <- x[o]
-  w_ord <- w[o]
+  sorted_x <- x[o]
+  sorted_w <- w[o]
 
-  #— Compute cumulative weights and threshold —#
-  cum_w     <- cumsum(w_ord)
-  total_w   <- sum(w_ord)
-  threshold <- prob * total_w
+  #  Compute cumulative weights and threshold
+  cum_w     <- cumsum(sorted_w)
+  threshold <- prob * sum(sorted_w)
 
-  #— Find first index where cumulative weight ≥ threshold —#
+  # Find first index where cumulative weight ≥ threshold
   idx <- which(cum_w >= threshold)[1]
-
-  #— Return corresponding quantile value —#
-  return(x_ord[idx])
+  if (idx == 1) {return(idx)}
+  diff_x = sorted_x[idx] - sorted_x[idx-1]
+  diff_w = sorted_w[idx] - sorted_w[idx-1]
+  frac = (cum_w[idx]-threshold)/diff_w
+  return(sorted_x[idx] - frac*diff_x)
 }

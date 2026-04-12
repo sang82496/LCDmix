@@ -6,6 +6,7 @@ dens_true_fun <- function(
   t,
   y_grid
 ) {
+  K = 2
   if (sim$noisetype == 'skewed') {
     res <- sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
