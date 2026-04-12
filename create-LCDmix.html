@@ -3713,7 +3713,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   return(metric)
 }</code></pre>
 <pre class="r"><code>#' @export
-res_LCDmix_simul = function(s){
+<span id="res_LCDmix_simul">res_LCDmix_simul</span> &lt;- function(s){
   mat = summ[[s]]$reduced_mat
   print(summ[[s]]$opt_lambdas)
   sim = readRDS(paste0('sim_data/sim_', s, '.rds'))
