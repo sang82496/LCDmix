@@ -64,7 +64,7 @@ mixture_metric <- function(
   }
   
   for (t in seq_len(TT)) {
-    dens_est  <- dens_est_fun(est_res, t, Y_bin[[t]])
+    dens_est  <- dens_est_fun(est_res, t, Y_bin[[t]], X)
     mix_est   <- dens_est %*% pi_est[t, ]
     dens_true <- dens_true_fun(sim, t, Y_bin[[t]])
     mix_true  <- dens_true %*% pi_true[t, ]

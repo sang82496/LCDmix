@@ -3701,7 +3701,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   }
   
   for (t in seq_len(TT)) {
-    dens_est  &lt;- <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>(est_res, t, Y_bin[[t]])
+    dens_est  &lt;- <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>(est_res, t, Y_bin[[t]], X)
     mix_est   &lt;- dens_est %*% pi_est[t, ]
     dens_true &lt;- <a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(sim, t, Y_bin[[t]])
     mix_true  &lt;- dens_true %*% pi_true[t, ]
