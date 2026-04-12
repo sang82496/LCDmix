@@ -3599,7 +3599,7 @@ mixture_metric <- function(
 
 ```{r}
 #' @export
-res_LCDmix_simul = function(s){
+res_LCDmix_simul <- function(s){
   mat = summ[[s]]$reduced_mat
   print(summ[[s]]$opt_lambdas)
   sim = readRDS(paste0('sim_data/sim_', s, '.rds'))
