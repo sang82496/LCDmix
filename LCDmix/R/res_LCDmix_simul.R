@@ -378,6 +378,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 9. Mixture density estimates ##
+  print("Mixture density estimates")
   times <- c(1, 51)
   par(mfrow = c(1, 2), pty = "s", cex = 0.7)
   for (t in times) {
@@ -398,9 +399,11 @@ res_LCDmix_simul <- function(s){
       res$Y_bin[[t]], freq, type = "b", main = paste("T =", t), 
       xlab = "Y", ylab = "density", ylim = c(0, ymax), col = 'white')
     lines(res$Y_bin[[t]], mix_flow, col = 4, lwd = 2)
-    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 3)
+#    points(res$Y_bin[[t]], mix_true, col = 3)
     lines(res$Y_bin[[t]], mix_lcd,  col = 2,  lwd = 2)
-    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 3)
+#    points(res$Y_bin[[t]], mix_true, col = 3)
     
     # place legend in upper‐right inside the plot
     legend("topright", legend = c("Flowmix", "LCDmix", "Truth"),
