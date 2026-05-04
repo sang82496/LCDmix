@@ -78,13 +78,13 @@ estep_lcd <- function(
     
     # Compute (log‐density × mixing probability) for each component
     for (k in seq_len(K_comp)) {
-      log_dens <- suppressWarnings(
+      dens <- suppressWarnings(
         logcondens::evaluateLogConDens(
           residuals[[t]][, k],
           densities[[k]]
         )[, 3]
       )
-      lik_mat[, k] <- log_dens * pi_mat[t, k]
+      lik_mat[, k] <- dens * pi_mat[t, k]
     }
     
     # Normalize to get soft responsibilities

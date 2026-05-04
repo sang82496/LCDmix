@@ -871,7 +871,18 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
 }
 ```
 
-
+Formally,
+$$
+\deqn{Q = \frac{1}{N}\sum_{t=1}^{TT}\sum_{k=1}^{K}\sum_{i\in\mathcal{I}_{tk}}
+ w_{t,i,k}\bigl[\log f_k(r_{t,i,k}) + \log\pi_{t,k}\bigr]
+ - \lambda_\alpha\|\alpha_{-0}\|_1 - \lambda_\theta\|\theta\|_1,}
+ $$
+where:
+ - \(r_{t,i,k}\) are residuals,  
+ - \(f_k\) is the log-concave density for component \(k\),  
+ - \(\pi_{t,k}=P(Z^{(t)}=k\mid X^{(t)})\),  
+ - \(w_{t,i,k}\) are responsibilities,  
+ - \(N=\sum_{t,i,k}w_{t,i,k}\).  
 
 
 
@@ -1326,13 +1337,13 @@ estep_lcd <- function(
     
     # Compute (log‐density × mixing probability) for each component
     for (k in seq_len(K_comp)) {
-      log_dens <- suppressWarnings(
+      dens <- suppressWarnings(
         logcondens::evaluateLogConDens(
           residuals[[t]][, k],
           densities[[k]]
         )[, 3]
       )
-      lik_mat[, k] <- log_dens * pi_mat[t, k]
+      lik_mat[, k] <- dens * pi_mat[t, k]
     }
     
     # Normalize to get soft responsibilities
@@ -3993,6 +4004,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 9. Mixture density estimates ##
+  print("Mixture density estimates")
   times <- c(1, 51)
   par(mfrow = c(1, 2), pty = "s", cex = 0.7)
   for (t in times) {
@@ -4013,9 +4025,11 @@ res_LCDmix_simul <- function(s){
       res$Y_bin[[t]], freq, type = "b", main = paste("T =", t), 
       xlab = "Y", ylab = "density", ylim = c(0, ymax), col = 'white')
     lines(res$Y_bin[[t]], mix_flow, col = 4, lwd = 2)
-    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 3)
+#    points(res$Y_bin[[t]], mix_true, col = 3)
     lines(res$Y_bin[[t]], mix_lcd,  col = 2,  lwd = 2)
-    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 3)
+#    points(res$Y_bin[[t]], mix_true, col = 3)
     
     # place legend in upper‐right inside the plot
     legend("topright", legend = c("Flowmix", "LCDmix", "Truth"),
