@@ -207,6 +207,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 5. Mean‐curves ##
+  print("Mean‐curves")
   
   ## flowmix
   par(mfrow = c(1,2), pty = "s", cex = 0.7)
@@ -258,6 +259,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 6. Median curves ##
+  print("Median curves")
   median_curves_lcd  <- matrix(0, nrow = TT, ncol = K)
   
   for (k in 1:K) {
@@ -309,6 +311,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 7. Pi‐curves ##
+  print("Pi‐curves")
   pi_flow  <- pi_k(X, t(alpha_est_flow))
   pi_lcd   <- pi_k(X, t(alpha_est_lcd))
   pi_true  <- pi_k(X, t(alpha_true))
@@ -336,6 +339,7 @@ res_LCDmix_simul <- function(s){
   
   
   ## 8. experts (errors) estimates ##
+  print("experts (errors) estimates")
   rg = range(g_est[[1]]$xn, g_est[[2]]$xn)
   gridk    <- seq(
     rg[1], rg[2], length = 200

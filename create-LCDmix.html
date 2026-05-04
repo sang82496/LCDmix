@@ -3950,6 +3950,7 @@ responsibilities,<br>
   
   
   ## 5. Mean‐curves ##
+  print("Mean‐curves")
   
   ## flowmix
   par(mfrow = c(1,2), pty = "s", cex = 0.7)
@@ -4001,6 +4002,7 @@ responsibilities,<br>
   
   
   ## 6. Median curves ##
+  print("Median curves")
   median_curves_lcd  &lt;- matrix(0, nrow = TT, ncol = K)
   
   for (k in 1:K) {
@@ -4052,6 +4054,7 @@ responsibilities,<br>
   
   
   ## 7. Pi‐curves ##
+  print("Pi‐curves")
   pi_flow  &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha_est_flow))
   pi_lcd   &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha_est_lcd))
   pi_true  &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha_true))
@@ -4079,6 +4082,7 @@ responsibilities,<br>
   
   
   ## 8. experts (errors) estimates ##
+  print("experts (errors) estimates")
   rg = range(g_est[[1]]$xn, g_est[[2]]$xn)
   gridk    &lt;- seq(
     rg[1], rg[2], length = 200
