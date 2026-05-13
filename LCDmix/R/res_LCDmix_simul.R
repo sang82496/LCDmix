@@ -124,23 +124,35 @@ res_LCDmix_simul <- function(s){
   }
   
   print("Theta estimates (rows=intercept+slopes, cols=components):")
+  print("Theta estimates for flowmix:")
   print(theta_est_flow)
+  print("Theta estimates for LCDmix:")
   print(theta_est_lcd)
+  print("True theta:")
   print(theta_true)
   
   print("Theta sparsity (proportion of < 1e-6):")
+  print("Theta sparsity for flowmix:")
   print(mean(abs(theta_est_flow[-1,]) < 1e-6)) # 0.35
+  print("Theta sparsity for LCDmix:")
   print(mean(abs(theta_est_lcd[-1,])  < 1e-6)) # 0.95
+  print("True theta sparsity:")
   print(mean(abs(theta_true[-1,])  < 1e-6))    # 0.9
   
   print("Alpha estimates (rows=components, cols=intercept+slopes):")
+  print("Alpha estimates for flowmix:")
   print(alpha_est_flow)
+  print("Alpha estimates for LCDmix:")
   print(alpha_est_lcd)
+  print("True alpha:")
   print(alpha_true)
   
   print("Alpha sparsity (proportion of < 1e-6):")
+  print("Alpha sparsity for flowmix:")
   print(mean(abs(as.numeric(alpha_est_flow[-1, -1, drop = FALSE])) < 1e-6, na.rm = TRUE)) # 0
+  print("Alpha sparsity for LCDmix:")
   print(mean(abs(as.numeric(alpha_est_lcd[-1, -1, drop = FALSE])) < 1e-6, na.rm = TRUE))  # 1
+  print("True alpha sparsity:")
   print(mean(abs(as.numeric(alpha_true[-1, -1, drop = FALSE])) < 1e-6, na.rm = TRUE))     # 0.9
   
   
@@ -224,8 +236,8 @@ res_LCDmix_simul <- function(s){
       )
   }
   # true
-  lines(1:TT, mean_curves_true[,1], col = 3, lwd = 2)
-  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 3, lwd = 2)
+  lines(1:TT, mean_curves_true[,1], col = 4, lwd = 2)
+  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 4, lwd = 2)
   # estimation
   for (k in seq_len(K)) {
     lines(seq_len(TT), mean_curves_flow[, k], lwd = 2, col = 2)
@@ -245,8 +257,8 @@ res_LCDmix_simul <- function(s){
       )
   }
   # true
-  lines(1:TT, mean_curves_true[,1], col = 3, lwd = 2)
-  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 3, lwd = 2)
+  lines(1:TT, mean_curves_true[,1], col = 4, lwd = 2)
+  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 4, lwd = 2)
   # estimation
   for (k in seq_len(K)) {
     lines(seq_len(TT), mean_curves_lcd[, k], lwd = 2, col = 2)
@@ -323,7 +335,7 @@ res_LCDmix_simul <- function(s){
     xlab = "t", ylab = expression(pi[t,k]),
     main = "Flowmix pi vs t"
   )
-  for (k in 1:K) lines(1:TT, pi_true[,k], col = 3)
+  for (k in 1:K) lines(1:TT, pi_true[,k], col = 4)
   for (k in 2:K) lines(1:TT, pi_flow[,k], col = 2)
   
   # LCDmix
@@ -332,7 +344,7 @@ res_LCDmix_simul <- function(s){
     xlab = "t", ylab = expression(pi[t,k]),
     main = "LCDmix pi vs t"
   )
-  for (k in 1:K) lines(1:TT, pi_true[,k], col = 3)
+  for (k in 1:K) lines(1:TT, pi_true[,k], col = 4)
   for (k in 2:K) lines(1:TT, pi_lcd[,k], col = 2)
   
   
@@ -403,14 +415,12 @@ res_LCDmix_simul <- function(s){
       res$Y_bin[[t]], freq, type = "b", main = paste("T =", t), 
       xlab = "Y", ylab = "density", ylim = c(0, ymax), col = 'white')
     lines(res$Y_bin[[t]], mix_flow, col = 4, lwd = 2)
-    lines(res$Y_bin[[t]], mix_true, col = 3)
-#    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 1)
     lines(res$Y_bin[[t]], mix_lcd,  col = 2,  lwd = 2)
-    lines(res$Y_bin[[t]], mix_true, col = 3)
-#    points(res$Y_bin[[t]], mix_true, col = 3)
+    lines(res$Y_bin[[t]], mix_true, col = 1)
     
     # place legend in upper‐right inside the plot
     legend("topright", legend = c("Flowmix", "LCDmix", "Truth"),
-      col = c(4, 2, 3), lty = 1, lwd = 2, bty = "n")
+      col = c(4, 2, 1), lty = 1, lwd = 2, bty = "n")
   }
 }
