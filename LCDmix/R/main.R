@@ -61,8 +61,10 @@ main <- function(
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,
   debug          = FALSE,
-  lp_time_limit  = 3600
+  lp_time_limit  = 3600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update <- match.arg(update)           # NEW
   #— Step 1: Binning (if needed) —#
   if (binned) {
     Y_bin    <- Y
@@ -99,7 +101,8 @@ main <- function(
     resp_threshold,
     calc_Q_every,
     debug,
-    lp_time_limit
+    lp_time_limit,
+    update = update                     # NEW
   )
   
   if (debug && !is.null(iter_res$error)) {

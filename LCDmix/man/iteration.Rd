@@ -16,7 +16,8 @@ iteration(
   resp_threshold = 0.001,
   calc_Q_every = FALSE,
   debug = FALSE,
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update = c("lp", "optim")
 )
 }
 \arguments{

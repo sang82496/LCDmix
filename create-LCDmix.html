@@ -459,8 +459,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,
   debug          = FALSE,
-  lp_time_limit  = 3600
+  lp_time_limit  = 3600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update &lt;- match.arg(update)           # NEW
   #— Step 1: Binning (if needed) —#
   if (binned) {
     Y_bin    &lt;- Y
@@ -497,7 +499,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     resp_threshold,
     calc_Q_every,
     debug,
-    lp_time_limit
+    lp_time_limit,
+    update = update                     # NEW
   )
   
   if (debug &amp;&amp; !is.null(iter_res$error)) {
@@ -1382,8 +1385,10 @@ responsibilities,<br>
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
   debug          = FALSE,
-  lp_time_limit  = 3600
+  lp_time_limit  = 3600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update &lt;- match.arg(update)           # NEW
   TT &lt;- nrow(X)
   p  &lt;- ncol(X)
   K  &lt;- length(init_res$g_init)
@@ -1413,9 +1418,19 @@ responsibilities,<br>
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
+    theta_diag  = theta_diag,
     n_outside_every = n_outside_every,
     iter_num    = 0)
   
+  idx_new    &lt;- idx_old
+  resp_new   &lt;- resp_old
+  weight_new &lt;- weight_old
+  resi_new   &lt;- resi_old
+  alpha_new  &lt;- alpha_old
+  theta0_new &lt;- theta0_old
+  theta_new  &lt;- theta_old
+  g_new      &lt;- g_old
+  i          &lt;- 0L
   
   res &lt;- tryCatch({
   for (i in seq_len(max_iter)){
@@ -1567,7 +1582,10 @@ responsibilities,<br>
       Q_every     = Q_every,
       n_outside_every = n_outside_every,
       theta_diag      = theta_diag,
-      iter_num    = i)
+      iter_num        = i,
+      error           = res$error,           # NEW
+      failed_iter     = res$failed_iter      # NEW
+      )
   }
     list(final = last_state,
          error = NULL)

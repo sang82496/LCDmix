@@ -52,8 +52,10 @@ iteration <- function(
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
   debug          = FALSE,
-  lp_time_limit  = 3600
+  lp_time_limit  = 3600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update <- match.arg(update)           # NEW
   TT <- nrow(X)
   p  <- ncol(X)
   K  <- length(init_res$g_init)
@@ -83,9 +85,19 @@ iteration <- function(
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
+    theta_diag  = theta_diag,
     n_outside_every = n_outside_every,
     iter_num    = 0)
   
+  idx_new    <- idx_old
+  resp_new   <- resp_old
+  weight_new <- weight_old
+  resi_new   <- resi_old
+  alpha_new  <- alpha_old
+  theta0_new <- theta0_old
+  theta_new  <- theta_old
+  g_new      <- g_old
+  i          <- 0L
   
   res <- tryCatch({
   for (i in seq_len(max_iter)){
@@ -237,7 +249,10 @@ iteration <- function(
       Q_every     = Q_every,
       n_outside_every = n_outside_every,
       theta_diag      = theta_diag,
-      iter_num    = i)
+      iter_num        = i,
+      error           = res$error,           # NEW
+      failed_iter     = res$failed_iter      # NEW
+      )
   }
     list(final = last_state,
          error = NULL)
