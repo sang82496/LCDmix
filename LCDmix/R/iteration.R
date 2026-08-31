@@ -70,6 +70,7 @@ iteration <- function(
   Q           <- init_res$Q
   Q_every     <- init_res$Q_every
   n_outside_every <- integer(0)      # NEW: parallel to Q_every
+  theta_diag <- list()
   
   last_state <- list(
     idx_old     = idx_old,
@@ -83,8 +84,8 @@ iteration <- function(
     Q           = Q,
     Q_every     = Q_every,
     n_outside_every = n_outside_every,
-    theta_diag      = theta_diag,
     iter_num    = 0)
+  
   
   res <- tryCatch({
   for (i in seq_len(max_iter)){
