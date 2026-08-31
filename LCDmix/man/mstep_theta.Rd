@@ -14,7 +14,8 @@ mstep_theta(
   intercepts,
   slopes,
   lambda_theta,
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update = c("lp", "optim")
 )
 }
 \arguments{

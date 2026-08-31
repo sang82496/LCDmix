@@ -69,6 +69,7 @@ iteration <- function(
   g_old       <- init_res$g_init
   Q           <- init_res$Q
   Q_every     <- init_res$Q_every
+  n_outside_every <- integer(0)      # NEW: parallel to Q_every
   
   last_state <- list(
     idx_old     = idx_old,
@@ -81,6 +82,8 @@ iteration <- function(
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
+    n_outside_every = n_outside_every,
+    theta_diag      = theta_diag,
     iter_num    = 0)
   
   res <- tryCatch({
@@ -98,10 +101,13 @@ iteration <- function(
     idx_new    <- Estep$idx
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
+#     Q(Theta^(m) | Theta^(m)) -- the reference point for the ascent test.
     if (calc_Q_every) {
-      Q_new    <- comp_Q(X, g_old, resi_old, theta_old, alpha_old, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every <- c(Q_every, Q_new)
+     Q_new <- comp_Q(X, g_old, resi_old, theta_old, alpha_old, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_old)          # NEW
+     Q_every         <- c(Q_every, Q_new)
+     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ E‐step complete")
     
@@ -113,31 +119,36 @@ iteration <- function(
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    <- comp_Q(X, g_old, resi_old, theta_old, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every <- c(Q_every, Q_new)
+     Q_new <- comp_Q(X, g_old, resi_old, theta_old, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_old)          # NEW
+     Q_every         <- c(Q_every, Q_new)
+     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Updated α")
     
     #— M‐step θ via LP + shift —#
+    #     THIS IS FIX 1. theta_lp$theta0 is the coefficient update's own intercept,
+    #     before mstep_shift() overwrites it at L1147. Naming it explicitly keeps
+    #     the distinction from being lost to a later edit.
     theta_lp <- mstep_theta(
-      Y_bin               = Y_bin,
-      X                   = X,
-      weights             = weight_new,
-      residuals           = resi_old,
-      densities           = g_old,
-      idx                 = idx_old,
-      intercepts          = theta0_old,
-      slopes              = theta_old,
-      lambda_theta        = lambda_theta,
-      lp_time_limit       = lp_time_limit
+      Y_bin = Y_bin, X = X, weights = weight_new, residuals = resi_old,
+      densities = g_old, idx = idx_old, intercepts = theta0_old,
+      slopes = theta_old, lambda_theta = lambda_theta,
+      lp_time_limit = lp_time_limit,
+      update = update                                   # NEW, for the ablation
     )
-    theta0_new <- theta_lp$theta0
+    theta0_lp  <- theta_lp$theta0    # NEW: the update's own intercept, pre-shift
+    theta0_new <- theta0_lp
     theta_new  <- theta_lp$theta
+    theta_diag[[i]] <- theta_lp$diag                    # NEW, for the ablation
+    
     if (calc_Q_every) {
-      Q_new    <- comp_Q(X, g_old, resi_old, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every <- c(Q_every, Q_new)
+     Q_new <- comp_Q(X, g_old, resi_old, theta_new, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_lp)           # NEW
+     Q_every         <- c(Q_every, Q_new)
+     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Updated θ via LP")
     
@@ -156,9 +167,11 @@ iteration <- function(
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    <- comp_Q(X, g_old, resi_new, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every <- c(Q_every, Q_new)
+     Q_new <- comp_Q(X, g_old, resi_new, theta_new, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_new)          # NEW
+     Q_every         <- c(Q_every, Q_new)
+     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Centered the intercepts")
     
@@ -171,10 +184,12 @@ iteration <- function(
     message("✔ Updated g")
     
     # Surrogate log-likelihood
-    Q_new    <- comp_Q(X, g_new, resi_new, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-    Q_every <- c(Q_every, Q_new)
-    Q       <- c(Q, Q_new)
+    Q_new <- comp_Q(X, g_new, resi_new, theta_new, alpha_new, idx_new,
+                   weight_new, lambda_alpha, lambda_theta)
+    Q_every         <- c(Q_every, Q_new)
+    Q               <- c(Q, Q_new)
+    n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))   # NEW, safe
+
     message("✔ Q[i] = ", round(Q_new, 6))
     
     
@@ -219,6 +234,8 @@ iteration <- function(
       g_old       = g_old,
       Q           = Q,
       Q_every     = Q_every,
+      n_outside_every = n_outside_every,
+      theta_diag      = theta_diag,
       iter_num    = i)
   }
     list(final = last_state,
@@ -249,5 +266,7 @@ iteration <- function(
     g_new       = g_new,
     Q           = Q,
     Q_every     = Q_every,
+    n_outside_every = n_outside_every,
+    theta_diag      = theta_diag,
     iter_num    = i))
 }

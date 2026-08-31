@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-05-13">
+<meta name="date" content="2026-08-31">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-05-13</h4>
+<h4 class="date">2026-08-31</h4>
 
 </div>
 
@@ -749,9 +749,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   Q_init &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
     X, g_init, resi_init, theta_init,
     alpha_init, idx_init, weight_init,
-    lambda_alpha, lambda_theta
-  )
-  names(Q_init) = 'Q'
+    lambda_alpha, lambda_theta,
+    Y_bin = Y_bin, intercepts = theta0_init          # NEW
+    )
+  names(Q_init) &lt;- "Q"       # note: &lt;- not =, and attributes survive naming
   
   # Return initialization results
   return(list(
@@ -1169,59 +1170,82 @@ X^{(t)})\)</span>,<br>
 - <span class="math inline">\(w_{t,i,k}\)</span> are
 responsibilities,<br>
 - <span class="math inline">\(N=\sum_{t,i,k}w_{t,i,k}\)</span>.</p>
-<pre class="r"><code>#' Compute the surrogate log-likelihood Q for the EM algorithm
+<pre class="r"><code>#' Compute the surrogate log-likelihood Q
 #'
 #' @description
-#' Calculates the expected complete-data log-likelihood (the “Q” function) given
-#' current parameter estimates, combining:
-#' - Log-concave density contributions of residuals  
-#' - Mixture weight (α) contributions  
-#' - L1 penalties on α (excluding intercepts) and on regression slopes  
+#' Evaluates the (normalized) surrogate log-likelihood
+#' \deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in \mathcal{I}_{tk}}
+#'   w_{tik}\left[\log \hat f_k(u_{tik}) + \log \<a href="create-LCDmix.html#pi_k">pi_k</a>(X_t)\right]
+#'   - \lambda_\alpha \|\alpha\|_1 - \lambda_\theta \|\theta\|_1 .}
 #'
-#' Formally,
-#' \deqn{Q = \frac{1}{N}\sum_{t=1}^{TT}\sum_{k=1}^{K}\sum_{i\in\mathcal{I}_{tk}}
-#'   w_{t,i,k}\bigl[\log f_k(r_{t,i,k}) + \log\pi_{t,k}\bigr]
-#'   - \lambda_\alpha\|\alpha_{-0}\|_1 - \lambda_\theta\|\theta\|_1,}
-#' where:
-#'   - \(r_{t,i,k}\) are residuals,  
-#'   - \(f_k\) is the log-concave density for component \(k\),  
-#'   - \(\pi_{t,k}=P(Z^{(t)}=k\mid X^{(t)})\),  
-#'   - \(w_{t,i,k}\) are responsibilities,  
-#'   - \(N=\sum_{t,i,k}w_{t,i,k}\).  
+#' Residuals may either be supplied directly through \code{residuals}, or
+#' recomputed internally from \code{(intercepts, slopes)} when both
+#' \code{Y_bin} and \code{intercepts} are given. The second form exists because
+#' \code{slopes} otherwise enters only through the L1 penalty: passing stale
+#' residuals alongside updated slopes measures the penalty change and nothing
+#' else, which makes the M-step diagnostic in \code{<a href="create-LCDmix.html#iteration">iteration</a>()} vacuous.
 #'
-#' @param X A \eqn{TT \times p} numeric covariate matrix (rows = time points).
-#' @param densities A list of length \eqn{K}, each object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.
-#' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.
-#' @param slopes A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.
-#' @param alpha A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).
-#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.
-#' @param resp A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.
+#' @param X A numeric \eqn{TT \times p} covariate matrix (rows = time points).
+#' @param densities A list of length \eqn{K} of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} objects.
+#' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
+#'   residuals. Ignored when both \code{Y_bin} and \code{intercepts} are supplied.
+#' @param slopes A list of length \eqn{K} of slope vectors.
+#' @param alpha A numeric \eqn{K \times (p+1)} matrix of gating parameters.
+#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical matrix.
+#' @param resp A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
+#'   posterior weights \eqn{w_{tik}}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.
-#' @param lambda_theta Nonnegative numeric L1 penalty on slope parameters \code{slopes}.
+#' @param lambda_theta Nonnegative numeric L1 penalty on \code{slopes}.
+#' @param Y_bin Optional list of length \eqn{TT} of binned responses. Supply
+#'   together with \code{intercepts} to recompute residuals internally.
+#' @param intercepts Optional list of length \eqn{K} of intercepts. Supply
+#'   together with \code{Y_bin} to recompute residuals internally.
 #'
-#' @return A single numeric: the surrogate log-likelihood \eqn{Q} (normalized) minus the L1 penalties.
+#' @return A single numeric: the normalized surrogate log-likelihood minus the
+#'   L1 penalties. Carries three attributes, used by the LP ablation and ignored
+#'   by ordinary arithmetic:
+#'   \describe{
+#'     \item{\code{n_eval}}{Number of active bins evaluated.}
+#'     \item{\code{n_outside}}{Number of those whose residual fell outside the
+#'       fitted support, so the log-density was \code{-Inf} and the bin was
+#'       dropped from the sum.}
+#'     \item{\code{mass_outside}}{Total posterior weight of the dropped bins.}
+#'   }
+#'   Bins outside the support are silently excluded from \eqn{Q}; a larger
+#'   \code{n_outside} therefore means \eqn{Q} is computed over less of the data,
+#'   and \eqn{Q} values with different \code{n_outside} are not comparable.
 #'
 #' @examples
 #' \dontrun{
 #' TT &lt;- 3; p &lt;- 2; K &lt;- 2
 #' X  &lt;- matrix(rnorm(TT * p), nrow = TT)
 #' densities &lt;- replicate(K,
-#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(50), w = rep(1/50,50)),
+#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(50), w = rep(1/50, 50)),
 #'   simplify = FALSE
 #' )
 #' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-#' idx   &lt;- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
-#' resp &lt;- lapply(idx,
-#'   function(idx) matrix(runif(length(idx)), nrow = nrow(idx))
-#' )
+#' idx    &lt;- lapply(residuals, function(m) matrix(TRUE, nrow(m), ncol(m)))
+#' resp   &lt;- lapply(idx, function(ii) matrix(runif(length(ii)), nrow = nrow(ii)))
 #' slopes &lt;- replicate(K, rnorm(p), simplify = FALSE)
-#' alpha  &lt;- matrix(rnorm(K*(p+1)), nrow = K)
+#' alpha  &lt;- matrix(rnorm(K * (p + 1)), nrow = K)
 #'
+#' ## (a) residuals supplied directly -- unchanged behavior
 #' Q_val &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
 #'   X, densities, residuals, slopes, alpha,
 #'   idx, resp,
 #'   lambda_alpha = 1e-3, lambda_theta = 1e-3
 #' )
+#'
+#' ## (b) residuals recomputed from (intercepts, slopes)
+#' Y_bin      &lt;- lapply(1:TT, function(t) matrix(rnorm(5), ncol = 1))
+#' intercepts &lt;- replicate(K, rnorm(1), simplify = FALSE)
+#' Q_val2 &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
+#'   X, densities, residuals, slopes, alpha,
+#'   idx, resp,
+#'   lambda_alpha = 1e-3, lambda_theta = 1e-3,
+#'   Y_bin = Y_bin, intercepts = intercepts
+#' )
+#' attr(Q_val2, "n_outside")
 #' }
 #' @export
 <span id="comp_Q">comp_Q</span> &lt;- function(
@@ -1233,26 +1257,44 @@ responsibilities,<br>
   idx,
   resp,
   lambda_alpha,
-  lambda_theta
+  lambda_theta,
+  Y_bin      = NULL,   # NEW, appended
+  intercepts = NULL    # NEW, appended
 ) {
   # Number of time points
   TT     &lt;- nrow(X)
   K_comp &lt;- length(densities)
 
-  # Total “effective sample size”
+  ## ---- NEW: recompute residuals when both new arguments are supplied -------
+  ## <a href="create-LCDmix.html#comp_resi">comp_resi</a>() is defined earlier in the file, so it is always available here.
+  if (!is.null(Y_bin) &amp;&amp; !is.null(intercepts)) {
+    if (length(intercepts) != K_comp || length(slopes) != K_comp) {
+      stop("<a href="create-LCDmix.html#comp_Q">comp_Q</a>(): `intercepts` and `slopes` must both have length ",
+           K_comp, " to recompute residuals.")
+    }
+    residuals &lt;- <a href="create-LCDmix.html#comp_resi">comp_resi</a>(Y_bin, X, intercepts, slopes)
+  } else if (xor(is.null(Y_bin), is.null(intercepts))) {
+    warning("<a href="create-LCDmix.html#comp_Q">comp_Q</a>(): `Y_bin` and `intercepts` must be supplied together; ",
+            "falling back to the `residuals` argument.")
+  }
+
+  # Total "effective sample size"
   N_total &lt;- sum(unlist(resp))
 
   # Mixture probabilities: TT x K matrix
   pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)
 
-  total_ll &lt;- 0
+  total_ll     &lt;- 0
+  n_eval       &lt;- 0L   # NEW: active bins evaluated
+  n_outside    &lt;- 0L   # NEW: of those, how many fell outside the support
+  mass_outside &lt;- 0     # NEW: their total posterior weight
 
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
       # Select bins for component k at time t
-      idx_tk    &lt;- idx[[t]][, k]
-      w_tk      &lt;- resp[[t]][idx_tk, k]
-      resi_tk   &lt;- residuals[[t]][idx_tk, k]
+      idx_tk  &lt;- idx[[t]][, k]
+      w_tk    &lt;- resp[[t]][idx_tk, k]
+      resi_tk &lt;- residuals[[t]][idx_tk, k]
 
       if (length(w_tk) == 0) next
 
@@ -1261,6 +1303,11 @@ responsibilities,<br>
         logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 2]
       )
       finite_mask &lt;- is.finite(log_dens)
+
+      # NEW: record how much of the data this Q is actually computed over
+      n_eval       &lt;- n_eval + length(w_tk)
+      n_outside    &lt;- n_outside + sum(!finite_mask)
+      mass_outside &lt;- mass_outside + sum(w_tk[!finite_mask])
 
       # Accumulate weighted log-density and mixture log-prob terms
       total_ll &lt;- total_ll +
@@ -1275,6 +1322,11 @@ responsibilities,<br>
   pen_total &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
   Q_val &lt;- total_ll / N_total - pen_total
+
+  ## ---- NEW: diagnostics ride along as attributes; return stays scalar ------
+  attr(Q_val, "n_eval")       &lt;- n_eval
+  attr(Q_val, "n_outside")    &lt;- n_outside
+  attr(Q_val, "mass_outside") &lt;- mass_outside
 
   return(Q_val)
 }</code></pre>
@@ -1347,6 +1399,7 @@ responsibilities,<br>
   g_old       &lt;- init_res$g_init
   Q           &lt;- init_res$Q
   Q_every     &lt;- init_res$Q_every
+  n_outside_every &lt;- integer(0)      # NEW: parallel to Q_every
   
   last_state &lt;- list(
     idx_old     = idx_old,
@@ -1359,6 +1412,8 @@ responsibilities,<br>
     g_old       = g_old,
     Q           = Q,
     Q_every     = Q_every,
+    n_outside_every = n_outside_every,
+    theta_diag      = theta_diag,
     iter_num    = 0)
   
   res &lt;- tryCatch({
@@ -1376,10 +1431,13 @@ responsibilities,<br>
     idx_new    &lt;- Estep$idx
     resp_new   &lt;- Estep$resp
     weight_new &lt;- Estep$weight
+#     Q(Theta^(m) | Theta^(m)) -- the reference point for the ascent test.
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_old, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every &lt;- c(Q_every, Q_new)
+     Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_old, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_old)          # NEW
+     Q_every         &lt;- c(Q_every, Q_new)
+     n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ E‐step complete")
     
@@ -1391,31 +1449,36 @@ responsibilities,<br>
       lambda_alpha         = lambda_alpha
     )
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every &lt;- c(Q_every, Q_new)
+     Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_old, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_old)          # NEW
+     Q_every         &lt;- c(Q_every, Q_new)
+     n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Updated α")
     
     #— M‐step θ via LP + shift —#
+    #     THIS IS FIX 1. theta_lp$theta0 is the coefficient update's own intercept,
+    #     before <a href="create-LCDmix.html#mstep_shift">mstep_shift</a>() overwrites it at L1147. Naming it explicitly keeps
+    #     the distinction from being lost to a later edit.
     theta_lp &lt;- <a href="create-LCDmix.html#mstep_theta">mstep_theta</a>(
-      Y_bin               = Y_bin,
-      X                   = X,
-      weights             = weight_new,
-      residuals           = resi_old,
-      densities           = g_old,
-      idx                 = idx_old,
-      intercepts          = theta0_old,
-      slopes              = theta_old,
-      lambda_theta        = lambda_theta,
-      lp_time_limit       = lp_time_limit
+      Y_bin = Y_bin, X = X, weights = weight_new, residuals = resi_old,
+      densities = g_old, idx = idx_old, intercepts = theta0_old,
+      slopes = theta_old, lambda_theta = lambda_theta,
+      lp_time_limit = lp_time_limit,
+      update = update                                   # NEW, for the ablation
     )
-    theta0_new &lt;- theta_lp$theta0
+    theta0_lp  &lt;- theta_lp$theta0    # NEW: the update's own intercept, pre-shift
+    theta0_new &lt;- theta0_lp
     theta_new  &lt;- theta_lp$theta
+    theta_diag[[i]] &lt;- theta_lp$diag                    # NEW, for the ablation
+    
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every &lt;- c(Q_every, Q_new)
+     Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_new, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_lp)           # NEW
+     Q_every         &lt;- c(Q_every, Q_new)
+     n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Updated θ via LP")
     
@@ -1434,9 +1497,11 @@ responsibilities,<br>
       slopes     = theta_new
     )
     if (calc_Q_every) {
-      Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_new, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-      Q_every &lt;- c(Q_every, Q_new)
+     Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_new, theta_new, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_new)          # NEW
+     Q_every         &lt;- c(Q_every, Q_new)
+     n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Centered the intercepts")
     
@@ -1449,10 +1514,12 @@ responsibilities,<br>
     message("✔ Updated g")
     
     # Surrogate log-likelihood
-    Q_new    &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_new, resi_new, theta_new, alpha_new, idx_new,
-                         weight_new, lambda_alpha, lambda_theta)
-    Q_every &lt;- c(Q_every, Q_new)
-    Q       &lt;- c(Q, Q_new)
+    Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_new, resi_new, theta_new, alpha_new, idx_new,
+                   weight_new, lambda_alpha, lambda_theta)
+    Q_every         &lt;- c(Q_every, Q_new)
+    Q               &lt;- c(Q, Q_new)
+    n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))   # NEW, safe
+
     message("✔ Q[i] = ", round(Q_new, 6))
     
     
@@ -1497,6 +1564,8 @@ responsibilities,<br>
       g_old       = g_old,
       Q           = Q,
       Q_every     = Q_every,
+      n_outside_every = n_outside_every,
+      theta_diag      = theta_diag,
       iter_num    = i)
   }
     list(final = last_state,
@@ -1527,6 +1596,8 @@ responsibilities,<br>
     g_new       = g_new,
     Q           = Q,
     Q_every     = Q_every,
+    n_outside_every = n_outside_every,
+    theta_diag      = theta_diag,
     iter_num    = i))
 }</code></pre>
 <pre class="r"><code>#' Perform the E-step using log-concave component densities
@@ -1759,35 +1830,74 @@ responsibilities,<br>
   intercepts,
   slopes,
   lambda_theta,
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update        = c("lp", "optim")   # NEW; default preserves current behavior
 ) {
+  update &lt;- match.arg(update)
+
   K &lt;- length(densities)
   theta0_new &lt;- vector("list", K)
   theta_new  &lt;- vector("list", K)
-  
+  diag_list  &lt;- vector("list", K)
+
   for (k in seq_len(K)) {
-    tmp &lt;- <a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>(
-      Y_bin               = Y_bin,
-      X                   = X,
-      weights             = weights,
-      residuals           = residuals,
-      density_k           = densities[[k]],
-      idx                 = idx,
-      intercept_k         = intercepts[[k]],
-      slopes_k            = slopes[[k]],
-      lambda_theta        = lambda_theta,
-      component           = k,
-      lp_time_limit       = lp_time_limit
+
+    t0 &lt;- proc.time()[["elapsed"]]
+
+    tmp &lt;- switch(
+      update,
+      lp = <a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>(
+        Y_bin = Y_bin, X = X, weights = weights, residuals = residuals,
+        density_k = densities[[k]], idx = idx,
+        intercept_k = intercepts[[k]], slopes_k = slopes[[k]],
+        lambda_theta = lambda_theta, component = k,
+        lp_time_limit = lp_time_limit
+      ),
+      optim = <a href="create-LCDmix.html#mstep_theta_optim">mstep_theta_optim</a>(
+        Y_bin = Y_bin, X = X, weights = weights, residuals = residuals,
+        density_k = densities[[k]], idx = idx,
+        intercept_k = intercepts[[k]], slopes_k = slopes[[k]],
+        lambda_theta = lambda_theta, component = k,
+        lp_time_limit = lp_time_limit
+      )
     )
+
+    elapsed &lt;- proc.time()[["elapsed"]] - t0
+
     theta0_new[[k]] &lt;- tmp$theta0_k
     theta_new[[k]]  &lt;- tmp$theta_k
+
+    ## ---- diagnostics, computed identically for BOTH arms --------------------
+    ## n_outside must be measured the same way in each arm or the headline
+    ## metric is not comparable. mstep_theta_optim returns its own, but we
+    ## recompute here so the LP arm gets the same number by the same route.
+    g_ext &lt;- <a href="create-LCDmix.html#make_logdens_ext">make_logdens_ext</a>(densities[[k]])
+    u_new &lt;- numeric(0)
+    for (t in seq_len(length(Y_bin))) {
+      idx_tk &lt;- idx[[t]][, k]
+      if (any(idx_tk)) {
+        u_new &lt;- c(u_new,
+                   Y_bin[[t]][idx_tk, 1] - tmp$theta0_k -
+                     sum(X[t, ] * tmp$theta_k))
+      }
+    }
+
+    diag_list[[k]] &lt;- list(
+      arm         = update,
+      seconds     = elapsed,
+      n_active    = length(u_new),
+      n_outside   = sum(u_new &lt; g_ext$L | u_new &gt; g_ext$U),
+      convergence = if (is.null(tmp$convergence)) NA_integer_ else tmp$convergence,
+      obj_start   = if (is.null(tmp$obj_start))   NA_real_    else tmp$obj_start,
+      obj_end     = if (is.null(tmp$obj_end))     NA_real_    else tmp$obj_end
+    )
   }
-  
-  # Explicit return
-  return(list(
+
+  list(
     theta0 = theta0_new,
-    theta  = theta_new
-  ))
+    theta  = theta_new,
+    diag   = diag_list          # NEW; ignored by existing callers
+  )
 }</code></pre>
 <pre class="r"><code>#' M‐step update of intercept and slopes via linear programming under log-concavity
 #'
@@ -1952,6 +2062,192 @@ responsibilities,<br>
     theta0_k = theta0_new,
     theta_k  = theta_new
   ))
+}</code></pre>
+<pre class="r"><code>#' Piecewise-linear log-density with linear extension beyond the support
+#'
+#' @description
+#' Builds an evaluator for the fitted log-concave log-density \eqn{\hat g_k},
+#' linear between knots and extended beyond \eqn{[L_k, U_k]} using the boundary
+#' slopes. The extension keeps the function finite, concave, and piecewise
+#' linear everywhere, which is what makes the quasi-Newton arm a fair
+#' comparator rather than a strawman: with the honest \code{-Inf} convention
+#' \code{optim} stalls on its first step outside the support and the comparison
+#' proves nothing.
+#'
+#' @param density_k Object from \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} with fields
+#'   \code{x}, \code{phi}, \code{IsKnot}.
+#'
+#' @return A list with \code{<a href="create-LCDmix.html#value">value</a>(u)}, \code{<a href="create-LCDmix.html#slope">slope</a>(u)}, and the support
+#'   endpoints \code{L}, \code{U}.
+#' @keywords internal
+<span id="make_logdens_ext">make_logdens_ext</span> &lt;- function(density_k) {
+  knot  &lt;- as.logical(density_k$IsKnot)
+  x_m   &lt;- density_k$x[knot]
+  phi_m &lt;- density_k$phi[knot]
+
+  M &lt;- length(x_m)
+  if (M &lt; 2L) stop("<a href="create-LCDmix.html#make_logdens_ext">make_logdens_ext</a>(): fitted density has fewer than two knots.")
+
+  L &lt;- x_m[1L]
+  U &lt;- x_m[M]
+
+  b_left  &lt;- (phi_m[2L] - phi_m[1L]) / (x_m[2L] - x_m[1L])
+  b_right &lt;- (phi_m[M]  - phi_m[M - 1L]) / (x_m[M] - x_m[M - 1L])
+
+  <span id="value">value</span> &lt;- function(u) {
+    out &lt;- numeric(length(u))
+    lo  &lt;- u &lt; L
+    hi  &lt;- u &gt; U
+    mid &lt;- !lo &amp; !hi
+    if (any(mid)) out[mid] &lt;- stats::approx(x_m, phi_m, xout = u[mid])$y
+    if (any(lo))  out[lo]  &lt;- phi_m[1L] + b_left  * (u[lo] - L)
+    if (any(hi))  out[hi]  &lt;- phi_m[M]  + b_right * (u[hi] - U)
+    out
+  }
+
+  # Local slope; at a kink the right-hand slope is returned (a valid
+  # subgradient element, and the point of the experiment is that these exist).
+  <span id="slope">slope</span> &lt;- function(u) {
+    out &lt;- numeric(length(u))
+    lo  &lt;- u &lt; L
+    hi  &lt;- u &gt; U
+    mid &lt;- !lo &amp; !hi
+    if (any(lo)) out[lo] &lt;- b_left
+    if (any(hi)) out[hi] &lt;- b_right
+    if (any(mid)) {
+      j &lt;- findInterval(u[mid], x_m, rightmost.closed = TRUE, all.inside = TRUE)
+      out[mid] &lt;- (phi_m[j + 1L] - phi_m[j]) / (x_m[j + 1L] - x_m[j])
+    }
+    out
+  }
+
+  list(value = value, slope = slope, L = L, U = U)
+}</code></pre>
+<pre class="r"><code>#' M-step update of intercept and slopes by quasi-Newton (no LP, no constraints)
+#'
+#' @description
+#' Comparison arm for the LP ablation. Maximizes the same weighted
+#' log-likelihood with the same L1 penalty as \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}, but with
+#' \code{optim(method = "L-BFGS-B")} and without the log-concavity epigraph
+#' constraints or the support-feasibility bounds.
+#'
+#' The slope vector is split as \eqn{\theta = \theta^+ - \theta^-} with both
+#' parts nonnegative, mirroring the LP's variable structure so that the two arms
+#' differ in solver rather than in problem statement, and so the non-smooth L1
+#' penalty is handled the same way in both.
+#'
+#' @inheritParams mstep_theta_lp
+#' @param maxit Integer; \code{optim} iteration cap. Default 500.
+#' @param use_gradient Logical; supply the analytic (sub)gradient. Default TRUE.
+#'
+#' @return A list with \code{theta0_k}, \code{theta_k}, and diagnostics
+#'   \code{convergence}, \code{obj_start}, \code{obj_end}, \code{n_outside},
+#'   \code{counts}. \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} reads only the first two, so the
+#'   diagnostics are free to carry.
+#' @export
+<span id="mstep_theta_optim">mstep_theta_optim</span> &lt;- function(
+  Y_bin,
+  X,
+  weights,
+  residuals,
+  density_k,
+  idx,
+  intercept_k,
+  slopes_k,
+  lambda_theta,
+  component,
+  lp_time_limit = NULL,   # accepted and ignored; keeps the signature identical
+  maxit         = 500L,
+  use_gradient  = TRUE
+) {
+  TT &lt;- length(Y_bin)
+  p  &lt;- ncol(X)
+
+  ## ---- collect the same bins the LP would use -------------------------------
+  w_k &lt;- numeric(0)
+  Y_k &lt;- numeric(0)
+  X_k &lt;- matrix(nrow = 0, ncol = p)
+
+  for (t in seq_len(TT)) {
+    idx_tk &lt;- idx[[t]][, component]
+    if (any(idx_tk)) {
+      w_k &lt;- c(w_k, weights[[t]][idx_tk, component])
+      Y_k &lt;- c(Y_k, Y_bin[[t]][idx_tk, 1])
+      X_k &lt;- rbind(X_k,
+                   matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE))
+    }
+  }
+
+  if (length(Y_k) == 0L) {
+    return(list(theta0_k = intercept_k, theta_k = slopes_k,
+                convergence = NA_integer_, obj_start = NA_real_,
+                obj_end = NA_real_, n_outside = 0L, counts = c(NA, NA)))
+  }
+
+  ## ---- objective ------------------------------------------------------------
+  g       &lt;- <a href="create-LCDmix.html#make_logdens_ext">make_logdens_ext</a>(density_k)
+  N_total &lt;- sum(unlist(weights))          # matches mstep_theta_lp L1658
+  pen     &lt;- N_total * lambda_theta
+
+  <span id="unpack">unpack</span> &lt;- function(par) {
+    list(theta0 = par[1L],
+         theta  = par[2L:(p + 1L)] - par[(p + 2L):(2L * p + 1L)])
+  }
+
+  # optim minimizes, so return the negated objective
+  <span id="negobj">negobj</span> &lt;- function(par) {
+    q &lt;- <a href="create-LCDmix.html#unpack">unpack</a>(par)
+    u &lt;- Y_k - q$theta0 - as.vector(X_k %*% q$theta)
+    -(sum(w_k * g$<a href="create-LCDmix.html#value">value</a>(u)) - pen * sum(par[-1L]))
+  }
+
+  # d/dtheta0 g(u) = -<a href="create-LCDmix.html#slope">slope</a>(u);  d/dtheta_j g(u) = -<a href="create-LCDmix.html#slope">slope</a>(u) * X_j
+  # d/dtheta^+_j ||theta||_1 = d/dtheta^-_j ||theta||_1 = 1
+  <span id="neggrad">neggrad</span> &lt;- function(par) {
+    q  &lt;- <a href="create-LCDmix.html#unpack">unpack</a>(par)
+    u  &lt;- Y_k - q$theta0 - as.vector(X_k %*% q$theta)
+    s  &lt;- g$<a href="create-LCDmix.html#slope">slope</a>(u)
+    ws &lt;- w_k * s
+    d_theta0 &lt;- -sum(ws)
+    d_theta  &lt;- -as.vector(crossprod(X_k, ws))
+    -c(d_theta0, d_theta - pen, -d_theta - pen)
+  }
+
+  ## ---- start at the current iterate, as the LP effectively does -------------
+  par0 &lt;- c(intercept_k, pmax(slopes_k, 0), pmax(-slopes_k, 0))
+  lower &lt;- c(-Inf, rep(0, 2L * p))
+
+  obj_start &lt;- -<a href="create-LCDmix.html#negobj">negobj</a>(par0)
+
+  fit &lt;- tryCatch(
+    stats::optim(
+      par     = par0,
+      fn      = negobj,
+      gr      = if (use_gradient) neggrad else NULL,
+      method  = "L-BFGS-B",
+      lower   = lower,
+      control = list(maxit = maxit)
+    ),
+    error = function(e) list(par = par0, value = -obj_start,
+                             convergence = 99L, counts = c(NA, NA),
+                             message = conditionMessage(e))
+  )
+
+  q &lt;- <a href="create-LCDmix.html#unpack">unpack</a>(fit$par)
+
+  ## ---- diagnostic: how far off the support did this update push us? ---------
+  u_new     &lt;- Y_k - q$theta0 - as.vector(X_k %*% q$theta)
+  n_outside &lt;- sum(u_new &lt; g$L | u_new &gt; g$U)
+
+  list(
+    theta0_k    = q$theta0,
+    theta_k     = q$theta,
+    convergence = fit$convergence,
+    obj_start   = obj_start,
+    obj_end     = -fit$value,
+    n_outside   = n_outside,
+    counts      = fit$counts
+  )
 }</code></pre>
 <pre class="r"><code>#' Compute L1 distance between true and estimated parameter matrices with label‐switching correction
 #'
@@ -3650,11 +3946,11 @@ responsibilities,<br>
   est_res,
   t,
   y_grid,
-  X = X
+  X
 ) {
   if (!is.null(est_res$alpha_new)) { # if LCDmix 
     K &lt;- length(est_res$g_new)
-    res &lt;- sapply(seq_len(K), function(k) {
+    res_est &lt;- sapply(seq_len(K), function(k) {
         mu &lt;- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
         logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
       })
@@ -3662,7 +3958,7 @@ responsibilities,<br>
     mn_arr &lt;- est_res$mn
     sigma  &lt;- as.numeric(est_res$sigma)
     K      &lt;- dim(mn_arr)[3]
-    res &lt;- sapply(seq_len(K), function(k) {
+    res_est &lt;- sapply(seq_len(K), function(k) {
         dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
     }
@@ -4189,6 +4485,7 @@ responsibilities,<br>
 ## Writing 'is_increasing.Rd'
 ## Writing 'iteration.Rd'
 ## Writing 'main.Rd'
+## Writing 'make_logdens_ext.Rd'
 ## Writing 'mixture_metric.Rd'
 ## Writing 'modified_logcondens.Rd'
 ## Writing 'mstep_alpha.Rd'
@@ -4196,6 +4493,7 @@ responsibilities,<br>
 ## Writing 'mstep_shift.Rd'
 ## Writing 'mstep_theta.Rd'
 ## Writing 'mstep_theta_lp.Rd'
+## Writing 'mstep_theta_optim.Rd'
 ## Writing 'pi_k.Rd'
 ## Writing 'refit_lcd.Rd'
 ## Writing 'refit_lcd_simul.Rd'
