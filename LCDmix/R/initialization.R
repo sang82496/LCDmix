@@ -116,9 +116,10 @@ initialization <- function(
   Q_init <- comp_Q(
     X, g_init, resi_init, theta_init,
     alpha_init, idx_init, weight_init,
-    lambda_alpha, lambda_theta
-  )
-  names(Q_init) = 'Q'
+    lambda_alpha, lambda_theta,
+    Y_bin = Y_bin, intercepts = theta0_init          # NEW
+    )
+  names(Q_init) <- "Q"       # note: <- not =, and attributes survive naming
   
   # Return initialization results
   return(list(

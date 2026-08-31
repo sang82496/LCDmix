@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{comp_Q}
 \alias{comp_Q}
-\title{Compute the surrogate log-likelihood Q for the EM algorithm}
+\title{Compute the surrogate log-likelihood Q}
 \usage{
 comp_Q(
   X,
@@ -13,73 +13,96 @@ comp_Q(
   idx,
   resp,
   lambda_alpha,
-  lambda_theta
+  lambda_theta,
+  Y_bin = NULL,
+  intercepts = NULL
 )
 }
 \arguments{
-\item{X}{A \eqn{TT \times p} numeric covariate matrix (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix (rows = time points).}
 
-\item{densities}{A list of length \eqn{K}, each object returned by \code{modified_logcondens()}.}
+\item{densities}{A list of length \eqn{K} of \code{modified_logcondens()} objects.}
 
-\item{residuals}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of residuals.}
+\item{residuals}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
+residuals. Ignored when both \code{Y_bin} and \code{intercepts} are supplied.}
 
-\item{slopes}{A list of length \eqn{K}, each a numeric vector of length \eqn{p} of slope parameters.}
+\item{slopes}{A list of length \eqn{K} of slope vectors.}
 
-\item{alpha}{A \eqn{K \times (p+1)} numeric matrix of mixture parameters (column 1 = intercepts).}
+\item{alpha}{A numeric \eqn{K \times (p+1)} matrix of gating parameters.}
 
-\item{idx}{A list of length \eqn{TT}, each an \eqn{M_t \times K} logical/integer matrix indicating which residuals belong to component \eqn{k}.}
+\item{idx}{A list of length \eqn{TT}, each an \eqn{M_t \times K} logical matrix.}
 
-\item{resp}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of responsibilities \eqn{w_{t,i,k}}.}
+\item{resp}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
+posterior weights \eqn{w_{tik}}.}
 
 \item{lambda_alpha}{Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.}
 
-\item{lambda_theta}{Nonnegative numeric L1 penalty on slope parameters \code{slopes}.}
+\item{lambda_theta}{Nonnegative numeric L1 penalty on \code{slopes}.}
+
+\item{Y_bin}{Optional list of length \eqn{TT} of binned responses. Supply
+together with \code{intercepts} to recompute residuals internally.}
+
+\item{intercepts}{Optional list of length \eqn{K} of intercepts. Supply
+together with \code{Y_bin} to recompute residuals internally.}
 }
 \value{
-A single numeric: the surrogate log-likelihood \eqn{Q} (normalized) minus the L1 penalties.
+A single numeric: the normalized surrogate log-likelihood minus the
+L1 penalties. Carries three attributes, used by the LP ablation and ignored
+by ordinary arithmetic:
+\describe{
+\item{\code{n_eval}}{Number of active bins evaluated.}
+\item{\code{n_outside}}{Number of those whose residual fell outside the
+fitted support, so the log-density was \code{-Inf} and the bin was
+dropped from the sum.}
+\item{\code{mass_outside}}{Total posterior weight of the dropped bins.}
+}
+Bins outside the support are silently excluded from \eqn{Q}; a larger
+\code{n_outside} therefore means \eqn{Q} is computed over less of the data,
+and \eqn{Q} values with different \code{n_outside} are not comparable.
 }
 \description{
-Calculates the expected complete-data log-likelihood (the “Q” function) given
-current parameter estimates, combining:
-\itemize{
-\item Log-concave density contributions of residuals
-\item Mixture weight (α) contributions
-\item L1 penalties on α (excluding intercepts) and on regression slopes
-}
+Evaluates the (normalized) surrogate log-likelihood
+\deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in \mathcal{I}_{tk}}
+  w_{tik}\left[\log \hat f_k(u_{tik}) + \log \pi_k(X_t)\right]
+  - \lambda_\alpha \|\alpha\|_1 - \lambda_\theta \|\theta\|_1 .}
 
-Formally,
-\deqn{Q = \frac{1}{N}\sum_{t=1}^{TT}\sum_{k=1}^{K}\sum_{i\in\mathcal{I}_{tk}}
-  w_{t,i,k}\bigl[\log f_k(r_{t,i,k}) + \log\pi_{t,k}\bigr]
-  - \lambda_\alpha\|\alpha_{-0}\|_1 - \lambda_\theta\|\theta\|_1,}
-where:
-\itemize{
-\item \(r_{t,i,k}\) are residuals,
-\item \(f_k\) is the log-concave density for component \(k\),
-\item \(\pi_{t,k}=P(Z^{(t)}=k\mid X^{(t)})\),
-\item \(w_{t,i,k}\) are responsibilities,
-\item \(N=\sum_{t,i,k}w_{t,i,k}\).
-}
+Residuals may either be supplied directly through \code{residuals}, or
+recomputed internally from \code{(intercepts, slopes)} when both
+\code{Y_bin} and \code{intercepts} are given. The second form exists because
+\code{slopes} otherwise enters only through the L1 penalty: passing stale
+residuals alongside updated slopes measures the penalty change and nothing
+else, which makes the M-step diagnostic in \code{iteration()} vacuous.
 }
 \examples{
 \dontrun{
 TT <- 3; p <- 2; K <- 2
 X  <- matrix(rnorm(TT * p), nrow = TT)
 densities <- replicate(K,
-  modified_logcondens(rnorm(50), w = rep(1/50,50)),
+  modified_logcondens(rnorm(50), w = rep(1/50, 50)),
   simplify = FALSE
 )
 residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-idx   <- lapply(residuals,  function(m) matrix(TRUE, nrow(m), ncol(m)))
-resp <- lapply(idx,
-  function(idx) matrix(runif(length(idx)), nrow = nrow(idx))
-)
+idx    <- lapply(residuals, function(m) matrix(TRUE, nrow(m), ncol(m)))
+resp   <- lapply(idx, function(ii) matrix(runif(length(ii)), nrow = nrow(ii)))
 slopes <- replicate(K, rnorm(p), simplify = FALSE)
-alpha  <- matrix(rnorm(K*(p+1)), nrow = K)
+alpha  <- matrix(rnorm(K * (p + 1)), nrow = K)
 
+## (a) residuals supplied directly -- unchanged behavior
 Q_val <- comp_Q(
   X, densities, residuals, slopes, alpha,
   idx, resp,
   lambda_alpha = 1e-3, lambda_theta = 1e-3
 )
+
+## (b) residuals recomputed from (intercepts, slopes)
+Y_bin      <- lapply(1:TT, function(t) matrix(rnorm(5), ncol = 1))
+intercepts <- replicate(K, rnorm(1), simplify = FALSE)
+Q_val2 <- comp_Q(
+  X, densities, residuals, slopes, alpha,
+  idx, resp,
+  lambda_alpha = 1e-3, lambda_theta = 1e-3,
+  Y_bin = Y_bin, intercepts = intercepts
+)
+attr(Q_val2, "n_outside")
 }
 }
