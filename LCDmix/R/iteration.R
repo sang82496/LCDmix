@@ -73,6 +73,7 @@ iteration <- function(
   Q_every     <- init_res$Q_every
   n_outside_every <- integer(0)      # NEW: parallel to Q_every
   theta_diag <- list()
+  lp_check_every  <- list()                       # NEW
   
   last_state <- list(
     idx_old     = idx_old,
@@ -255,6 +256,7 @@ iteration <- function(
       Q_every     = Q_every,
       n_outside_every = n_outside_every,
       theta_diag      = theta_diag,
+      lp_check_every  = lp_check_every,               # NEW
       iter_num        = i,
       error           = res$error,           # NEW
       failed_iter     = res$failed_iter      # NEW
@@ -290,5 +292,6 @@ iteration <- function(
     Q_every     = Q_every,
     n_outside_every = n_outside_every,
     theta_diag      = theta_diag,
+    lp_check_every  = lp_check_every,               # NEW
     iter_num    = i))
 }

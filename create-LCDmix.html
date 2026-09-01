@@ -1412,6 +1412,7 @@ responsibilities,<br>
   Q_every     &lt;- init_res$Q_every
   n_outside_every &lt;- integer(0)      # NEW: parallel to Q_every
   theta_diag &lt;- list()
+  lp_check_every  &lt;- list()                       # NEW
   
   last_state &lt;- list(
     idx_old     = idx_old,
@@ -1594,6 +1595,7 @@ responsibilities,<br>
       Q_every     = Q_every,
       n_outside_every = n_outside_every,
       theta_diag      = theta_diag,
+      lp_check_every  = lp_check_every,               # NEW
       iter_num        = i,
       error           = res$error,           # NEW
       failed_iter     = res$failed_iter      # NEW
@@ -1629,6 +1631,7 @@ responsibilities,<br>
     Q_every     = Q_every,
     n_outside_every = n_outside_every,
     theta_diag      = theta_diag,
+    lp_check_every  = lp_check_every,               # NEW
     iter_num    = i))
 }</code></pre>
 <pre class="r"><code>#' Perform the E-step using log-concave component densities
