@@ -97,11 +97,19 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
         L <- res2$L
         conv_new <- res2$conv
         H <- res2$H
+        stalled <- FALSE                                  # NEW
         while ((max(conv_new) > prec * max(abs(conv_new)))) {
             JJ <- (1:n) * (conv_new > 0)
             JJ <- JJ[JJ > 0]
-            if (length(JJ) == 1 && conv[JJ] == conv_new[JJ]){ # inserted
-              print('break')
+            if (length(JJ) == 1 && conv[JJ] == conv_new[JJ]){
+              # Line search stalled: adopting phi_new and continuing has been
+              # shown to drive phi into numerical divergence a few outer
+              # iterations later (e.g. from a sane range like [-10,-1] out to
+              # [-230121,-230112]), at which point logcondens::LocalMLE()
+              # overflows internally and crashes with "NAs are not allowed
+              # in subscripted assignments". Stop refining here instead of
+              # letting that happen.
+              stalled <- TRUE                              # NEW
               break
               } 
             tmp <- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -117,6 +125,10 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
             conv_new <- res3$conv
             H <- res3$H
         }
+        if (stalled) {                                     # NEW
+          IsKnot <- IsKnot_old                              # NEW: discard this
+          break                                             # NEW: outer iteration's
+        }                                                   # NEW: attempted knot
         phi <- phi_new
         conv <- conv_new
         if (sum(IsKnot != IsKnot_old) == 0) {
