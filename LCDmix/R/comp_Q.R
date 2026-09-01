@@ -118,6 +118,7 @@ comp_Q <- function(
   n_eval       <- 0L   # NEW: active bins evaluated
   n_outside    <- 0L   # NEW: of those, how many fell outside the support
   mass_outside <- 0     # NEW: their total posterior weight
+  max_over     <- 0     # ADD
 
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
@@ -157,12 +158,13 @@ comp_Q <- function(
   l1_theta  <- sum(abs(unlist(slopes)))
   pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  Q_val <- total_ll / N_total - pen_total
+  Q_val <- unname(total_ll / N_total - pen_total)
 
   ## ---- NEW: diagnostics ride along as attributes; return stays scalar ------
   attr(Q_val, "n_eval")       <- n_eval
   attr(Q_val, "n_outside")    <- n_outside
   attr(Q_val, "mass_outside") <- mass_outside
+  attr(Q_val, "max_over")     <- max_over     # ADD
 
   return(Q_val)
 }

@@ -184,7 +184,7 @@ main <- function(
             bin_mass     = bin_mass,
             initial      = init_res,
             iter_partial = iter_res,
-            iter         = NULL,
+            iter         = NULL
           ))
   }
   message("✔ Iterations complete")
@@ -1009,6 +1009,7 @@ comp_Q <- function(
   n_eval       <- 0L   # NEW: active bins evaluated
   n_outside    <- 0L   # NEW: of those, how many fell outside the support
   mass_outside <- 0     # NEW: their total posterior weight
+  max_over     <- 0     # ADD
 
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
@@ -1048,12 +1049,13 @@ comp_Q <- function(
   l1_theta  <- sum(abs(unlist(slopes)))
   pen_total <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  Q_val <- total_ll / N_total - pen_total
+  Q_val <- unname(total_ll / N_total - pen_total)
 
   ## ---- NEW: diagnostics ride along as attributes; return stays scalar ------
   attr(Q_val, "n_eval")       <- n_eval
   attr(Q_val, "n_outside")    <- n_outside
   attr(Q_val, "mass_outside") <- mass_outside
+  attr(Q_val, "max_over")     <- max_over     # ADD
 
   return(Q_val)
 }
@@ -1228,7 +1230,8 @@ iteration <- function(
           if (!any(ii)) return(numeric(0))
           Y_bin[[t]][ii, 1] - theta0_lp[[k]] - sum(X[t, ] * theta_new[[k]])
         }))
-        c(n_out = sum(u < g_ext$L | u > g_ext$U),
+        tol <- 1e-8
+        c(n_out = sum(u < g_ext$L - tol | u > g_ext$U + tol),
           max_over = max(0, g_ext$L - min(u), max(u) - g_ext$U))
       })
       lp_check_every[[i]] <- do.call(rbind, lp_check)
