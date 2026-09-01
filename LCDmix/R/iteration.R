@@ -157,11 +157,17 @@ iteration <- function(
     theta_diag[[i]] <- theta_lp$diag                    # NEW, for the ablation
     
     if (calc_Q_every) {
-     Q_new <- comp_Q(X, g_old, resi_old, theta_new, alpha_new, idx_new,
-                     weight_new, lambda_alpha, lambda_theta,
-                     Y_bin = Y_bin, intercepts = theta0_lp)           # NEW
-     Q_every         <- c(Q_every, Q_new)
-     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
+      lp_check <- lapply(seq_len(K), function(k) {
+        g_ext <- make_logdens_ext(g_old[[k]])
+        u <- unlist(lapply(seq_len(TT), function(t) {
+          ii <- idx_old[[t]][, k]                     # the bin set the LP was given
+          if (!any(ii)) return(numeric(0))
+          Y_bin[[t]][ii, 1] - theta0_lp[[k]] - sum(X[t, ] * theta_new[[k]])
+        }))
+        c(n_out = sum(u < g_ext$L | u > g_ext$U),
+          max_over = max(0, g_ext$L - min(u), max(u) - g_ext$U))
+      })
+      lp_check_every[[i]] <- do.call(rbind, lp_check)
     }
     message("✔ Updated θ via LP")
     

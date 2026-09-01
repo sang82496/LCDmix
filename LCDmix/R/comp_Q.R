@@ -133,6 +133,12 @@ comp_Q <- function(
         logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 2]
       )
       finite_mask <- is.finite(log_dens)
+      
+      if (any(!finite_mask)) {
+        rng <- range(densities[[k]]$x)
+        over <- pmax(rng[1] - resi_tk[!finite_mask], resi_tk[!finite_mask] - rng[2])
+        max_over <- max(max_over, over)
+      }
 
       # NEW: record how much of the data this Q is actually computed over
       n_eval       <- n_eval + length(w_tk)
