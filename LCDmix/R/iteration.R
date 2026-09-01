@@ -165,7 +165,8 @@ iteration <- function(
           if (!any(ii)) return(numeric(0))
           Y_bin[[t]][ii, 1] - theta0_lp[[k]] - sum(X[t, ] * theta_new[[k]])
         }))
-        c(n_out = sum(u < g_ext$L | u > g_ext$U),
+        tol <- 1e-8
+        c(n_out = sum(u < g_ext$L - tol | u > g_ext$U + tol),
           max_over = max(0, g_ext$L - min(u), max(u) - g_ext$U))
       })
       lp_check_every[[i]] <- do.call(rbind, lp_check)

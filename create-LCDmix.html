@@ -513,7 +513,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
             bin_mass     = bin_mass,
             initial      = init_res,
             iter_partial = iter_res,
-            iter         = NULL,
+            iter         = NULL
           ))
   }
   message("✔ Iterations complete")
@@ -1291,6 +1291,7 @@ responsibilities,<br>
   n_eval       &lt;- 0L   # NEW: active bins evaluated
   n_outside    &lt;- 0L   # NEW: of those, how many fell outside the support
   mass_outside &lt;- 0     # NEW: their total posterior weight
+  max_over     &lt;- 0     # ADD
 
   for (k in seq_len(K_comp)) {
     for (t in seq_len(TT)) {
@@ -1330,12 +1331,13 @@ responsibilities,<br>
   l1_theta  &lt;- sum(abs(unlist(slopes)))
   pen_total &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
-  Q_val &lt;- total_ll / N_total - pen_total
+  Q_val &lt;- unname(total_ll / N_total - pen_total)
 
   ## ---- NEW: diagnostics ride along as attributes; return stays scalar ------
   attr(Q_val, "n_eval")       &lt;- n_eval
   attr(Q_val, "n_outside")    &lt;- n_outside
   attr(Q_val, "mass_outside") &lt;- mass_outside
+  attr(Q_val, "max_over")     &lt;- max_over     # ADD
 
   return(Q_val)
 }</code></pre>
@@ -1504,7 +1506,8 @@ responsibilities,<br>
           if (!any(ii)) return(numeric(0))
           Y_bin[[t]][ii, 1] - theta0_lp[[k]] - sum(X[t, ] * theta_new[[k]])
         }))
-        c(n_out = sum(u &lt; g_ext$L | u &gt; g_ext$U),
+        tol &lt;- 1e-8
+        c(n_out = sum(u &lt; g_ext$L - tol | u &gt; g_ext$U + tol),
           max_over = max(0, g_ext$L - min(u), max(u) - g_ext$U))
       })
       lp_check_every[[i]] &lt;- do.call(rbind, lp_check)

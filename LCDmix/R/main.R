@@ -115,7 +115,7 @@ main <- function(
             bin_mass     = bin_mass,
             initial      = init_res,
             iter_partial = iter_res,
-            iter         = NULL,
+            iter         = NULL
           ))
   }
   message("✔ Iterations complete")
