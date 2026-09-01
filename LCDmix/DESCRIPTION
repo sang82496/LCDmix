@@ -4,7 +4,7 @@ Version: 0.0.0.9000
 Authors@R: 
     person("Sang-wook", "Lee", , "sangwook@usc.edu", role = c("aut", "cre"))
 Description: This package uses mixture of log-concave regressions to
-    analyze complex and heterogenous data.
+    analyze complex and heterogeneous data.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
