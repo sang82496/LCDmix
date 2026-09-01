@@ -257,9 +257,7 @@ iteration <- function(
       n_outside_every = n_outside_every,
       theta_diag      = theta_diag,
       lp_check_every  = lp_check_every,               # NEW
-      iter_num        = i,
-      error           = res$error,           # NEW
-      failed_iter     = res$failed_iter      # NEW
+      iter_num        = i
       )
   }
     list(final = last_state,
@@ -293,5 +291,7 @@ iteration <- function(
     n_outside_every = n_outside_every,
     theta_diag      = theta_diag,
     lp_check_every  = lp_check_every,               # NEW
+    error           = res$error,           # NEW
+    failed_iter     = res$failed_iter,      # NEW
     iter_num    = i))
 }
