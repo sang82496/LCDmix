@@ -335,7 +335,7 @@ of the R package.</p>
     Package = params$package_name,
     Version = "0.0.0.9000",
     Title = "Mixture of log-concave regressions",
-    Description = "This package uses mixture of log-concave regressions to analyze complex and heterogenous data.",
+    Description = "This package uses mixture of log-concave regressions to analyze complex and heterogeneous data.",
     `Authors@R` = person(
       given = "Sang-wook",
       family = "Lee",
@@ -1511,6 +1511,11 @@ responsibilities,<br>
           max_over = max(0, g_ext$L - min(u), max(u) - g_ext$U))
       })
       lp_check_every[[i]] &lt;- do.call(rbind, lp_check)
+     Q_new &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(X, g_old, resi_old, theta_new, alpha_new, idx_new,
+                     weight_new, lambda_alpha, lambda_theta,
+                     Y_bin = Y_bin, intercepts = theta0_lp)           # NEW
+     Q_every         &lt;- c(Q_every, Q_new)
+     n_outside_every &lt;- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
     }
     message("✔ Updated θ via LP")
     
