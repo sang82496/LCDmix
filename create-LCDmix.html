@@ -1121,11 +1121,19 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         L &lt;- res2$L
         conv_new &lt;- res2$conv
         H &lt;- res2$H
+        stalled &lt;- FALSE                                  # NEW
         while ((max(conv_new) &gt; prec * max(abs(conv_new)))) {
             JJ &lt;- (1:n) * (conv_new &gt; 0)
             JJ &lt;- JJ[JJ &gt; 0]
-            if (length(JJ) == 1 &amp;&amp; conv[JJ] == conv_new[JJ]){ # inserted
-              print('break')
+            if (length(JJ) == 1 &amp;&amp; conv[JJ] == conv_new[JJ]){
+              # Line search stalled: adopting phi_new and continuing has been
+              # shown to drive phi into numerical divergence a few outer
+              # iterations later (e.g. from a sane range like [-10,-1] out to
+              # [-230121,-230112]), at which point logcondens::LocalMLE()
+              # overflows internally and crashes with "NAs are not allowed
+              # in subscripted assignments". Stop refining here instead of
+              # letting that happen.
+              stalled &lt;- TRUE                              # NEW
               break
               } 
             tmp &lt;- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -1141,6 +1149,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
             conv_new &lt;- res3$conv
             H &lt;- res3$H
         }
+        if (stalled) {                                     # NEW
+          IsKnot &lt;- IsKnot_old                              # NEW: discard this
+          break                                             # NEW: outer iteration's
+        }                                                   # NEW: attempted knot
         phi &lt;- phi_new
         conv &lt;- conv_new
         if (sum(IsKnot != IsKnot_old) == 0) {
