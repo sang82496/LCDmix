@@ -18,7 +18,8 @@ cv_lcd <- function(
   n_cores            = "max",
   cv_reps            = NULL,
   blocksize          = 20,
-  lp_time_limit      = 3600
+  lp_time_limit      = 3600,
+  update             = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -46,7 +47,7 @@ cv_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit"),
+                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -84,7 +85,8 @@ cv_lcd <- function(
         resp_threshold = resp_threshold,
         trim_prob      = trim_prob,
         save_dir       = save_dir,
-        lp_time_limit  = lp_time_limit
+        lp_time_limit  = lp_time_limit,
+        update         = update
       )
       return(res_ii)
     }

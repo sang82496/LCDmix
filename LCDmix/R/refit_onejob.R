@@ -16,8 +16,10 @@ refit_onejob <- function(
   resp_threshold,
   trim_prob,
   save_dir,
-  lp_time_limit
+  lp_time_limit,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update <- match.arg(update)           # NEW
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
 
@@ -45,7 +47,8 @@ refit_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
-        lp_time_limit   = lp_time_limit
+        lp_time_limit   = lp_time_limit,
+        update          = update
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
