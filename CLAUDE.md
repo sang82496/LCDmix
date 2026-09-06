@@ -17,6 +17,9 @@ the sibling folder `../` carry the full reasoning:
 - `LCDmix_plan_B_sprint.md` — the 10-day plan to submission (self-contained)
 - `LCDmix_ablation_design.md` — the experiment this code work exists to support
 - `n_outside_diagnosis.md` — why the out-of-support counter matters and what it measures
+- `cv_failure_diagnosis.md` — known CV crashes from near-duplicate residuals destabilizing
+  `logcondens`'s MLE numerics (3/40 on a test grid); two candidate fixes tried, both rejected
+  or partial; left as-is, intended for the paper's appendix as a known limitation
 
 Read `LCDmix_ablation_design.md` before proposing changes to the M-step. It explains the
 statistical reasoning, and changes that look like cleanups can silently invalidate the experiment.
