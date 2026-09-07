@@ -892,7 +892,7 @@ $$
 \deqn{Q = \frac{1}{N}\sum_{t=1}^{TT}\sum_{k=1}^{K}\sum_{i\in\mathcal{I}_{tk}}
  w_{t,i,k}\bigl[\log f_k(r_{t,i,k}) + \log\pi_{t,k}\bigr]
  - \lambda_\alpha\|\alpha_{-0}\|_1 - \lambda_\theta\|\theta\|_1,}
- $$
+$$
 where:
  - \(r_{t,i,k}\) are residuals,  
  - \(f_k\) is the log-concave density for component \(k\),  
@@ -900,6 +900,7 @@ where:
  - \(w_{t,i,k}\) are responsibilities,  
  - \(N=\sum_{t,i,k}w_{t,i,k}\).  
  
+
 
 
 ```{r}
@@ -1218,7 +1219,7 @@ iteration <- function(
     }
     message("✔ Updated α")
     
-    #— M‐step θ via LP + shift —#
+    # M‐step θ via LP + shift #
     #     THIS IS FIX 1. theta_lp$theta0 is the coefficient update's own intercept,
     #     before mstep_shift() overwrites it at L1147. Naming it explicitly keeps
     #     the distinction from being lost to a later edit.
@@ -3906,7 +3907,7 @@ dens_est_fun <- function(
         dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
     }
-  return(res)
+  return(res_est)
 }
 ```
 

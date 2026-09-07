@@ -1494,7 +1494,7 @@ responsibilities,<br>
     }
     message("✔ Updated α")
     
-    #— M‐step θ via LP + shift —#
+    # M‐step θ via LP + shift #
     #     THIS IS FIX 1. theta_lp$theta0 is the coefficient update's own intercept,
     #     before <a href="create-LCDmix.html#mstep_shift">mstep_shift</a>() overwrites it at L1147. Naming it explicitly keeps
     #     the distinction from being lost to a later edit.
@@ -4028,7 +4028,7 @@ responsibilities,<br>
         dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
     }
-  return(res)
+  return(res_est)
 }</code></pre>
 <pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
 #'

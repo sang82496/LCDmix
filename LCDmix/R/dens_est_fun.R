@@ -21,5 +21,5 @@ dens_est_fun <- function(
         dnorm(y_grid, mean = mn_arr[t,1,k], sd = sqrt(sigma[k]))
       })
     }
-  return(res)
+  return(res_est)
 }

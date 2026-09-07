@@ -141,7 +141,7 @@ iteration <- function(
     }
     message("✔ Updated α")
     
-    #— M‐step θ via LP + shift —#
+    # M‐step θ via LP + shift #
     #     THIS IS FIX 1. theta_lp$theta0 is the coefficient update's own intercept,
     #     before mstep_shift() overwrites it at L1147. Naming it explicitly keeps
     #     the distinction from being lost to a later edit.
