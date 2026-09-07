@@ -17,7 +17,8 @@ refit_onejob(
   resp_threshold,
   trim_prob,
   save_dir,
-  lp_time_limit
+  lp_time_limit,
+  update = c("lp", "optim")
 )
 }
 \description{

@@ -835,11 +835,19 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
         L <- res2$L
         conv_new <- res2$conv
         H <- res2$H
+        stalled <- FALSE                                  # NEW
         while ((max(conv_new) > prec * max(abs(conv_new)))) {
             JJ <- (1:n) * (conv_new > 0)
             JJ <- JJ[JJ > 0]
-            if (length(JJ) == 1 && conv[JJ] == conv_new[JJ]){ # inserted
-              print('break')
+            if (length(JJ) == 1 && conv[JJ] == conv_new[JJ]){
+              # Line search stalled: adopting phi_new and continuing has been
+              # shown to drive phi into numerical divergence a few outer
+              # iterations later (e.g. from a sane range like [-10,-1] out to
+              # [-230121,-230112]), at which point logcondens::LocalMLE()
+              # overflows internally and crashes with "NAs are not allowed
+              # in subscripted assignments". Stop refining here instead of
+              # letting that happen.
+              stalled <- TRUE                              # NEW
               break
               } 
             tmp <- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -855,6 +863,10 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
             conv_new <- res3$conv
             H <- res3$H
         }
+        if (stalled) {                                     # NEW
+          IsKnot <- IsKnot_old                              # NEW: discard this
+          break                                             # NEW: outer iteration's
+        }                                                   # NEW: attempted knot
         phi <- phi_new
         conv <- conv_new
         if (sum(IsKnot != IsKnot_old) == 0) {
@@ -2512,8 +2524,10 @@ cv_lcd_onejob <- function(
   trim_prob,
   save_dir,
   lp_time_limit = 3600,
-  sparsity_eps = 1e-6
+  sparsity_eps = 1e-6,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update <- match.arg(update)           # NEW
   alpha_idx     <- job[["alpha_idx"]]
   theta_idx     <- job[["theta_idx"]]
   seed_idx      <- job[["seed_idx"]]
@@ -2558,7 +2572,8 @@ cv_lcd_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
-        lp_time_limit   = lp_time_limit
+        lp_time_limit   = lp_time_limit,
+        update          = update
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -2655,7 +2670,8 @@ cv_lcd <- function(
   n_cores            = "max",
   cv_reps            = NULL,
   blocksize          = 20,
-  lp_time_limit      = 3600
+  lp_time_limit      = 3600,
+  update             = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -2683,7 +2699,7 @@ cv_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit"),
+                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -2721,7 +2737,8 @@ cv_lcd <- function(
         resp_threshold = resp_threshold,
         trim_prob      = trim_prob,
         save_dir       = save_dir,
-        lp_time_limit  = lp_time_limit
+        lp_time_limit  = lp_time_limit,
+        update         = update
       )
       return(res_ii)
     }
@@ -2831,7 +2848,8 @@ cv_lcd_simul <- function(
   blocksize      = 10,
   base_dir       = "./cv_saves",
   n_cores        = "max",
-  lp_time_limit  = 600
+  lp_time_limit  = 600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -2873,7 +2891,7 @@ cv_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
-                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit"),
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -2927,7 +2945,8 @@ cv_lcd_simul <- function(
         resp_threshold = resp_threshold,
         trim_prob      = trim_prob,
         save_dir       = sim_dir,
-        lp_time_limit  = lp_time_limit
+        lp_time_limit  = lp_time_limit,
+        update         = update
       )
       return(res_ii)
   })
@@ -3166,8 +3185,10 @@ refit_onejob <- function(
   resp_threshold,
   trim_prob,
   save_dir,
-  lp_time_limit
+  lp_time_limit,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update <- match.arg(update)           # NEW
   seed_int <- as.integer(seed)
   out_path <- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
 
@@ -3195,7 +3216,8 @@ refit_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
-        lp_time_limit   = lp_time_limit
+        lp_time_limit   = lp_time_limit,
+        update          = update
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -3300,7 +3322,8 @@ refit_lcd <- function(
   trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max",
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -3318,7 +3341,7 @@ refit_lcd <- function(
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -3338,7 +3361,7 @@ refit_lcd <- function(
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, lp_time_limit = lp_time_limit)
+      save_dir = save_dir, lp_time_limit = lp_time_limit, update = update)
     return(res_ii)
   })
 
@@ -3452,7 +3475,8 @@ refit_lcd_simul <- function(
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  lp_time_limit = 600
+  lp_time_limit = 600,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -3488,7 +3512,7 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir", "lp_time_limit"),
+                "resp_threshold","trim_prob","base_dir", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -3521,7 +3545,7 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, update = update)
     return(res_ii)
     })
   

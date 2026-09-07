@@ -16,7 +16,8 @@ refit_lcd_simul(
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  lp_time_limit = 600
+  lp_time_limit = 600,
+  update = c("lp", "optim")
 )
 }
 \arguments{

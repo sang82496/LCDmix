@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-09-01">
+<meta name="date" content="2026-09-06">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-09-01</h4>
+<h4 class="date">2026-09-06</h4>
 
 </div>
 
@@ -1121,11 +1121,19 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         L &lt;- res2$L
         conv_new &lt;- res2$conv
         H &lt;- res2$H
+        stalled &lt;- FALSE                                  # NEW
         while ((max(conv_new) &gt; prec * max(abs(conv_new)))) {
             JJ &lt;- (1:n) * (conv_new &gt; 0)
             JJ &lt;- JJ[JJ &gt; 0]
-            if (length(JJ) == 1 &amp;&amp; conv[JJ] == conv_new[JJ]){ # inserted
-              print('break')
+            if (length(JJ) == 1 &amp;&amp; conv[JJ] == conv_new[JJ]){
+              # Line search stalled: adopting phi_new and continuing has been
+              # shown to drive phi into numerical divergence a few outer
+              # iterations later (e.g. from a sane range like [-10,-1] out to
+              # [-230121,-230112]), at which point logcondens::LocalMLE()
+              # overflows internally and crashes with "NAs are not allowed
+              # in subscripted assignments". Stop refining here instead of
+              # letting that happen.
+              stalled &lt;- TRUE                              # NEW
               break
               } 
             tmp &lt;- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -1141,6 +1149,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
             conv_new &lt;- res3$conv
             H &lt;- res3$H
         }
+        if (stalled) {                                     # NEW
+          IsKnot &lt;- IsKnot_old                              # NEW: discard this
+          break                                             # NEW: outer iteration's
+        }                                                   # NEW: attempted knot
         phi &lt;- phi_new
         conv &lt;- conv_new
         if (sum(IsKnot != IsKnot_old) == 0) {
@@ -2710,8 +2722,10 @@ responsibilities,<br>
   trim_prob,
   save_dir,
   lp_time_limit = 3600,
-  sparsity_eps = 1e-6
+  sparsity_eps = 1e-6,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update &lt;- match.arg(update)           # NEW
   alpha_idx     &lt;- job[["alpha_idx"]]
   theta_idx     &lt;- job[["theta_idx"]]
   seed_idx      &lt;- job[["seed_idx"]]
@@ -2756,7 +2770,8 @@ responsibilities,<br>
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
-        lp_time_limit   = lp_time_limit
+        lp_time_limit   = lp_time_limit,
+        update          = update
       ),
       error = function(e) { err_msg &lt;&lt;- e$message; NULL }
     ),
@@ -2846,7 +2861,8 @@ responsibilities,<br>
   n_cores            = "max",
   cv_reps            = NULL,
   blocksize          = 20,
-  lp_time_limit      = 3600
+  lp_time_limit      = 3600,
+  update             = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -2874,7 +2890,7 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit"),
+                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -2912,7 +2928,8 @@ responsibilities,<br>
         resp_threshold = resp_threshold,
         trim_prob      = trim_prob,
         save_dir       = save_dir,
-        lp_time_limit  = lp_time_limit
+        lp_time_limit  = lp_time_limit,
+        update         = update
       )
       return(res_ii)
     }
@@ -3018,7 +3035,8 @@ responsibilities,<br>
   blocksize      = 10,
   base_dir       = "./cv_saves",
   n_cores        = "max",
-  lp_time_limit  = 600
+  lp_time_limit  = 600,
+  update         = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3060,7 +3078,7 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
-                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit"),
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -3114,7 +3132,8 @@ responsibilities,<br>
         resp_threshold = resp_threshold,
         trim_prob      = trim_prob,
         save_dir       = sim_dir,
-        lp_time_limit  = lp_time_limit
+        lp_time_limit  = lp_time_limit,
+        update         = update
       )
       return(res_ii)
   })
@@ -3333,8 +3352,10 @@ responsibilities,<br>
   resp_threshold,
   trim_prob,
   save_dir,
-  lp_time_limit
+  lp_time_limit,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
+  update &lt;- match.arg(update)           # NEW
   seed_int &lt;- as.integer(seed)
   out_path &lt;- file.path(save_dir, sprintf("refit_%d.rds", seed_int))
 
@@ -3362,7 +3383,8 @@ responsibilities,<br>
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
-        lp_time_limit   = lp_time_limit
+        lp_time_limit   = lp_time_limit,
+        update          = update
       ),
       error = function(e) { err_msg &lt;&lt;- e$message; NULL }
     ),
@@ -3460,7 +3482,8 @@ responsibilities,<br>
   trim_prob = 0.03,
   save_dir = "./refits", 
   n_cores = "max",
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3478,7 +3501,7 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -3498,7 +3521,7 @@ responsibilities,<br>
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, lp_time_limit = lp_time_limit)
+      save_dir = save_dir, lp_time_limit = lp_time_limit, update = update)
     return(res_ii)
   })
 
@@ -3606,7 +3629,8 @@ responsibilities,<br>
   trim_prob = 0.03,
   base_dir = "./cv_saves",
   n_cores = "max",
-  lp_time_limit = 600
+  lp_time_limit = 600,
+  update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3642,7 +3666,7 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir", "lp_time_limit"),
+                "resp_threshold","trim_prob","base_dir", "lp_time_limit", "update"),
     envir = environment()
   )
 
@@ -3675,7 +3699,7 @@ responsibilities,<br>
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, update = update)
     return(res_ii)
     })
   

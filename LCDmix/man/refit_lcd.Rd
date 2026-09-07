@@ -18,7 +18,8 @@ refit_lcd(
   trim_prob = 0.03,
   save_dir = "./refits",
   n_cores = "max",
-  lp_time_limit = 3600
+  lp_time_limit = 3600,
+  update = c("lp", "optim")
 )
 }
 \arguments{
