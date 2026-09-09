@@ -2728,7 +2728,7 @@ responsibilities,<br>
 <pre class="r"><code>#' @keywords internal
 #' 
 #' @export
-<span id=".fit_error_text">.fit_error_text</span> &lt;- function(fit, err_msg) {
+<span id="fit_error_text">fit_error_text</span> &lt;- function(fit, err_msg) {
   ## Error thrown out of <a href="create-LCDmix.html#main">main</a>() -- tryCatch already captured it.
   if (!is.null(err_msg)) return(err_msg)
   ## <a href="create-LCDmix.html#main">main</a>() returned normally with iter = NULL: <a href="create-LCDmix.html#iteration">iteration</a>() caught it inside.
@@ -2826,7 +2826,7 @@ responsibilities,<br>
   log_msg &lt;- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
 
   if (!is.list(fit) || is.null(fit$iter)) {
-    err_txt &lt;- <a href="create-LCDmix.html#.fit_error_text">.fit_error_text</a>(fit, err_msg)                       # NEW
+    err_txt &lt;- <a href="create-LCDmix.html#fit_error_text">fit_error_text</a>(fit, err_msg)                       # NEW
     failed_iter &lt;- if (is.list(fit) &amp;&amp; !is.null(fit$iter_partial)) # NEW
                      fit$iter_partial$failed_iter else NA_integer_ # NEW
     log_msg &lt;- paste0(log_msg, "✖ Fit failed: ", err_txt)
@@ -3446,7 +3446,7 @@ responsibilities,<br>
 
   # failure path
     if (!is.list(fit) | is.null(fit$iter)) {
-      err_txt &lt;- <a href="create-LCDmix.html#.fit_error_text">.fit_error_text</a>(fit, err_msg)                     # NEW
+      err_txt &lt;- <a href="create-LCDmix.html#fit_error_text">fit_error_text</a>(fit, err_msg)                     # NEW
       log_msg &lt;- paste0(log_msg, "✖ Refit failed: ", err_txt)
       saveRDS(list(
         fit         = NULL,

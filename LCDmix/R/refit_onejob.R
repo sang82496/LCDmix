@@ -58,7 +58,7 @@ refit_onejob <- function(
 
   # failure path
     if (!is.list(fit) | is.null(fit$iter)) {
-      err_txt <- .fit_error_text(fit, err_msg)                     # NEW
+      err_txt <- fit_error_text(fit, err_msg)                     # NEW
       log_msg <- paste0(log_msg, "✖ Refit failed: ", err_txt)
       saveRDS(list(
         fit         = NULL,

@@ -3,7 +3,7 @@
 #' @keywords internal
 #' 
 #' @export
-.fit_error_text <- function(fit, err_msg) {
+fit_error_text <- function(fit, err_msg) {
   ## Error thrown out of main() -- tryCatch already captured it.
   if (!is.null(err_msg)) return(err_msg)
   ## main() returned normally with iter = NULL: iteration() caught it inside.

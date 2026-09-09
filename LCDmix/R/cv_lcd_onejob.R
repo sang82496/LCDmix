@@ -85,7 +85,7 @@ cv_lcd_onejob <- function(
   log_msg <- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
 
   if (!is.list(fit) || is.null(fit$iter)) {
-    err_txt <- .fit_error_text(fit, err_msg)                       # NEW
+    err_txt <- fit_error_text(fit, err_msg)                       # NEW
     failed_iter <- if (is.list(fit) && !is.null(fit$iter_partial)) # NEW
                      fit$iter_partial$failed_iter else NA_integer_ # NEW
     log_msg <- paste0(log_msg, "✖ Fit failed: ", err_txt)
