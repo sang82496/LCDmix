@@ -11,7 +11,7 @@ iteration(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta = 1e-06,
+  iter_eta = 0.001,
   max_iter = 30,
   resp_threshold = 0.001,
   calc_Q_every = FALSE,

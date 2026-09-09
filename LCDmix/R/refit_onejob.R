@@ -58,11 +58,15 @@ refit_onejob <- function(
 
   # failure path
     if (!is.list(fit) | is.null(fit$iter)) {
-      log_msg <- paste0(log_msg, "✖ Refit failed: ", err_msg)
+      err_txt <- .fit_error_text(fit, err_msg)                     # NEW
+      log_msg <- paste0(log_msg, "✖ Refit failed: ", err_txt)
       saveRDS(list(
-        fit      = NULL,
-        fit_L    = NULL,
-        log_msg  = log_msg
+        fit         = NULL,
+        fit_L       = NULL,
+        err_msg     = err_txt,                                     # NEW
+        failed_iter = if (is.list(fit) && !is.null(fit$iter_partial))  # NEW
+                        fit$iter_partial$failed_iter else NA_integer_, # NEW
+        log_msg     = log_msg
       ), file = out_path)
       return(FALSE)
     }

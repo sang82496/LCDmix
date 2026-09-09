@@ -4,7 +4,7 @@
 \alias{mstep_g}
 \title{Estimate component densities via log-concave density estimation (M-step)}
 \usage{
-mstep_g(residuals, weights, idx)
+mstep_g(residuals, weights, idx, dedup_tol = 1e-10)
 }
 \arguments{
 \item{residuals}{A list of length \code{TT}, where each element is an \eqn{M_t \times K}
@@ -16,6 +16,11 @@ matrix of posterior weights (e.g., responsibilities) corresponding to \code{resi
 \item{idx}{A list of length \code{TT}, where each element is an \eqn{M_t \times K}
 logical or integer matrix.  \code{idx[[t]][i,k]} indicates whether the \(i\)th bin
 at time \(t\) contributes to component \(k\).}
+
+\item{dedup_tol}{Numeric; residuals closer together than this are merged
+before fitting. Binning produces residuals differing only at machine
+precision, which prevents the log-concave active-set search from reaching
+its maximizer. Set to \code{0} to disable merging. Default \code{1e-10}.}
 }
 \value{
 A list of length \code{K}, where element \code{k} is the output of

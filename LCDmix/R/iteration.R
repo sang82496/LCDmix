@@ -47,7 +47,7 @@ iteration <- function(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta       = 1e-6,
+  iter_eta       = 1e-3,
   max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,

@@ -85,7 +85,10 @@ cv_lcd_onejob <- function(
   log_msg <- paste0(log_msg, paste0(out_log, collapse = "\n"), "\n")
 
   if (!is.list(fit) || is.null(fit$iter)) {
-    log_msg <- paste0(log_msg, "✖ Fit failed: ", err_msg)
+    err_txt <- .fit_error_text(fit, err_msg)                       # NEW
+    failed_iter <- if (is.list(fit) && !is.null(fit$iter_partial)) # NEW
+                     fit$iter_partial$failed_iter else NA_integer_ # NEW
+    log_msg <- paste0(log_msg, "✖ Fit failed: ", err_txt)
     saveRDS(
       list(
         eval_prop_inf       = NA_real_,
@@ -100,6 +103,8 @@ cv_lcd_onejob <- function(
         fit_med_loglik      = NA_real_,
         theta_spars         = NA_real_,
         alpha_spars         = NA_real_,
+        err_msg             = err_txt,                             # NEW
+        failed_iter         = failed_iter,                         # NEW
         log_msg             = log_msg
       ),
       file = out_path
@@ -141,6 +146,8 @@ cv_lcd_onejob <- function(
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
       alpha_spars         = alpha_spars,
+      err_msg             = NA_character_,                       # NEW
+      failed_iter         = NA_integer_,                         # NEW
       log_msg             = log_msg
     ),
     file = out_path
