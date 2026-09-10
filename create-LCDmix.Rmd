@@ -2572,7 +2572,8 @@ cv_lcd_onejob <- function(
   save_dir,
   lp_time_limit = 3600,
   sparsity_eps = 1e-6,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  calc_Q_every  = FALSE,                 # NEW
+  update         = c("lp", "optim")     # NEW
 ) {
   update <- match.arg(update)           # NEW
   alpha_idx     <- job[["alpha_idx"]]
@@ -2619,6 +2620,7 @@ cv_lcd_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
+        calc_Q_every    = calc_Q_every,      # NEW
         lp_time_limit   = lp_time_limit,
         update          = update
       ),
@@ -2650,6 +2652,14 @@ cv_lcd_onejob <- function(
         alpha_spars         = NA_real_,
         err_msg             = err_txt,                             # NEW
         failed_iter         = failed_iter,                         # NEW
+       iter_num = NA_integer_, 
+       n_outside_total = NA_real_,
+       lp_max_over = NA_real_, 
+       lp_n_out_total = NA_real_,
+       n_ascent_violations = NA_integer_,
+       Q_every = NULL, 
+       n_outside_every = NULL, 
+       lp_check_every = NULL,
         log_msg             = log_msg
       ),
       file = out_path
@@ -2675,6 +2685,9 @@ cv_lcd_onejob <- function(
   alpha_core  <- fit$iter$alpha_new[-1, -1, drop = FALSE]
   alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
 
+  
+  
+  
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))
 
   saveRDS(
@@ -2691,9 +2704,26 @@ cv_lcd_onejob <- function(
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
       alpha_spars         = alpha_spars,
-      err_msg             = NA_character_,                       # NEW
-      failed_iter         = NA_integer_,                         # NEW
-      log_msg             = log_msg
+       # --- NEW: diagnostics -------------------------------------------------
+       iter_num            = fit$iter$iter_num,
+       n_outside_total     = sum(fit$iter$n_outside_every),
+       lp_max_over         = if (length(fit$iter$lp_check_every))
+                               max(vapply(fit$iter$lp_check_every,
+                                          function(m) max(m[, "max_over"]), numeric(1))) else NA_real_,
+       lp_n_out_total      = if (length(fit$iter$lp_check_every))
+                               sum(vapply(fit$iter$lp_check_every,
+                                          function(m) sum(m[, "n_out"]), numeric(1))) else NA_real_,
+       n_ascent_violations = if (isTRUE(calc_Q_every)) {
+                               q <- fit$iter$Q_every; it <- fit$iter$iter_num
+                               sum(q[5 * seq_len(it) + 1] - q[5 * seq_len(it) - 3] < 0)
+                             } else NA_integer_,
+       Q_every             = if (isTRUE(calc_Q_every)) fit$iter$Q_every         else NULL,
+       n_outside_every     = if (isTRUE(calc_Q_every)) fit$iter$n_outside_every else NULL,
+       lp_check_every      = if (isTRUE(calc_Q_every)) fit$iter$lp_check_every  else NULL,
+       # ----------------------------------------------------------------------
+       err_msg             = NA_character_,
+       failed_iter         = NA_integer_,
+       log_msg             = log_msg
     ),
     file = out_path
   )
@@ -2903,6 +2933,7 @@ cv_lcd_simul <- function(
   base_dir       = "./cv_saves",
   n_cores        = "max",
   lp_time_limit  = 600,
+  calc_Q_every   = FALSE,                # NEW - appended
   update         = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
@@ -2945,7 +2976,8 @@ cv_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
-                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit", "update"),
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", 
+                "nfold", "lp_time_limit", "update", "calc_Q_every"),
     envir = environment()
   )
 
@@ -3000,6 +3032,7 @@ cv_lcd_simul <- function(
         trim_prob      = trim_prob,
         save_dir       = sim_dir,
         lp_time_limit  = lp_time_limit,
+        calc_Q_every   = calc_Q_every,       # NEW
         update         = update
       )
       return(res_ii)
@@ -3240,6 +3273,7 @@ refit_onejob <- function(
   trim_prob,
   save_dir,
   lp_time_limit,
+  calc_Q_every = FALSE,         # NEW - appended
   update = c("lp", "optim")     # NEW - must be LAST
 ) {
   update <- match.arg(update)           # NEW
@@ -3270,6 +3304,7 @@ refit_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
+        calc_Q_every    = calc_Q_every,   # NEW
         lp_time_limit   = lp_time_limit,
         update          = update
       ),
@@ -3534,6 +3569,7 @@ refit_lcd_simul <- function(
   base_dir = "./cv_saves",
   n_cores = "max",
   lp_time_limit = 600,
+  calc_Q_every = FALSE,
   update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
@@ -3569,8 +3605,8 @@ refit_lcd_simul <- function(
   parallel::clusterEvalQ(cl, { library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir", "lp_time_limit", "update"),
+    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta","resp_threshold",
+                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every"),
     envir = environment()
   )
 
@@ -3603,21 +3639,24 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, update = update)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, 
+      update = update, calc_Q_every = calc_Q_every)
     return(res_ii)
     })
   
   success   <- unlist(res, use.names = FALSE)
   summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
   
-  best_table <- data.frame(
-    sim            = seq_len(num_sims),
-    lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
-    lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
-    best_idx       = NA_integer_,
-    loglike        = NA_real_,
-    stringsAsFactors = FALSE
-  )
+   best_table <- data.frame(
+     sim            = seq_len(num_sims),
+     lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
+     lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
+     best_idx       = NA_integer_,
+     loglike        = NA_real_,
+     best_file      = NA_character_,   # NEW: resolved path, or NA if none
+     n_failed_seeds = NA_integer_,     # NEW: how many of `seeds` produced no fit
+     stringsAsFactors = FALSE
+   )
   loglik_lst = list()
 
   for (s in seq_len(num_sims)) {
@@ -3633,16 +3672,28 @@ refit_lcd_simul <- function(
         L_vec[i]  <- obj$fit_L
       }
     }
-    loglik_lst[[s]] = L_vec
-    
-    if (all(!is.finite(L_vec))) next
-    
-    L_vec[!is.finite(L_vec)] <- -Inf   # handles NA and NaN
-    best_table$best_idx[s] <- seeds[which.max(L_vec)]
-    best_table$loglike[s]  <- max(L_vec)
+     loglik_lst[[s]] = L_vec
+     best_table$n_failed_seeds[s] <- sum(!is.finite(L_vec))       # NEW
+     if (all(!is.finite(L_vec))) {
+       warning("refit_lcd_simul(): simulation ", s,
+               " has no usable refit (all ", length(seeds)," seeds failed)")  # NEW
+       next
+     }
+     L_vec[!is.finite(L_vec)] <- -Inf
+     bi <- seeds[which.max(L_vec)]
+     best_table$best_idx[s]  <- bi
+     best_table$loglike[s]   <- max(L_vec)
+     best_table$best_file[s] <- file.path(sim_refit_dir,             # NEW
+                                          sprintf("refit_%d.rds", as.integer(bi)))
   }
   colnames(best_table)[5] = 'loglik'
-
+  
+   n_dead <- sum(is.na(best_table$best_idx))
+   if (n_dead > 0)
+     warning("refit_lcd_simul(): ", n_dead, " of ", num_sims,
+             " simulations have no usable refit: ",
+             paste(which(is.na(best_table$best_idx)), collapse = ", "))
+   
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
               loglik_lst = loglik_lst,

@@ -17,6 +17,7 @@ refit_onejob <- function(
   trim_prob,
   save_dir,
   lp_time_limit,
+  calc_Q_every = FALSE,         # NEW - appended
   update = c("lp", "optim")     # NEW - must be LAST
 ) {
   update <- match.arg(update)           # NEW
@@ -47,6 +48,7 @@ refit_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
+        calc_Q_every    = calc_Q_every,   # NEW
         lp_time_limit   = lp_time_limit,
         update          = update
       ),

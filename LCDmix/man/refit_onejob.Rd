@@ -18,6 +18,7 @@ refit_onejob(
   trim_prob,
   save_dir,
   lp_time_limit,
+  calc_Q_every = FALSE,
   update = c("lp", "optim")
 )
 }

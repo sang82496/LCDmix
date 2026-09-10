@@ -27,7 +27,8 @@ cv_lcd_onejob <- function(
   save_dir,
   lp_time_limit = 3600,
   sparsity_eps = 1e-6,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  calc_Q_every  = FALSE,                 # NEW
+  update         = c("lp", "optim")     # NEW
 ) {
   update <- match.arg(update)           # NEW
   alpha_idx     <- job[["alpha_idx"]]
@@ -74,6 +75,7 @@ cv_lcd_onejob <- function(
         resp_threshold  = resp_threshold,
         trim_prob       = trim_prob,
         debug           = TRUE,
+        calc_Q_every    = calc_Q_every,      # NEW
         lp_time_limit   = lp_time_limit,
         update          = update
       ),
@@ -105,6 +107,14 @@ cv_lcd_onejob <- function(
         alpha_spars         = NA_real_,
         err_msg             = err_txt,                             # NEW
         failed_iter         = failed_iter,                         # NEW
+       iter_num = NA_integer_, 
+       n_outside_total = NA_real_,
+       lp_max_over = NA_real_, 
+       lp_n_out_total = NA_real_,
+       n_ascent_violations = NA_integer_,
+       Q_every = NULL, 
+       n_outside_every = NULL, 
+       lp_check_every = NULL,
         log_msg             = log_msg
       ),
       file = out_path
@@ -130,6 +140,9 @@ cv_lcd_onejob <- function(
   alpha_core  <- fit$iter$alpha_new[-1, -1, drop = FALSE]
   alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
 
+  
+  
+  
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))
 
   saveRDS(
@@ -146,9 +159,26 @@ cv_lcd_onejob <- function(
       fit_med_loglik      = fit$L$med_loglik,
       theta_spars         = theta_spars,
       alpha_spars         = alpha_spars,
-      err_msg             = NA_character_,                       # NEW
-      failed_iter         = NA_integer_,                         # NEW
-      log_msg             = log_msg
+       # --- NEW: diagnostics -------------------------------------------------
+       iter_num            = fit$iter$iter_num,
+       n_outside_total     = sum(fit$iter$n_outside_every),
+       lp_max_over         = if (length(fit$iter$lp_check_every))
+                               max(vapply(fit$iter$lp_check_every,
+                                          function(m) max(m[, "max_over"]), numeric(1))) else NA_real_,
+       lp_n_out_total      = if (length(fit$iter$lp_check_every))
+                               sum(vapply(fit$iter$lp_check_every,
+                                          function(m) sum(m[, "n_out"]), numeric(1))) else NA_real_,
+       n_ascent_violations = if (isTRUE(calc_Q_every)) {
+                               q <- fit$iter$Q_every; it <- fit$iter$iter_num
+                               sum(q[5 * seq_len(it) + 1] - q[5 * seq_len(it) - 3] < 0)
+                             } else NA_integer_,
+       Q_every             = if (isTRUE(calc_Q_every)) fit$iter$Q_every         else NULL,
+       n_outside_every     = if (isTRUE(calc_Q_every)) fit$iter$n_outside_every else NULL,
+       lp_check_every      = if (isTRUE(calc_Q_every)) fit$iter$lp_check_every  else NULL,
+       # ----------------------------------------------------------------------
+       err_msg             = NA_character_,
+       failed_iter         = NA_integer_,
+       log_msg             = log_msg
     ),
     file = out_path
   )

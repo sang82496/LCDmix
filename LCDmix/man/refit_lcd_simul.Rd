@@ -17,6 +17,7 @@ refit_lcd_simul(
   base_dir = "./cv_saves",
   n_cores = "max",
   lp_time_limit = 600,
+  calc_Q_every = FALSE,
   update = c("lp", "optim")
 )
 }

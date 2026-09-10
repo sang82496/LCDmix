@@ -95,6 +95,7 @@ cv_lcd_simul <- function(
   base_dir       = "./cv_saves",
   n_cores        = "max",
   lp_time_limit  = 600,
+  calc_Q_every   = FALSE,                # NEW - appended
   update         = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
@@ -137,7 +138,8 @@ cv_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
-                "resp_threshold", "trim_prob", "blocksize", "base_dir", "nfold", "lp_time_limit", "update"),
+                "resp_threshold", "trim_prob", "blocksize", "base_dir", 
+                "nfold", "lp_time_limit", "update", "calc_Q_every"),
     envir = environment()
   )
 
@@ -192,6 +194,7 @@ cv_lcd_simul <- function(
         trim_prob      = trim_prob,
         save_dir       = sim_dir,
         lp_time_limit  = lp_time_limit,
+        calc_Q_every   = calc_Q_every,       # NEW
         update         = update
       )
       return(res_ii)

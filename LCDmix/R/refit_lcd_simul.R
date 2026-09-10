@@ -78,6 +78,7 @@ refit_lcd_simul <- function(
   base_dir = "./cv_saves",
   n_cores = "max",
   lp_time_limit = 600,
+  calc_Q_every = FALSE,
   update = c("lp", "optim")     # NEW - must be LAST
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
@@ -113,8 +114,8 @@ refit_lcd_simul <- function(
   parallel::clusterEvalQ(cl, { library(LCDmix); NULL })
   parallel::clusterExport(
     cl,
-    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta",
-                "resp_threshold","trim_prob","base_dir", "lp_time_limit", "update"),
+    varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta","resp_threshold",
+                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every"),
     envir = environment()
   )
 
@@ -147,21 +148,24 @@ refit_lcd_simul <- function(
       lambda_alpha = la, lambda_theta = lt,
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, update = update)
+      save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, 
+      update = update, calc_Q_every = calc_Q_every)
     return(res_ii)
     })
   
   success   <- unlist(res, use.names = FALSE)
   summary   <- sprintf("Failures: %d/%d (%.1f%%)", sum(!success), length(success), 100 * sum(!success)/length(success))
   
-  best_table <- data.frame(
-    sim            = seq_len(num_sims),
-    lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
-    lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
-    best_idx       = NA_integer_,
-    loglike        = NA_real_,
-    stringsAsFactors = FALSE
-  )
+   best_table <- data.frame(
+     sim            = seq_len(num_sims),
+     lambda_alpha   = vapply(opt_lambdas_list, function(x) as.numeric(x[1]), numeric(1)),
+     lambda_theta   = vapply(opt_lambdas_list, function(x) as.numeric(x[2]), numeric(1)),
+     best_idx       = NA_integer_,
+     loglike        = NA_real_,
+     best_file      = NA_character_,   # NEW: resolved path, or NA if none
+     n_failed_seeds = NA_integer_,     # NEW: how many of `seeds` produced no fit
+     stringsAsFactors = FALSE
+   )
   loglik_lst = list()
 
   for (s in seq_len(num_sims)) {
@@ -177,16 +181,28 @@ refit_lcd_simul <- function(
         L_vec[i]  <- obj$fit_L
       }
     }
-    loglik_lst[[s]] = L_vec
-    
-    if (all(!is.finite(L_vec))) next
-    
-    L_vec[!is.finite(L_vec)] <- -Inf   # handles NA and NaN
-    best_table$best_idx[s] <- seeds[which.max(L_vec)]
-    best_table$loglike[s]  <- max(L_vec)
+     loglik_lst[[s]] = L_vec
+     best_table$n_failed_seeds[s] <- sum(!is.finite(L_vec))       # NEW
+     if (all(!is.finite(L_vec))) {
+       warning("refit_lcd_simul(): simulation ", s,
+               " has no usable refit (all ", length(seeds)," seeds failed)")  # NEW
+       next
+     }
+     L_vec[!is.finite(L_vec)] <- -Inf
+     bi <- seeds[which.max(L_vec)]
+     best_table$best_idx[s]  <- bi
+     best_table$loglike[s]   <- max(L_vec)
+     best_table$best_file[s] <- file.path(sim_refit_dir,             # NEW
+                                          sprintf("refit_%d.rds", as.integer(bi)))
   }
   colnames(best_table)[5] = 'loglik'
-
+  
+   n_dead <- sum(is.na(best_table$best_idx))
+   if (n_dead > 0)
+     warning("refit_lcd_simul(): ", n_dead, " of ", num_sims,
+             " simulations have no usable refit: ",
+             paste(which(is.na(best_table$best_idx)), collapse = ", "))
+   
   return(list(grand_jobs = grand_jobs,
               summary    = summary,
               loglik_lst = loglik_lst,
