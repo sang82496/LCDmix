@@ -4,7 +4,7 @@
 \alias{mixture_metric}
 \title{Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures}
 \usage{
-mixture_metric(sim, est_res)
+mixture_metric(sim, est_res, rescale = TRUE)
 }
 \arguments{
 \item{est_res}{A fitted model object:
@@ -12,6 +12,14 @@ mixture_metric(sim, est_res)
 \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
 \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
 }}
+
+\item{rescale}{Logical; if \code{TRUE} (default) multiply the midpoint
+Riemann sum by the bin width \eqn{h}, returning the integrated absolute
+error \eqn{\int |\hat f - f|\,dy \in [0, 2]}. If \code{FALSE}, return the
+unscaled sum \eqn{\sum_b |\hat f_b - f_b|}, which is \eqn{1/h} times that
+and is what versions of this function before the rescale returned. Ignored
+with a warning when the bin midpoints do not lie on an equally spaced
+lattice (e.g. data binned with \code{n_bins = 0}).}
 
 \item{Y_bin}{List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.}
 
@@ -31,6 +39,11 @@ A list with elements:
 \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
 \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
 }
+
+Scalar: the biomass-weighted average over time of the \eqn{L^1}
+distance between the estimated and true mixture densities. Carries
+attributes \code{"h"} (the bin width used, \code{NA} if not rescaled) and
+\code{"per_time"} (the length-\code{TT} vector of per-time distances).
 }
 \description{
 For each time point \code{t}, evaluates the estimated mixture density

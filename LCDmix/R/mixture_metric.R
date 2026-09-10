@@ -22,13 +22,24 @@
 #'     \item{\code{prob}}{\code{TT × K} numeric matrix of true mixing proportions \eqn{\pi_{t,k}}.}
 #'     \item{\code{dens_true}}{List of length \code{TT}, each an \code{n_t × K} numeric matrix of the true component densities evaluated at \code{Y_bin[[t]]}.}
 #'   }
+#' @param rescale Logical; if \code{TRUE} (default) multiply the midpoint
+#' Riemann sum by the bin width \eqn{h}, returning the integrated absolute
+#'   error \eqn{\int |\hat f - f|\,dy \in [0, 2]}. If \code{FALSE}, return the
+#'   unscaled sum \eqn{\sum_b |\hat f_b - f_b|}, which is \eqn{1/h} times that
+#'   and is what versions of this function before the rescale returned. Ignored
+#'   with a warning when the bin midpoints do not lie on an equally spaced
+#'   lattice (e.g. data binned with \code{n_bins = 0}).
 #'
 #' @return A list with elements:
 #' \describe{
 #'   \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
 #'   \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
 #' }
-#'
+#' @return Scalar: the biomass-weighted average over time of the \eqn{L^1}
+#'   distance between the estimated and true mixture densities. Carries
+#'   attributes \code{"h"} (the bin width used, \code{NA} if not rescaled) and
+#'   \code{"per_time"} (the length-\code{TT} vector of per-time distances).
+#'   
 #' @examples
 #' \dontrun{
 #' sim <- generate_skewed_data(seed = 42)
@@ -48,7 +59,8 @@
 #' @export
 mixture_metric <- function(
   sim,
-  est_res
+  est_res,
+  rescale = TRUE                      # NEW - appended
 ) {
   Y_bin     = sim$Y_bin
   X         = sim$X
@@ -70,9 +82,36 @@ mixture_metric <- function(
     mix_true  <- dens_true %*% pi_true[t, ]
     per_time[t] <- sum(abs(mix_est - mix_true))
   }
-  w_t      <- vapply(bin_mass, sum, numeric(1))
-  h        <- min(diff(sort(unique(unlist(Y_bin)))))
-  metric   <- sum(w_t * per_time) / (sum(w_t) * h)
   
+  ## --- NEW: recover the bin width and convert the sum into an integral -------
+  ## All time points share one global equal-width grid (see binning()), so the
+  ## smallest gap between distinct midpoints IS the bin width. Empty bins make
+  ## some gaps 2h, 3h, ..., hence the integer-multiple test rather than an
+  ## all-gaps-equal test.
+  h <- NA_real_
+  if (isTRUE(rescale)) {
+    grid <- sort(unique(as.numeric(unlist(Y_bin))))
+    if (length(grid) < 2L) {
+      warning("mixture_metric(): fewer than two distinct bin midpoints; ",
+              "returning the unscaled sum")
+    } else {
+      d  <- diff(grid)
+      h0 <- min(d)
+      if (max(abs(d / h0 - round(d / h0))) > 1e-6) {
+        warning("mixture_metric(): bin midpoints are not on an equally spaced ",
+                "lattice (n_bins = 0?); returning the unscaled sum")
+      } else {
+        h        <- h0
+        per_time <- h * per_time
+      }
+    }
+  }
+  ## --------------------------------------------------------------------------
+
+  w_t      <- vapply(bin_mass, sum, numeric(1))
+  metric   <- sum(w_t * per_time) / sum(w_t)
+
+  attr(metric, "h")        <- h
+  attr(metric, "per_time") <- per_time
   return(metric)
 }
