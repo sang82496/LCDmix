@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-09-09">
+<meta name="date" content="2026-09-10">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-09-09</h4>
+<h4 class="date">2026-09-10</h4>
 
 </div>
 
@@ -1826,35 +1826,37 @@ responsibilities,<br>
 ) {
   TT &lt;- nrow(X)
   K  &lt;- ncol(idx[[1]])
-  
-  # Sequence of candidate lambda values (from large to target)
   lambda_max &lt;- lambda_alpha * 100
   lambda_seq &lt;- exp(seq(log(lambda_max), log(lambda_alpha), length.out = 30))
-  
-  # Sum posterior weights per time point and component
+
   weight_sum &lt;- matrix(0, nrow = TT, ncol = K)
   for (t in seq_len(TT)) {
     for (k in seq_len(K)) {
-      mask_tk         &lt;- idx[[t]][, k]
+      mask_tk &lt;- idx[[t]][, k]
       weight_sum[t, k] &lt;- sum(weights[[t]][mask_tk, k])
     }
   }
-  
-  # Fit penalized multinomial regression
-  fit &lt;- glmnet::glmnet(
-    x         = X,
-    y         = weight_sum,
-    lambda    = lambda_seq,
-    family    = "multinomial",
-    intercept = TRUE
-  )
-  
-  # Extract coefficients at the requested lambda
+
+  # NEW: exact MLE when class proportions do not vary across time points
+  <span id="intercept_only">intercept_only</span> &lt;- function() {
+    tot &lt;- colSums(weight_sum)
+    a0  &lt;- log(pmax(tot, .Machine$double.xmin) / sum(tot))
+    a   &lt;- cbind(a0, matrix(0, K, ncol(X)))
+    sweep(a, 2, a[1, ], FUN = "-")
+  }
+  rs &lt;- rowSums(weight_sum)
+  pr &lt;- weight_sum[rs &gt; 0, , drop = FALSE] / rs[rs &gt; 0]
+  if (!nrow(pr) || max(abs(sweep(pr, 2, colMeans(pr)))) &lt; 1e-10) return(<a href="create-LCDmix.html#intercept_only">intercept_only</a>())
+
+  fit &lt;- tryCatch(                                             # NEW
+    glmnet::glmnet(x = X, y = weight_sum, lambda = lambda_seq,
+                   family = "multinomial", intercept = TRUE),
+    error = function(e) NULL)
+  if (is.null(fit)) return(<a href="create-LCDmix.html#intercept_only">intercept_only</a>())                  # NEW
+
   coefs_list &lt;- glmnet::coef.glmnet(fit, s = lambda_alpha)
   alpha_mat  &lt;- t(as.matrix(do.call(cbind, coefs_list)))
   alpha_mat  &lt;- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
-  
-  # Return K x (p+1) matrix: rows = components, cols = intercept + slopes
   return(alpha_mat)
 }</code></pre>
 <pre class="r"><code>#' M‐step update of all component regression parameters under log‐concavity
@@ -2494,22 +2496,22 @@ responsibilities,<br>
   w,
   prob = 0.05
 ) {
-  # Sort by x
-  o     &lt;- order(x)
+  ok &lt;- !is.na(x) &amp; is.finite(w) &amp; w &gt; 0          # zero-weight points cannot move a quantile
+  x  &lt;- x[ok]; w &lt;- w[ok]
+  if (!length(x)) return(NA_real_)
+
+  o        &lt;- order(x)
   sorted_x &lt;- x[o]
   sorted_w &lt;- w[o]
-
-  #  Compute cumulative weights and threshold
   cum_w     &lt;- cumsum(sorted_w)
-  threshold &lt;- prob * sum(sorted_w)
+  threshold &lt;- prob * cum_w[length(cum_w)]
 
-  # Find first index where cumulative weight ≥ threshold
   idx &lt;- which(cum_w &gt;= threshold)[1]
-  if (idx == 1) {return(idx)}
-  diff_x = sorted_x[idx] - sorted_x[idx-1]
-  diff_w = sorted_w[idx] - sorted_w[idx-1]
-  frac = (cum_w[idx]-threshold)/diff_w
-  return(sorted_x[idx] - frac*diff_x)
+  if (idx == 1) return(sorted_x[1])                         # was: return(idx)
+  lo &lt;- sorted_x[idx - 1]; hi &lt;- sorted_x[idx]
+  if (!is.finite(lo) || !is.finite(hi)) return(hi)          # -Inf neighbor: no interpolation
+  frac &lt;- (threshold - cum_w[idx - 1]) / sorted_w[idx]      # was: / (sorted_w[idx] - sorted_w[idx-1])
+  min(hi, max(lo, lo + frac * (hi - lo)))                   # clamp: floating overshoot past hi
 }</code></pre>
 <pre class="r"><code>#' Evaluate held-out (penalized) log-likelihood for LCDmix
 #'

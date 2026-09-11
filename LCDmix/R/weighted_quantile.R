@@ -28,20 +28,20 @@ weighted_quantile <- function(
   w,
   prob = 0.05
 ) {
-  # Sort by x
-  o     <- order(x)
+  ok <- !is.na(x) & is.finite(w) & w > 0          # zero-weight points cannot move a quantile
+  x  <- x[ok]; w <- w[ok]
+  if (!length(x)) return(NA_real_)
+
+  o        <- order(x)
   sorted_x <- x[o]
   sorted_w <- w[o]
-
-  #  Compute cumulative weights and threshold
   cum_w     <- cumsum(sorted_w)
-  threshold <- prob * sum(sorted_w)
+  threshold <- prob * cum_w[length(cum_w)]
 
-  # Find first index where cumulative weight ≥ threshold
   idx <- which(cum_w >= threshold)[1]
-  if (idx == 1) {return(idx)}
-  diff_x = sorted_x[idx] - sorted_x[idx-1]
-  diff_w = sorted_w[idx] - sorted_w[idx-1]
-  frac = (cum_w[idx]-threshold)/diff_w
-  return(sorted_x[idx] - frac*diff_x)
+  if (idx == 1) return(sorted_x[1])                         # was: return(idx)
+  lo <- sorted_x[idx - 1]; hi <- sorted_x[idx]
+  if (!is.finite(lo) || !is.finite(hi)) return(hi)          # -Inf neighbor: no interpolation
+  frac <- (threshold - cum_w[idx - 1]) / sorted_w[idx]      # was: / (sorted_w[idx] - sorted_w[idx-1])
+  min(hi, max(lo, lo + frac * (hi - lo)))                   # clamp: floating overshoot past hi
 }

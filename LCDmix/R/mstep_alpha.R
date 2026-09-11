@@ -35,34 +35,36 @@ mstep_alpha <- function(
 ) {
   TT <- nrow(X)
   K  <- ncol(idx[[1]])
-  
-  # Sequence of candidate lambda values (from large to target)
   lambda_max <- lambda_alpha * 100
   lambda_seq <- exp(seq(log(lambda_max), log(lambda_alpha), length.out = 30))
-  
-  # Sum posterior weights per time point and component
+
   weight_sum <- matrix(0, nrow = TT, ncol = K)
   for (t in seq_len(TT)) {
     for (k in seq_len(K)) {
-      mask_tk         <- idx[[t]][, k]
+      mask_tk <- idx[[t]][, k]
       weight_sum[t, k] <- sum(weights[[t]][mask_tk, k])
     }
   }
-  
-  # Fit penalized multinomial regression
-  fit <- glmnet::glmnet(
-    x         = X,
-    y         = weight_sum,
-    lambda    = lambda_seq,
-    family    = "multinomial",
-    intercept = TRUE
-  )
-  
-  # Extract coefficients at the requested lambda
+
+  # NEW: exact MLE when class proportions do not vary across time points
+  intercept_only <- function() {
+    tot <- colSums(weight_sum)
+    a0  <- log(pmax(tot, .Machine$double.xmin) / sum(tot))
+    a   <- cbind(a0, matrix(0, K, ncol(X)))
+    sweep(a, 2, a[1, ], FUN = "-")
+  }
+  rs <- rowSums(weight_sum)
+  pr <- weight_sum[rs > 0, , drop = FALSE] / rs[rs > 0]
+  if (!nrow(pr) || max(abs(sweep(pr, 2, colMeans(pr)))) < 1e-10) return(intercept_only())
+
+  fit <- tryCatch(                                             # NEW
+    glmnet::glmnet(x = X, y = weight_sum, lambda = lambda_seq,
+                   family = "multinomial", intercept = TRUE),
+    error = function(e) NULL)
+  if (is.null(fit)) return(intercept_only())                  # NEW
+
   coefs_list <- glmnet::coef.glmnet(fit, s = lambda_alpha)
   alpha_mat  <- t(as.matrix(do.call(cbind, coefs_list)))
   alpha_mat  <- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
-  
-  # Return K x (p+1) matrix: rows = components, cols = intercept + slopes
   return(alpha_mat)
 }
