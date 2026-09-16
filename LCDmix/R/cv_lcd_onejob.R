@@ -26,7 +26,6 @@ cv_lcd_onejob <- function(
   trim_prob,
   save_dir,
   lp_time_limit = 3600,
-  sparsity_eps = 1e-6,
   calc_Q_every  = FALSE,                 # NEW
   update         = c("lp", "optim")     # NEW
 ) {
@@ -103,8 +102,6 @@ cv_lcd_onejob <- function(
         fit_loglik          = NA_real_,
         fit_trimmed_loglik  = NA_real_,
         fit_med_loglik      = NA_real_,
-        theta_spars         = NA_real_,
-        alpha_spars         = NA_real_,
         err_msg             = err_txt,                             # NEW
         failed_iter         = failed_iter,                         # NEW
        iter_num = NA_integer_, 
@@ -131,18 +128,6 @@ cv_lcd_onejob <- function(
     trim_prob    = trim_prob
   )
   
-  # Coefficient sparsity
-  # θ: use all components (including the first); bind to p × K
-  theta_mat   <- do.call(cbind, fit$iter$theta_new)
-  theta_spars <- mean(abs(as.numeric(theta_mat)) < sparsity_eps, na.rm = TRUE)
-
-  # α: K × (p+1); drop row 1 (component 1) and col 1 (intercept) → (K-1) × p
-  alpha_core  <- fit$iter$alpha_new[-1, -1, drop = FALSE]
-  alpha_spars <- mean(abs(as.numeric(alpha_core)) < sparsity_eps, na.rm = TRUE)
-
-  
-  
-  
   log_msg <- paste0(log_msg, "✔ Saved: ", basename(out_path))
 
   saveRDS(
@@ -157,8 +142,6 @@ cv_lcd_onejob <- function(
       fit_loglik          = fit$L$loglik,
       fit_trimmed_loglik  = fit$L$trimmed_loglik,
       fit_med_loglik      = fit$L$med_loglik,
-      theta_spars         = theta_spars,
-      alpha_spars         = alpha_spars,
        # --- NEW: diagnostics -------------------------------------------------
        iter_num            = fit$iter$iter_num,
        n_outside_total     = sum(fit$iter$n_outside_every),

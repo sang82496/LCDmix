@@ -17,7 +17,6 @@ cv_lcd_onejob(
   trim_prob,
   save_dir,
   lp_time_limit = 3600,
-  sparsity_eps = 1e-06,
   calc_Q_every = FALSE,
   update = c("lp", "optim")
 )
