@@ -3790,7 +3790,7 @@ gen_simul_data <- function(
      } else if (noisetype == 'laplace'){
        noise = VGAM::rlaplace(ntlist[tt], 0, 1)
      } else if (noisetype == 'exponential'){
-       noise = rexp(ntlist[tt], 1)
+       noise = rexp(ntlist[tt], 1) - 1
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
@@ -3942,7 +3942,7 @@ err_true_fun <- function(
   } else if (sim$noisetype == 'laplace') {
     res <- VGAM::dlaplace(y_grid, scale = 1) 
   } else if (sim$noisetype == 'exponential') {
-    res <- dexp(y_grid) 
+    res <- dexp(y_grid + 1) 
   } else { # Gaussian
     res <- dnorm(y_grid, mean = 0)
   }
@@ -3979,7 +3979,7 @@ dens_true_fun <- function(
     } else if (sim$noisetype == 'exponential') {
     res <- sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        dexp(y_grid - mu) 
+        dexp(y_grid - mu + 1) 
       })
     } else { # Gaussian
     res <- sapply(seq_len(K), function(k) {

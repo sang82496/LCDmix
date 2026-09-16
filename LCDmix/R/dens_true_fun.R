@@ -25,7 +25,7 @@ dens_true_fun <- function(
     } else if (sim$noisetype == 'exponential') {
     res <- sapply(seq_len(K), function(k) {
         mu = sim$mnmat[t,k]
-        dexp(y_grid - mu) 
+        dexp(y_grid - mu + 1) 
       })
     } else { # Gaussian
     res <- sapply(seq_len(K), function(k) {

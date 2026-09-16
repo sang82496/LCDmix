@@ -12,7 +12,7 @@ err_true_fun <- function(
   } else if (sim$noisetype == 'laplace') {
     res <- VGAM::dlaplace(y_grid, scale = 1) 
   } else if (sim$noisetype == 'exponential') {
-    res <- dexp(y_grid) 
+    res <- dexp(y_grid + 1) 
   } else { # Gaussian
     res <- dnorm(y_grid, mean = 0)
   }

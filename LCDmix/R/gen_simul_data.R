@@ -81,7 +81,7 @@ gen_simul_data <- function(
      } else if (noisetype == 'laplace'){
        noise = VGAM::rlaplace(ntlist[tt], 0, 1)
      } else if (noisetype == 'exponential'){
-       noise = rexp(ntlist[tt], 1)
+       noise = rexp(ntlist[tt], 1) - 1
      } else { # gaussian
        noise = rnorm(ntlist[tt], 0, 1)
      } 
