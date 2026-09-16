@@ -27,13 +27,14 @@ gen_simul_data <- function(
   }
   
   if(!is.null(sim_seed)) set.seed(sim_seed)
-  ntlist = c(rep(0.8 * nt, TT/2), rep(nt, TT/2))
+  ntlist = rep(nt, TT)
 
   ## Generate covariate
   par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
 
   Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
-  X = cbind(scale(par[1:TT]), c(rep(0, TT/2), rep(1, TT/2)), Xrest)
+  X2 = c(seq(0.8, 1, length = TT/2), rep(1, TT/2))
+  X = cbind(scale(par[1:TT]), X2, Xrest)
   colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
 
   ## theta coefficients

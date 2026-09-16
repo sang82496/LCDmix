@@ -213,7 +213,7 @@ res_LCDmix_simul <- function(s){
   
   # only when K is correctly specified
   lines(1:TT, mean_curves_true[,1], col = 3, lwd = 2)
-  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 3, lwd = 2)
+  lines(1:TT, mean_curves_true[,2], col = 3, lwd = 2)
   
   
   
@@ -237,7 +237,7 @@ res_LCDmix_simul <- function(s){
   }
   # true
   lines(1:TT, mean_curves_true[,1], col = 4, lwd = 2)
-  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 4, lwd = 2)
+  lines(1:TT, mean_curves_true[,2], col = 4, lwd = 2)
   # estimation
   for (k in seq_len(K)) {
     lines(seq_len(TT), mean_curves_flow[, k], lwd = 2, col = 2)
@@ -258,7 +258,7 @@ res_LCDmix_simul <- function(s){
   }
   # true
   lines(1:TT, mean_curves_true[,1], col = 4, lwd = 2)
-  lines((TT/2):TT, mean_curves_true[(TT/2):TT,2], col = 4, lwd = 2)
+  lines(1:TT, mean_curves_true[,2], col = 4, lwd = 2)
   # estimation
   for (k in seq_len(K)) {
     lines(seq_len(TT), mean_curves_lcd[, k], lwd = 2, col = 2)
