@@ -3946,6 +3946,41 @@ err_true_fun <- function(
 ```
 
 
+```{r}
+#' True error quantile function of a simulated dataset, on the residual scale
+#'
+#' @description
+#' The inverse of \code{err_true_fun()}. The two are kept side by side on
+#' purpose: when a noise family is added, both branches must be added together.
+#' Every family is mean zero, so these are quantiles of the error, not of the
+#' response.
+#'
+#' @param sim A simulated dataset from \code{gen_simul_data()}.
+#' @param p   Numeric vector of probabilities.
+#'
+#' @return Numeric vector of quantiles of the true error distribution.
+#'
+#' @export
+err_true_quantile <- function(
+  sim,
+  p
+) {
+  if (sim$noisetype == 'skewed') {
+    res <- sn::qsn(p, xi = -sim$mn_shift, omega = sim$omega, alpha = sim$skew_alpha)
+  } else if (sim$noisetype == 'heavytail') {
+    res <- qt(p, df = sim$df) / sqrt(sim$variance)
+  } else if (sim$noisetype == 'laplace') {
+    res <- VGAM::qlaplace(p, scale = 1)
+  } else if (sim$noisetype == 'exponential') {
+    res <- qexp(p) - 1
+  } else { # Gaussian
+    res <- qnorm(p, mean = 0)
+  }
+  return(res)
+}
+```
+
+
 
 
 ```{r}
@@ -4136,6 +4171,169 @@ mixture_metric <- function(
   attr(metric, "h")        <- h
   attr(metric, "per_time") <- per_time
   return(metric)
+}
+```
+
+```{r}
+#' Estimated error density of one LCDmix component, zero outside the support.
+#'
+#' NOTE: evaluateLogConDens() returns a matrix, not a list, so the work order's
+#' `$log.density` does not work. Column 3 is the density, which is what the
+#' package's own dens_est_fun() uses.
+lcd_err_density <- function(g) {
+  sup <- range(g$x)
+  return(function(v) {
+    out <- numeric(length(v))
+    inside <- v >= sup[1] & v <= sup[2]
+    if (any(inside)) {
+      val <- tryCatch(logcondens::evaluateLogConDens(v[inside], g)[, 3],
+                      error = function(e) rep(NA_real_, sum(inside)))
+      out[inside] <- val
+    }
+    out[!is.finite(out)] <- 0
+    return(out)
+  })
+}
+```
+
+
+
+```{r}
+#' Estimated error density of one flowmix component.
+#'
+#' NOTE: flowmix stores a variance in `sigma`, so the standard deviation is
+#' sqrt(sigma_k). The work order's `dnorm(xs, 0, sigma_k)` passes a variance
+#' where a standard deviation belongs. dens_est_fun() uses sqrt(), and so does
+#' this function.
+#' @export
+flow_err_density <- function(sigma_k) {
+  return(function(v) stats::dnorm(v, 0, sqrt(sigma_k)))
+}
+```
+
+
+```{r}
+#' @export
+count_degenerate <- function(base_dir = "cv_saves") {
+  fs  <- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",
+                    recursive = TRUE, full.names = TRUE)
+  msg <- vapply(fs, function(f) {
+    m <- readRDS(f)$err_msg
+    if (is.null(m) || is.na(m)) NA_character_ else m
+  }, character(1))
+  deg <- grepl("^degenerate component", msg)
+  cat(sprintf("degenerate-component terminations: %d of %d cells (%.2f%%)\n",
+              sum(deg), length(fs), 100 * mean(deg)))
+  if (any(deg))
+    print(table(stage = ifelse(grepl("failed at iteration", msg[deg]),
+                               "iteration", "initialization")))
+  invisible(data.frame(file = fs[deg], err_msg = msg[deg], stringsAsFactors = FALSE))
+}
+```
+
+
+
+
+```{r}
+#' Overlap coefficient between a density and its shift by delta.
+#' Both components share one error density, so this is the whole story.
+#' @export
+ovl <- function(f, delta, lo = -Inf, hi = Inf) {
+  integrand <- function(v) pmin(f(v), f(v - delta))
+  out <- tryCatch(
+    stats::integrate(integrand, lo, hi, subdivisions = 2000L)$value,
+    error = function(e) NA_real_)
+  if (is.na(out)) {
+    ## Fall back to wide finite limits when the infinite range fails.
+    lo2 <- if (is.finite(lo)) lo else -40
+    hi2 <- if (is.finite(hi)) hi else  40 + delta
+    out <- stats::integrate(integrand, lo2, hi2, subdivisions = 2000L)$value
+  }
+  return(out)
+}
+```
+
+```{r}
+#' Half the L1 integral between two densities, so the value lies in [0, 1].
+#' @export
+tv_density <- function(fhat, ftrue, lo, hi, n = 2001) {
+  xs <- seq(lo, hi, length.out = n)
+  d  <- abs(fhat(xs) - ftrue(xs))
+  return(0.5 * sum(diff(xs) * (utils::head(d, -1) + utils::tail(d, -1)) / 2))
+}
+```
+
+
+
+```{r}
+#' Integration grid: the central range of the true density, widened to cover
+#' the estimated support.
+#' @export
+tv_grid <- function(qfun, est_support = NULL, p = 5e-4) {
+  lo <- qfun(p); hi <- qfun(1 - p)
+  if (!is.null(est_support)) {
+    lo <- min(lo, est_support[1]); hi <- max(hi, est_support[2])
+  }
+  pad <- 0.02 * (hi - lo)
+  return(c(lo - pad, hi + pad))
+}
+```
+
+
+
+
+
+```{r}
+#' Component order used throughout the pipeline: order by intercept, then by
+#' slopes. Copied from the analysis function in create-LCDmix.Rmd so that the
+#' two never drift apart.
+#' @export
+lcd_component_order <- function(res) {
+  theta_mat <- rbind(unlist(res$theta0_new), do.call(cbind, res$theta_new))
+  return(do.call(order, as.data.frame(t(theta_mat))))
+}
+```
+
+
+```{r}
+#' @export
+flow_component_order <- function(flow) {
+  theta_mat <- do.call(cbind, flow$beta)
+  return(do.call(order, as.data.frame(t(theta_mat))))
+}
+```
+
+
+
+
+
+```{r}
+#' @param fit  an LCDmix `iter` list, or a flowmix best-result list
+#' @return numeric vector of length K, in true-component order
+#' @export
+tv_by_component <- function(sim, fit, n = 2001) {
+  d_true <- function(v) LCDmix::err_true_fun(sim, v)
+  q_true <- function(p) LCDmix::err_true_quantile(sim, p)
+  is_lcd <- !is.null(fit$g_new)
+  K <- if (is_lcd) length(fit$g_new) else dim(fit$mn)[3]
+
+  ord <- if (is_lcd) lcd_component_order(fit) else flow_component_order(fit)
+
+  return(vapply(seq_len(K), function(k) {
+    kk <- ord[k]
+    if (is_lcd) {
+      g <- fit$g_new[[kk]]
+      fhat <- lcd_err_density(g)
+      sup  <- range(g$x)
+    } else {
+      fhat <- flow_err_density(as.numeric(fit$sigma)[kk])
+      sd_k <- sqrt(as.numeric(fit$sigma)[kk])
+      sup  <- c(-6 * sd_k, 6 * sd_k)
+    }
+    rg <- tv_grid(q_true, est_support = sup)
+    return(tryCatch(tv_density(fhat, d_true, rg[1], rg[2], n = n),
+                    error = function(e) NA_real_))
+  }, numeric(1)))
 }
 ```
 
@@ -4571,24 +4769,6 @@ res_LCDmix_simul <- function(s){
 
 
 
-```{r}
-#' @export
-count_degenerate <- function(base_dir = "cv_saves") {
-  fs  <- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",
-                    recursive = TRUE, full.names = TRUE)
-  msg <- vapply(fs, function(f) {
-    m <- readRDS(f)$err_msg
-    if (is.null(m) || is.na(m)) NA_character_ else m
-  }, character(1))
-  deg <- grepl("^degenerate component", msg)
-  cat(sprintf("degenerate-component terminations: %d of %d cells (%.2f%%)\n",
-              sum(deg), length(fs), 100 * mean(deg)))
-  if (any(deg))
-    print(table(stage = ifelse(grepl("failed at iteration", msg[deg]),
-                               "iteration", "initialization")))
-  invisible(data.frame(file = fs[deg], err_msg = msg[deg], stringsAsFactors = FALSE))
-}
-```
 
 
 ## Documenting the package and building
