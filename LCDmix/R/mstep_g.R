@@ -49,7 +49,11 @@ mstep_g <- function(
                            function(t) residuals[[t]][idx[[t]][, k], k]))
     w_k   <- unlist(lapply(seq_len(TT),
                            function(t) weights[[t]][idx[[t]][, k], k]))
-
+   # NEW: a component that owns no bins cannot be fitted
+   if (length(res_k) == 0L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, 0L, 0L), call. = FALSE)
+   }
     if (dedup_tol > 0) {
       # Merge residuals separated by less than dedup_tol. unique() treats values
       # ~1e-16 apart as distinct knot candidates, which prevents the active-set
@@ -76,6 +80,13 @@ mstep_g <- function(
       uniq_res <- unique(res_k)
       uniq_w   <- sapply(uniq_res, function(val) sum(w_k[res_k == val]))
     }
+    
+   # NEW: a log-concave MLE needs at least two distinct points; with one point
+   # the support has zero width and modified_logcondens() fails at tmp[, 1]
+   if (length(uniq_res) <= 1L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, length(uniq_res), length(res_k)), call. = FALSE)
+   }
 
     if (length(uniq_res) < 5) {
       message("Only ", length(uniq_res), " unique points for component ", k)

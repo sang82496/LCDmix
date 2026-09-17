@@ -719,7 +719,11 @@ mstep_g <- function(
                            function(t) residuals[[t]][idx[[t]][, k], k]))
     w_k   <- unlist(lapply(seq_len(TT),
                            function(t) weights[[t]][idx[[t]][, k], k]))
-
+   # NEW: a component that owns no bins cannot be fitted
+   if (length(res_k) == 0L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, 0L, 0L), call. = FALSE)
+   }
     if (dedup_tol > 0) {
       # Merge residuals separated by less than dedup_tol. unique() treats values
       # ~1e-16 apart as distinct knot candidates, which prevents the active-set
@@ -746,6 +750,13 @@ mstep_g <- function(
       uniq_res <- unique(res_k)
       uniq_w   <- sapply(uniq_res, function(val) sum(w_k[res_k == val]))
     }
+    
+   # NEW: a log-concave MLE needs at least two distinct points; with one point
+   # the support has zero width and modified_logcondens() fails at tmp[, 1]
+   if (length(uniq_res) <= 1L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, length(uniq_res), length(res_k)), call. = FALSE)
+   }
 
     if (length(uniq_res) < 5) {
       message("Only ", length(uniq_res), " unique points for component ", k)
@@ -4560,6 +4571,24 @@ res_LCDmix_simul <- function(s){
 
 
 
+```{r}
+#' @export
+count_degenerate <- function(base_dir = "cv_saves") {
+  fs  <- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",
+                    recursive = TRUE, full.names = TRUE)
+  msg <- vapply(fs, function(f) {
+    m <- readRDS(f)$err_msg
+    if (is.null(m) || is.na(m)) NA_character_ else m
+  }, character(1))
+  deg <- grepl("^degenerate component", msg)
+  cat(sprintf("degenerate-component terminations: %d of %d cells (%.2f%%)\n",
+              sum(deg), length(fs), 100 * mean(deg)))
+  if (any(deg))
+    print(table(stage = ifelse(grepl("failed at iteration", msg[deg]),
+                               "iteration", "initialization")))
+  invisible(data.frame(file = fs[deg], err_msg = msg[deg], stringsAsFactors = FALSE))
+}
+```
 
 
 ## Documenting the package and building

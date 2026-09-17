@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-09-16">
+<meta name="date" content="2026-09-17">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-09-16</h4>
+<h4 class="date">2026-09-17</h4>
 
 </div>
 
@@ -1011,7 +1011,11 @@ litr::render("create-LCDmix.Rmd")</code></pre>
                            function(t) residuals[[t]][idx[[t]][, k], k]))
     w_k   &lt;- unlist(lapply(seq_len(TT),
                            function(t) weights[[t]][idx[[t]][, k], k]))
-
+   # NEW: a component that owns no bins cannot be fitted
+   if (length(res_k) == 0L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, 0L, 0L), call. = FALSE)
+   }
     if (dedup_tol &gt; 0) {
       # Merge residuals separated by less than dedup_tol. unique() treats values
       # ~1e-16 apart as distinct knot candidates, which prevents the active-set
@@ -1038,6 +1042,13 @@ litr::render("create-LCDmix.Rmd")</code></pre>
       uniq_res &lt;- unique(res_k)
       uniq_w   &lt;- sapply(uniq_res, function(val) sum(w_k[res_k == val]))
     }
+    
+   # NEW: a log-concave MLE needs at least two distinct points; with one point
+   # the support has zero width and <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>() fails at tmp[, 1]
+   if (length(uniq_res) &lt;= 1L) {
+     stop(sprintf("degenerate component: component %d has %d distinct residual(s) (%d before merging); at least 2 are needed",
+                  k, length(uniq_res), length(res_k)), call. = FALSE)
+   }
 
     if (length(uniq_res) &lt; 5) {
       message("Only ", length(uniq_res), " unique points for component ", k)
@@ -4661,6 +4672,22 @@ responsibilities,<br>
     legend("topright", legend = c("Flowmix", "LCDmix", "Truth"),
       col = c(4, 2, 1), lty = 1, lwd = 2, bty = "n")
   }
+}</code></pre>
+<pre class="r"><code>#' @export
+<span id="count_degenerate">count_degenerate</span> &lt;- function(base_dir = "cv_saves") {
+  fs  &lt;- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",
+                    recursive = TRUE, full.names = TRUE)
+  msg &lt;- vapply(fs, function(f) {
+    m &lt;- readRDS(f)$err_msg
+    if (is.null(m) || is.na(m)) NA_character_ else m
+  }, character(1))
+  deg &lt;- grepl("^degenerate component", msg)
+  cat(sprintf("degenerate-component terminations: %d of %d cells (%.2f%%)\n",
+              sum(deg), length(fs), 100 * mean(deg)))
+  if (any(deg))
+    print(table(stage = ifelse(grepl("failed at iteration", msg[deg]),
+                               "iteration", "initialization")))
+  invisible(data.frame(file = fs[deg], err_msg = msg[deg], stringsAsFactors = FALSE))
 }</code></pre>
 </div>
 </div>
