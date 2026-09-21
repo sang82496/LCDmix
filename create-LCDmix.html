@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-09-17">
+<meta name="date" content="2026-09-21">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-09-17</h4>
+<h4 class="date">2026-09-21</h4>
 
 </div>
 
@@ -4165,119 +4165,118 @@ responsibilities,<br>
     }
   return(res_est)
 }</code></pre>
-<pre class="r"><code>#' Compute biomass‐weighted L1 (total‐variation) distance between estimated and true mixtures
+<pre class="r"><code>#' Biomass-weighted L1 distance between the estimated and true mixture densities
 #'
 #' @description
-#' For each time point \code{t}, evaluates the estimated mixture density 
-#' (either from an LCDmix fit or a flowmix fit) and the true mixture density 
-#' at the observed bin midpoints, computes the \(L^1\) distance, and then 
-#' returns both the per‐time distances and the overall weighted average 
-#' distance (weighted by total biomass at each \code{t}).
+#' For each time point t, computes the L1 distance between the estimated
+#' conditional density and the true one,
+#' \deqn{D_t = \int |\hat p_t(y) - p_t(y)| \, dy,}
+#' and returns the average of \eqn{D_t} weighted by the total biomass at each
+#' time point. The value lies in \eqn{[0, 2]}.
 #'
-#' @param Y_bin List of length \code{TT}; each element is a numeric vector of bin midpoints for time \code{t}.
-#' @param X Numeric \code{TT × p} matrix of covariates (rows = time points).
-#' @param bin_mass List of length \code{TT}; each element is a numeric vector of biomass weights aligned with \code{Y_bin[[t]]}.
-#' @param est_res A fitted model object:
-#'   \describe{
-#'     \item{LCDmix fits}{A list containing \code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}.}
-#'     \item{flowmix fits}{A list containing \code{alpha}, \code{mn}, and \code{sigma}.}
-#'   }
-#' @param true_res A list with components:
-#'   \describe{
-#'     \item{\code{prob}}{\code{TT × K} numeric matrix of true mixing proportions \eqn{\pi_{t,k}}.}
-#'     \item{\code{dens_true}}{List of length \code{TT}, each an \code{n_t × K} numeric matrix of the true component densities evaluated at \code{Y_bin[[t]]}.}
-#'   }
-#' @param rescale Logical; if \code{TRUE} (default) multiply the midpoint
-#' Riemann sum by the bin width \eqn{h}, returning the integrated absolute
-#'   error \eqn{\int |\hat f - f|\,dy \in [0, 2]}. If \code{FALSE}, return the
-#'   unscaled sum \eqn{\sum_b |\hat f_b - f_b|}, which is \eqn{1/h} times that
-#'   and is what versions of this function before the rescale returned. Ignored
-#'   with a warning when the bin midpoints do not lie on an equally spaced
-#'   lattice (e.g. data binned with \code{n_bins = 0}).
+#' The integral is computed on a fine grid, not at the bin midpoints. Each
+#' log-concave component density is evaluated exactly: its log-density is
+#' linear between its sorted support points and it is zero outside the
+#' support. The grid holds every knot and both ends of every support, so the
+#' kinks and the jumps to zero are resolved, and the trapezoid rule integrates
+#' the absolute difference. flowmix components are Gaussian and need no knots.
 #'
-#' @return A list with elements:
-#' \describe{
-#'   \item{\code{per_time}}{Numeric vector of length \code{TT}, the \(L^1\) distance at each time point.}
-#'   \item{\code{weighted}}{Scalar, the biomass‐weighted average of those distances.}
-#' }
-#' @return Scalar: the biomass-weighted average over time of the \eqn{L^1}
-#'   distance between the estimated and true mixture densities. Carries
-#'   attributes \code{"h"} (the bin width used, \code{NA} if not rescaled) and
-#'   \code{"per_time"} (the length-\code{TT} vector of per-time distances).
-#'   
-#' @examples
-#' \dontrun{
-#' sim &lt;- generate_skewed_data(seed = 42)
-#' Y_bin    &lt;- sim$ylist
-#' X        &lt;- sim$X
-#' bin_mass &lt;- sim$countslist
+#' @param sim     A simulated dataset from \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()}.
+#' @param est_res A fitted model: the \code{iter} element of an LCDmix fit, or a
+#'   flowmix best result (\code{alpha}, \code{mn}, \code{sigma}).
+#' @param rescale Kept for backward compatibility; it has no effect. The value
+#'   is always the integral.
+#' @param n_grid  Number of equally spaced grid points per time point, before
+#'   the knots and support ends are added. Default 4000.
 #'
-#' # Fit an LCDmix model
-#' fit &lt;- <a href="create-LCDmix.html#main">main</a>(Y = Y_bin, X = X, biomass = bin_mass, K = sim$numclust)
-#' true_res &lt;- list(prob = sim$prob, dens_true = sim$dens_true)
-#'
-#' # Compute metric
-#' dist &lt;- <a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(Y_bin, X, bin_mass, fit$iter, true_res)
-#' plot(dist$per_time, type = "b", xlab = "Time", ylab = "L1 distance")
-#' print(dist$weighted)
-#' }
+#' @return A single number, the biomass-weighted mean of \eqn{D_t}, with
+#'   attributes \code{per_time} (the length-TT vector of \eqn{D_t}),
+#'   \code{mass_est} (the range over time points of the integral of the
+#'   estimated density, which should be close to 1), and \code{h} (the bin
+#'   width of the data, reported for scripts that read it).
 #' @export
 <span id="mixture_metric">mixture_metric</span> &lt;- function(
   sim,
   est_res,
-  rescale = TRUE                      # NEW - appended
+  rescale = TRUE,                     # kept for backward compatibility; no effect
+  n_grid  = 4000                      # NEW - appended
 ) {
-  Y_bin     = sim$Y_bin
-  X         = sim$X
-  bin_mass  = sim$bin_mass
-  TT        = length(Y_bin)
-  pi_true = <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(sim$alpha))
-  per_time &lt;- numeric(TT)
-  
-  if (!is.null(est_res$alpha_new)) { # if LCDmix 
+  if (!isTRUE(rescale))
+    warning("<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(): 'rescale' has no effect; the value is always the integral")
+  Y_bin    &lt;- sim$Y_bin
+  X        &lt;- sim$X
+  bin_mass &lt;- sim$bin_mass
+  TT       &lt;- length(Y_bin)
+  pi_true  &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(sim$alpha))
+  is_lcd   &lt;- !is.null(est_res$alpha_new)
+
+  if (is_lcd) {                       # LCDmix
     pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha_new)
-  } else { # if flowmix
+    K      &lt;- length(est_res$g_new)
+    ## A log-concave MLE has a log-density that is linear between its sorted
+    ## support points, so linear interpolation of phi is exact. It matches
+    ## logcondens::evaluateLogConDens() to 4.4e-16 and is far faster.
+    dens_k &lt;- lapply(est_res$g_new, function(g) {
+      x &lt;- g$x; ph &lt;- g$phi
+      return(function(v) {
+        out &lt;- numeric(length(v))
+        inside &lt;- v &gt;= x[1] &amp; v &lt;= x[length(x)]
+        if (any(inside))
+          out[inside] &lt;- exp(stats::approx(x, ph, v[inside], ties = "ordered")$y)
+        return(out)
+      })
+    })
+    knots_k &lt;- lapply(est_res$g_new, function(g) {
+      x &lt;- if (!is.null(g$IsKnot)) g$x[g$IsKnot == 1] else g$x
+      return(sort(unique(c(x, range(g$x)))))
+    })
+    ends_k &lt;- lapply(est_res$g_new, function(g) range(g$x))
+  } else {                            # flowmix
     pi_est &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, est_res$alpha)
+    K      &lt;- dim(est_res$mn)[3]
+    sd_k   &lt;- sqrt(as.numeric(est_res$sigma))
   }
-  
+
+  per_time &lt;- numeric(TT)
+  mass_est &lt;- numeric(TT)
   for (t in seq_len(TT)) {
-    dens_est  &lt;- <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>(est_res, t, Y_bin[[t]], X)
-    mix_est   &lt;- dens_est %*% pi_est[t, ]
-    dens_true &lt;- <a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(sim, t, Y_bin[[t]])
-    mix_true  &lt;- dens_true %*% pi_true[t, ]
-    per_time[t] &lt;- sum(abs(mix_est - mix_true))
-  }
-  
-  ## --- NEW: recover the bin width and convert the sum into an integral -------
-  ## All time points share one global equal-width grid (see <a href="create-LCDmix.html#binning">binning</a>()), so the
-  ## smallest gap between distinct midpoints IS the bin width. Empty bins make
-  ## some gaps 2h, 3h, ..., hence the integer-multiple test rather than an
-  ## all-gaps-equal test.
-  h &lt;- NA_real_
-  if (isTRUE(rescale)) {
-    grid &lt;- sort(unique(as.numeric(unlist(Y_bin))))
-    if (length(grid) &lt; 2L) {
-      warning("<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(): fewer than two distinct bin midpoints; ",
-              "returning the unscaled sum")
+    if (is_lcd) {
+      mu &lt;- vapply(seq_len(K), function(k)
+        est_res$theta0_new[[k]] + sum(X[t, ] * est_res$theta_new[[k]]), numeric(1))
+      ends  &lt;- unlist(lapply(seq_len(K), function(k) mu[k] + ends_k[[k]]))
+      extra &lt;- c(unlist(lapply(seq_len(K), function(k) mu[k] + knots_k[[k]])),
+                 ends - 1e-9, ends + 1e-9)       # resolve the kinks and the jumps to zero
     } else {
-      d  &lt;- diff(grid)
-      h0 &lt;- min(d)
-      if (max(abs(d / h0 - round(d / h0))) &gt; 1e-6) {
-        warning("<a href="create-LCDmix.html#mixture_metric">mixture_metric</a>(): bin midpoints are not on an equally spaced ",
-                "lattice (n_bins = 0?); returning the unscaled sum")
-      } else {
-        h        &lt;- h0
-        per_time &lt;- h * per_time
-      }
+      mu    &lt;- est_res$mn[t, 1, ]
+      ends  &lt;- c(mu - 8 * sd_k, mu + 8 * sd_k)
+      extra &lt;- numeric(0)
     }
+    lo &lt;- min(min(Y_bin[[t]]) - 4, ends)
+    hi &lt;- max(max(Y_bin[[t]]) + 4, ends)
+    z  &lt;- sort(unique(c(seq(lo, hi, length.out = n_grid), extra)))
+    z  &lt;- z[z &gt;= lo &amp; z &lt;= hi]
+
+    if (is_lcd) {
+      p_est &lt;- rowSums(vapply(seq_len(K), function(k)
+        pi_est[t, k] * dens_k[[k]](z - mu[k]), numeric(length(z))))
+    } else {
+      p_est &lt;- rowSums(vapply(seq_len(K), function(k)
+        pi_est[t, k] * stats::dnorm(z, mu[k], sd_k[k]), numeric(length(z))))
+    }
+    p_true &lt;- as.numeric(<a href="create-LCDmix.html#dens_true_fun">dens_true_fun</a>(sim, t, z) %*% pi_true[t, ])
+
+    dz &lt;- diff(z)
+    per_time[t] &lt;- sum(dz * (utils::head(abs(p_est - p_true), -1) +
+                             utils::tail(abs(p_est - p_true), -1)) / 2)
+    mass_est[t] &lt;- sum(dz * (utils::head(p_est, -1) + utils::tail(p_est, -1)) / 2)
   }
-  ## --------------------------------------------------------------------------
 
-  w_t      &lt;- vapply(bin_mass, sum, numeric(1))
-  metric   &lt;- sum(w_t * per_time) / sum(w_t)
-
-  attr(metric, "h")        &lt;- h
+  w_t    &lt;- vapply(bin_mass, sum, numeric(1))
+  metric &lt;- sum(w_t * per_time) / sum(w_t)
+  grid   &lt;- sort(unique(as.numeric(unlist(Y_bin))))
   attr(metric, "per_time") &lt;- per_time
+  attr(metric, "mass_est") &lt;- range(mass_est)
+  attr(metric, "h")        &lt;- if (length(grid) &gt; 1) min(diff(grid)) else NA_real_
   return(metric)
 }</code></pre>
 <pre class="r"><code>#' Estimated error density of one LCDmix component, zero outside the support.
