@@ -3317,6 +3317,7 @@ refit_onejob <- function(
       saveRDS(list(
         fit         = NULL,
         fit_L       = NULL,
+        fit_L_unpen = NULL,
         err_msg     = err_txt,                                     # NEW
         failed_iter = if (is.list(fit) && !is.null(fit$iter_partial))  # NEW
                         fit$iter_partial$failed_iter else NA_integer_, # NEW
@@ -3324,14 +3325,16 @@ refit_onejob <- function(
       ), file = out_path)
       return(FALSE)
     }
-  fit_L = as.numeric(fit$L$loglik + fit$L$penalty) # unpenalized loglik
-  log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final loglikelihood = ", 
-                      round(fit_L, 6), "\n")
+   fit_L       = as.numeric(fit$L$loglik)                  # penalized: what the EM maximizes; picks the restart
+   fit_L_unpen = as.numeric(fit$L$loglik + fit$L$penalty)  # unpenalized, kept for reporting only
+   log_msg <- paste0(log_msg, "✔ Completed seed ", seed_int, "; final penalized objective = ",
+                       round(fit_L, 6), "\n")
   
   saveRDS(list(
-      fit     = fit,
-      fit_L   = fit_L,
-      log_msg = log_msg
+      fit         = fit,
+      fit_L       = fit_L,
+      fit_L_unpen = fit_L_unpen,
+      log_msg     = log_msg
     ), file = out_path)
   return(TRUE)
 }
