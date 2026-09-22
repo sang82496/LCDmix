@@ -1,5 +1,22 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Width of one bin on the binning grid.
+#'
+#' NOTE: binning() builds equally spaced cutpoints, so the smallest gap between
+#' distinct bin centers is the bin width. Empty grid positions leave gaps that
+#' are multiples of it, which is why the minimum is used and not the mean.
+infer_bin_width <- function(Y_test) {
+  centers <- sort(unique(as.numeric(unlist(Y_test))))
+  if (length(centers) < 2L) {
+    return(NA_real_)
+  }
+  gaps  <- diff(centers)
+  width <- min(gaps)
+  if (any(abs(gaps / width - round(gaps / width)) > 1e-6)) {
+    warning("infer_bin_width(): the bin centers are not on an equally spaced grid")
+  }
+  return(width)
+}
 #' Evaluate held-out (penalized) log-likelihood for LCDmix
 #'
 #' Computes per-observation held-out log-likelihoods for a fitted LCDmix
@@ -8,6 +25,9 @@
 #' \emph{all rows, including \code{-Inf} rows}, so that models with different
 #' proportions of finite rows remain comparable. The trimmed threshold is a
 #' weighted quantile of the log-likelihoods using \code{weighted_quantile()}.
+#' The data are binned, so a bin is an interval. Scoring it by the density at
+#' its center rewards a fitted density that is peaked inside the bin, which is
+#' why the bin probability is used instead.
 #'
 #' @param model List; fitted LCDmix object containing at least:
 #'   \code{g_new} (list of K log-concave density fits),
@@ -24,6 +44,13 @@
 #'   a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).
 #' @param trim_prob Numeric in \eqn{[0,1)}; fraction of weight to trim based on
 #'   the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).
+#' @param bin_width Numeric; the width of a bin. \code{NULL} (the default)
+#'   infers it from \code{Y_test}, which is correct for the equally spaced grid
+#'   that \code{binning()} builds.
+#' @param score Either \code{"bin_prob"} (the default) to score each bin by its
+#'   probability divided by the bin width, that is the average density over the
+#'   bin, or \code{"center"} for the density at the bin center, which was the
+#'   behavior before this fix.
 #'
 #' @details
 #' For each time \eqn{t} and component \eqn{k}, residuals are
@@ -63,8 +90,12 @@ eval_lcd <- function(
   Y_test,
   X_test,
   biomass_test,
-  trim_prob = 0.03
+  trim_prob = 0.03,
+  bin_width = NULL,                       # NEW, appended
+  score     = c("bin_prob", "center")     # NEW, appended
 ) {
+  score <- match.arg(score)
+
   # Unpack fitted parameters
   densities     <- model$g_new
   slopes        <- model$theta_new
@@ -76,28 +107,52 @@ eval_lcd <- function(
   TT <- nrow(X_test)
   K  <- nrow(alpha)
 
+  # NEW: the width of a bin. The data are binned, so a bin is an interval and
+  # its probability, not the density at its center, is what the model predicts.
+  if (score == "bin_prob" && is.null(bin_width)) {
+    bin_width <- infer_bin_width(Y_test)
+  }
+  if (score == "bin_prob" && (is.na(bin_width) || bin_width <= 0)) {
+    warning("eval_lcd(): could not infer the bin width; scoring at bin centers instead")
+    score <- "center"
+  }
+
   # Flatten biomass weights
   weights <- unlist(biomass_test)
 
-  # Mixture probabilities π_{t,k}
+  # Mixture probabilities pi_{t,k}
   pi_mat <- pi_k(X_test, alpha)
 
   # Per-observation log-likelihoods
   loglikes <- vector("list", TT)
   for (t in seq_len(TT)) {
     nt <- length(Y_test[[t]])
-    lt  <- matrix(NA_real_, nt, K)
-    # Component-wise densities f_k(r_{t,i,k})
+    lt <- matrix(NA_real_, nt, K)
+    # Component-wise values f_k(r_{t,i,k})
     for (k in seq_len(K)) {
-      pred_tk   <- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
-      # Column 3 = density; out-of-support → 0 (log -> -Inf)
-      dens_vals <- suppressWarnings(
-        logcondens::evaluateLogConDens(Y_test[[t]] - pred_tk, densities[[k]])[, 3]
-      )
+      pred_tk <- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
+      resid   <- as.numeric(Y_test[[t]]) - pred_tk
+      if (score == "bin_prob") {
+        # NEW: average density over the bin, from the exact distribution
+        # function (column 4). It is 0 below the support and 1 above it, so a
+        # bin outside the support still gives 0 and then -Inf, as before.
+        upper <- suppressWarnings(
+          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]])[, 4]
+        )
+        lower <- suppressWarnings(
+          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]])[, 4]
+        )
+        dens_vals <- pmax(upper - lower, 0) / bin_width
+      } else {
+        # Column 3 = density; out-of-support -> 0 (log -> -Inf)
+        dens_vals <- suppressWarnings(
+          logcondens::evaluateLogConDens(resid, densities[[k]])[, 3]
+        )
+      }
       lt[, k] <- dens_vals * pi_mat[t, k]
     }
 
-    # Mixture density and log
+    # Mixture value and log
     mix_dens      <- rowSums(lt)
     loglikes[[t]] <- log(mix_dens)
   }
@@ -105,9 +160,9 @@ eval_lcd <- function(
 
   # Proportion of non-finite rows
   finite_mask <- is.finite(loglikes)
-  prop_inf    <- sum(weights[!finite_mask])/sum(weights)
+  prop_inf    <- sum(weights[!finite_mask]) / sum(weights)
 
-  # All -Inf → return early
+  # All -Inf -> return early
   if (!any(finite_mask)) {
     return(list(
       prop_inf        = 1,
@@ -117,18 +172,18 @@ eval_lcd <- function(
       trimmed_loglik  = -Inf,
       penalty         = NA_real_,
       sum_w           = NA_real_,
-      sum_trimmed_w   = NA_real_,
+      sum_trimmed_w   = NA_real_
     ))
   }
 
   # Untrimmed weighted average
-  base_ll  <- sum(weights * loglikes) / sum(weights)
-  
+  base_ll <- sum(weights * loglikes) / sum(weights)
+
   # Untrimmed weighted average over finite rows
   base_finite <- sum(weights[finite_mask] * loglikes[finite_mask]) /
-             sum(weights[finite_mask])
-  
-  # Median_loglikelihood
+    sum(weights[finite_mask])
+
+  # Median log-likelihood
   base_med <- weighted_quantile(loglikes, weights, prob = 0.5)
 
   # Trim over all rows, with ties kept (>=)
@@ -136,10 +191,10 @@ eval_lcd <- function(
   keep_idx     <- loglikes >= threshold
   base_trimmed <- sum(loglikes[keep_idx] * weights[keep_idx]) / sum(weights[keep_idx])
 
-  # L1 penalties (exclude α intercept column)
-  l1_alpha  <- sum(abs(alpha[, -1]))
-  l1_theta  <- sum(abs(unlist(slopes)))
-  penalty <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+  # L1 penalties (exclude the alpha intercept column)
+  l1_alpha <- sum(abs(alpha[, -1]))
+  l1_theta <- sum(abs(unlist(slopes)))
+  penalty  <- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
   return(list(
     prop_inf            = prop_inf,

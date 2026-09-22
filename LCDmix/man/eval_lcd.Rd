@@ -4,7 +4,15 @@
 \alias{eval_lcd}
 \title{Evaluate held-out (penalized) log-likelihood for LCDmix}
 \usage{
-eval_lcd(model, Y_test, X_test, biomass_test, trim_prob = 0.03)
+eval_lcd(
+  model,
+  Y_test,
+  X_test,
+  biomass_test,
+  trim_prob = 0.03,
+  bin_width = NULL,
+  score = c("bin_prob", "center")
+)
 }
 \arguments{
 \item{model}{List; fitted LCDmix object containing at least:
@@ -26,6 +34,15 @@ a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).}
 
 \item{trim_prob}{Numeric in \eqn{[0,1)}; fraction of weight to trim based on
 the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).}
+
+\item{bin_width}{Numeric; the width of a bin. \code{NULL} (the default)
+infers it from \code{Y_test}, which is correct for the equally spaced grid
+that \code{binning()} builds.}
+
+\item{score}{Either \code{"bin_prob"} (the default) to score each bin by its
+probability divided by the bin width, that is the average density over the
+bin, or \code{"center"} for the density at the bin center, which was the
+behavior before this fix.}
 }
 \value{
 A list with:
@@ -42,6 +59,9 @@ and trimmed \strong{penalized} weighted means. Trimming is performed over
 \emph{all rows, including \code{-Inf} rows}, so that models with different
 proportions of finite rows remain comparable. The trimmed threshold is a
 weighted quantile of the log-likelihoods using \code{weighted_quantile()}.
+The data are binned, so a bin is an interval. Scoring it by the density at
+its center rewards a fitted density that is peaked inside the bin, which is
+why the bin probability is used instead.
 }
 \details{
 For each time \eqn{t} and component \eqn{k}, residuals are

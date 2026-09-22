@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-09-21">
+<meta name="date" content="2026-09-22">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-09-21</h4>
+<h4 class="date">2026-09-22</h4>
 
 </div>
 
@@ -350,16 +350,6 @@ usethis::use_mit_license(copyright_holder = "F. Last")</code></pre>
 <h2>Now to the package itself</h2>
 <pre class="r"><code>#usethis::use_rcpp_armadillo(name = "code")
 usethis::use_package("flowmix")</code></pre>
-<pre><code>## Registered S3 methods overwritten by 'RcppEigen':
-##   method               from         
-##   predict.fastLm       RcppArmadillo
-##   print.fastLm         RcppArmadillo
-##   summary.fastLm       RcppArmadillo
-##   print.summary.fastLm RcppArmadillo</code></pre>
-<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLmPure' by
-## 'RcppEigen::fastLmPure' when loading 'flowmix'</code></pre>
-<pre><code>## Warning: replacing previous import 'RcppArmadillo::fastLm' by
-## 'RcppEigen::fastLm' when loading 'flowmix'</code></pre>
 <pre><code>## ✔ Adding flowmix to 'Imports' field in DESCRIPTION.</code></pre>
 <pre><code>## ☐ Refer to functions with `flowmix::fun()`.</code></pre>
 <pre class="r"><code>usethis::use_package("logcondens")</code></pre>
@@ -2524,7 +2514,24 @@ responsibilities,<br>
   frac &lt;- (threshold - cum_w[idx - 1]) / sorted_w[idx]      # was: / (sorted_w[idx] - sorted_w[idx-1])
   min(hi, max(lo, lo + frac * (hi - lo)))                   # clamp: floating overshoot past hi
 }</code></pre>
-<pre class="r"><code>#' Evaluate held-out (penalized) log-likelihood for LCDmix
+<pre class="r"><code>#' Width of one bin on the binning grid.
+#'
+#' NOTE: <a href="create-LCDmix.html#binning">binning</a>() builds equally spaced cutpoints, so the smallest gap between
+#' distinct bin centers is the bin width. Empty grid positions leave gaps that
+#' are multiples of it, which is why the minimum is used and not the mean.
+<span id="infer_bin_width">infer_bin_width</span> &lt;- function(Y_test) {
+  centers &lt;- sort(unique(as.numeric(unlist(Y_test))))
+  if (length(centers) &lt; 2L) {
+    return(NA_real_)
+  }
+  gaps  &lt;- diff(centers)
+  width &lt;- min(gaps)
+  if (any(abs(gaps / width - round(gaps / width)) &gt; 1e-6)) {
+    warning("<a href="create-LCDmix.html#infer_bin_width">infer_bin_width</a>(): the bin centers are not on an equally spaced grid")
+  }
+  return(width)
+}
+#' Evaluate held-out (penalized) log-likelihood for LCDmix
 #'
 #' Computes per-observation held-out log-likelihoods for a fitted LCDmix
 #' \code{model} on test data \code{(Y_test, X_test)} and returns the untrimmed
@@ -2532,6 +2539,9 @@ responsibilities,<br>
 #' \emph{all rows, including \code{-Inf} rows}, so that models with different
 #' proportions of finite rows remain comparable. The trimmed threshold is a
 #' weighted quantile of the log-likelihoods using \code{<a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>()}.
+#' The data are binned, so a bin is an interval. Scoring it by the density at
+#' its center rewards a fitted density that is peaked inside the bin, which is
+#' why the bin probability is used instead.
 #'
 #' @param model List; fitted LCDmix object containing at least:
 #'   \code{g_new} (list of K log-concave density fits),
@@ -2548,6 +2558,13 @@ responsibilities,<br>
 #'   a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).
 #' @param trim_prob Numeric in \eqn{[0,1)}; fraction of weight to trim based on
 #'   the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).
+#' @param bin_width Numeric; the width of a bin. \code{NULL} (the default)
+#'   infers it from \code{Y_test}, which is correct for the equally spaced grid
+#'   that \code{<a href="create-LCDmix.html#binning">binning</a>()} builds.
+#' @param score Either \code{"bin_prob"} (the default) to score each bin by its
+#'   probability divided by the bin width, that is the average density over the
+#'   bin, or \code{"center"} for the density at the bin center, which was the
+#'   behavior before this fix.
 #'
 #' @details
 #' For each time \eqn{t} and component \eqn{k}, residuals are
@@ -2587,8 +2604,12 @@ responsibilities,<br>
   Y_test,
   X_test,
   biomass_test,
-  trim_prob = 0.03
+  trim_prob = 0.03,
+  bin_width = NULL,                       # NEW, appended
+  score     = c("bin_prob", "center")     # NEW, appended
 ) {
+  score &lt;- match.arg(score)
+
   # Unpack fitted parameters
   densities     &lt;- model$g_new
   slopes        &lt;- model$theta_new
@@ -2600,28 +2621,52 @@ responsibilities,<br>
   TT &lt;- nrow(X_test)
   K  &lt;- nrow(alpha)
 
+  # NEW: the width of a bin. The data are binned, so a bin is an interval and
+  # its probability, not the density at its center, is what the model predicts.
+  if (score == "bin_prob" &amp;&amp; is.null(bin_width)) {
+    bin_width &lt;- <a href="create-LCDmix.html#infer_bin_width">infer_bin_width</a>(Y_test)
+  }
+  if (score == "bin_prob" &amp;&amp; (is.na(bin_width) || bin_width &lt;= 0)) {
+    warning("<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>(): could not infer the bin width; scoring at bin centers instead")
+    score &lt;- "center"
+  }
+
   # Flatten biomass weights
   weights &lt;- unlist(biomass_test)
 
-  # Mixture probabilities π_{t,k}
+  # Mixture probabilities pi_{t,k}
   pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X_test, alpha)
 
   # Per-observation log-likelihoods
   loglikes &lt;- vector("list", TT)
   for (t in seq_len(TT)) {
     nt &lt;- length(Y_test[[t]])
-    lt  &lt;- matrix(NA_real_, nt, K)
-    # Component-wise densities f_k(r_{t,i,k})
+    lt &lt;- matrix(NA_real_, nt, K)
+    # Component-wise values f_k(r_{t,i,k})
     for (k in seq_len(K)) {
-      pred_tk   &lt;- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
-      # Column 3 = density; out-of-support → 0 (log -&gt; -Inf)
-      dens_vals &lt;- suppressWarnings(
-        logcondens::evaluateLogConDens(Y_test[[t]] - pred_tk, densities[[k]])[, 3]
-      )
+      pred_tk &lt;- intercepts[[k]] + sum(X_test[t, ] * slopes[[k]])
+      resid   &lt;- as.numeric(Y_test[[t]]) - pred_tk
+      if (score == "bin_prob") {
+        # NEW: average density over the bin, from the exact distribution
+        # function (column 4). It is 0 below the support and 1 above it, so a
+        # bin outside the support still gives 0 and then -Inf, as before.
+        upper &lt;- suppressWarnings(
+          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]])[, 4]
+        )
+        lower &lt;- suppressWarnings(
+          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]])[, 4]
+        )
+        dens_vals &lt;- pmax(upper - lower, 0) / bin_width
+      } else {
+        # Column 3 = density; out-of-support -&gt; 0 (log -&gt; -Inf)
+        dens_vals &lt;- suppressWarnings(
+          logcondens::evaluateLogConDens(resid, densities[[k]])[, 3]
+        )
+      }
       lt[, k] &lt;- dens_vals * pi_mat[t, k]
     }
 
-    # Mixture density and log
+    # Mixture value and log
     mix_dens      &lt;- rowSums(lt)
     loglikes[[t]] &lt;- log(mix_dens)
   }
@@ -2629,9 +2674,9 @@ responsibilities,<br>
 
   # Proportion of non-finite rows
   finite_mask &lt;- is.finite(loglikes)
-  prop_inf    &lt;- sum(weights[!finite_mask])/sum(weights)
+  prop_inf    &lt;- sum(weights[!finite_mask]) / sum(weights)
 
-  # All -Inf → return early
+  # All -Inf -&gt; return early
   if (!any(finite_mask)) {
     return(list(
       prop_inf        = 1,
@@ -2641,18 +2686,18 @@ responsibilities,<br>
       trimmed_loglik  = -Inf,
       penalty         = NA_real_,
       sum_w           = NA_real_,
-      sum_trimmed_w   = NA_real_,
+      sum_trimmed_w   = NA_real_
     ))
   }
 
   # Untrimmed weighted average
-  base_ll  &lt;- sum(weights * loglikes) / sum(weights)
-  
+  base_ll &lt;- sum(weights * loglikes) / sum(weights)
+
   # Untrimmed weighted average over finite rows
   base_finite &lt;- sum(weights[finite_mask] * loglikes[finite_mask]) /
-             sum(weights[finite_mask])
-  
-  # Median_loglikelihood
+    sum(weights[finite_mask])
+
+  # Median log-likelihood
   base_med &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(loglikes, weights, prob = 0.5)
 
   # Trim over all rows, with ties kept (&gt;=)
@@ -2660,10 +2705,10 @@ responsibilities,<br>
   keep_idx     &lt;- loglikes &gt;= threshold
   base_trimmed &lt;- sum(loglikes[keep_idx] * weights[keep_idx]) / sum(weights[keep_idx])
 
-  # L1 penalties (exclude α intercept column)
-  l1_alpha  &lt;- sum(abs(alpha[, -1]))
-  l1_theta  &lt;- sum(abs(unlist(slopes)))
-  penalty &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
+  # L1 penalties (exclude the alpha intercept column)
+  l1_alpha &lt;- sum(abs(alpha[, -1]))
+  l1_theta &lt;- sum(abs(unlist(slopes)))
+  penalty  &lt;- lambda_alpha * l1_alpha + lambda_theta * l1_theta
 
   return(list(
     prop_inf            = prop_inf,
@@ -4844,8 +4889,9 @@ responsibilities,<br>
 ## Writing 'cv_lcd_summary.Rd'
 ## Writing 'err_true_quantile.Rd'
 ## Writing 'estep_lcd.Rd'
-## Writing 'eval_lcd.Rd'
 ## Writing 'flow_err_density.Rd'
+## Writing 'infer_bin_width.Rd'
+## Writing 'eval_lcd.Rd'
 ## Writing 'initialization.Rd'
 ## Writing 'is_increasing.Rd'
 ## Writing 'iteration.Rd'
