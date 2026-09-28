@@ -115,13 +115,14 @@ iteration <- function(
     idx_new    <- Estep$idx
     resp_new   <- Estep$resp
     weight_new <- Estep$weight
-#     Q(Theta^(m) | Theta^(m)) -- the reference point for the ascent test.
+    ## Q(Theta^(m) | Theta^(m)) -- the reference point for the ascent test.
+    ## Computed unconditionally now: the stopping rule below needs it.
+    Q_ref <- comp_Q(X, g_old, resi_old, theta_old, alpha_old, idx_new,
+                    weight_new, lambda_alpha, lambda_theta,
+                    Y_bin = Y_bin, intercepts = theta0_old)
     if (calc_Q_every) {
-     Q_new <- comp_Q(X, g_old, resi_old, theta_old, alpha_old, idx_new,
-                     weight_new, lambda_alpha, lambda_theta,
-                     Y_bin = Y_bin, intercepts = theta0_old)          # NEW
-     Q_every         <- c(Q_every, Q_new)
-     n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))  # NEW
+     Q_every         <- c(Q_every, Q_ref)
+     n_outside_every <- c(n_outside_every, attr(Q_ref, "n_outside"))
     }
     message("✔ E‐step complete")
     
@@ -212,15 +213,16 @@ iteration <- function(
     # Surrogate log-likelihood
     Q_new <- comp_Q(X, g_new, resi_new, theta_new, alpha_new, idx_new,
                    weight_new, lambda_alpha, lambda_theta)
+    Q_E <- Q_new                      # NEW: explicit alias, checkpoint E
     Q_every         <- c(Q_every, Q_new)
     Q               <- c(Q, Q_new)
-    n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))   # NEW, safe
+    n_outside_every <- c(n_outside_every, attr(Q_new, "n_outside"))
 
     message("✔ Q[i] = ", round(Q_new, 6))
     
     
     # Check convergence or decrease
-    inc <- (Q[i + 1] - Q[i]) / abs(Q[i])
+    inc <- (as.numeric(Q_E) - as.numeric(Q_ref)) / abs(as.numeric(Q_ref))
     if (inc < 0) {
       message("⚠ Q decreased at iteration ", i,  "; reverting to previous iteration")
       idx_new    <- idx_old
