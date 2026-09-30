@@ -95,7 +95,7 @@ initialization <- function(
     for (k in seq_len(K)) {
       likeli_t[, k] <- dnorm(
         x    = resi_init[[t]][, k],
-        mean = flow_res$mn[t, 1, k],
+        mean = 0,    # fixR: resi_init is already Y - mn; was mean = flow_res$mn[t, 1, k]
         sd   = sqrt(flow_res$sigma[k])
       ) * pi_mat[t, k]
     }
