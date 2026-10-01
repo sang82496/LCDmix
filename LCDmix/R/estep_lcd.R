@@ -81,7 +81,8 @@ estep_lcd <- function(
       dens <- suppressWarnings(
         logcondens::evaluateLogConDens(
           residuals[[t]][, k],
-          densities[[k]]
+          densities[[k]],
+          which = 2 # fixT: which = 2 fills column 3 (density) only
         )[, 3]
       )
       lik_mat[, k] <- dens * pi_mat[t, k]

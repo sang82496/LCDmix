@@ -11,7 +11,7 @@ dens_est_fun <- function(
     K <- length(est_res$g_new)
     res_est <- sapply(seq_len(K), function(k) {
         mu <- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
-        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
+        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]], which = 2)[,3]   # fixT: column 3 = density
       })
     } else { # if flowmix
     mn_arr <- est_res$mn

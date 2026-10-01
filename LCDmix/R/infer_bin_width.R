@@ -137,16 +137,16 @@ eval_lcd <- function(
         # function (column 4). It is 0 below the support and 1 above it, so a
         # bin outside the support still gives 0 and then -Inf, as before.
         upper <- suppressWarnings(
-          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]])[, 4]
+          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]], which = 3)[, 4]   # fixT: which = 3 fills column 4 (CDF) only
         )
         lower <- suppressWarnings(
-          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]])[, 4]
+          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]], which = 3)[, 4]   # fixT
         )
         dens_vals <- pmax(upper - lower, 0) / bin_width
       } else {
         # Column 3 = density; out-of-support -> 0 (log -> -Inf)
         dens_vals <- suppressWarnings(
-          logcondens::evaluateLogConDens(resid, densities[[k]])[, 3]
+          logcondens::evaluateLogConDens(resid, densities[[k]], which = 2)[, 3]   # fixT: which = 2 fills column 3 (density) only
         )
       }
       lt[, k] <- dens_vals * pi_mat[t, k]

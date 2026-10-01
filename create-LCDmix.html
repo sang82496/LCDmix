@@ -1346,7 +1346,7 @@ responsibilities,<br>
 
       # Evaluate log-density for each residual under component k
       log_dens &lt;- suppressWarnings(
-        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 2]
+      logcondens::evaluateLogConDens(resi_tk, densities[[k]], which = 1)[, 2]   # fixT: which = 1 fills column 2 (log-density) only
       )
       finite_mask &lt;- is.finite(log_dens)
       
@@ -1767,7 +1767,8 @@ responsibilities,<br>
       dens &lt;- suppressWarnings(
         logcondens::evaluateLogConDens(
           residuals[[t]][, k],
-          densities[[k]]
+          densities[[k]],
+          which = 2 # fixT: which = 2 fills column 3 (density) only
         )[, 3]
       )
       lik_mat[, k] &lt;- dens * pi_mat[t, k]
@@ -2657,16 +2658,16 @@ responsibilities,<br>
         # function (column 4). It is 0 below the support and 1 above it, so a
         # bin outside the support still gives 0 and then -Inf, as before.
         upper &lt;- suppressWarnings(
-          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]])[, 4]
+          logcondens::evaluateLogConDens(resid + bin_width / 2, densities[[k]], which = 3)[, 4]   # fixT: which = 3 fills column 4 (CDF) only
         )
         lower &lt;- suppressWarnings(
-          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]])[, 4]
+          logcondens::evaluateLogConDens(resid - bin_width / 2, densities[[k]], which = 3)[, 4]   # fixT
         )
         dens_vals &lt;- pmax(upper - lower, 0) / bin_width
       } else {
         # Column 3 = density; out-of-support -&gt; 0 (log -&gt; -Inf)
         dens_vals &lt;- suppressWarnings(
-          logcondens::evaluateLogConDens(resid, densities[[k]])[, 3]
+          logcondens::evaluateLogConDens(resid, densities[[k]], which = 2)[, 3]   # fixT: which = 2 fills column 3 (density) only
         )
       }
       lt[, k] &lt;- dens_vals * pi_mat[t, k]
@@ -4207,7 +4208,7 @@ responsibilities,<br>
     K &lt;- length(est_res$g_new)
     res_est &lt;- sapply(seq_len(K), function(k) {
         mu &lt;- est_res$theta0_new[[k]] + sum(X[t,] * est_res$theta_new[[k]])
-        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]])[,3]
+        logcondens::evaluateLogConDens(y_grid - mu, est_res$g_new[[k]], which = 2)[,3]   # fixT: column 3 = density
       })
     } else { # if flowmix
     mn_arr &lt;- est_res$mn
@@ -4344,7 +4345,7 @@ responsibilities,<br>
     out &lt;- numeric(length(v))
     inside &lt;- v &gt;= sup[1] &amp; v &lt;= sup[2]
     if (any(inside)) {
-      val &lt;- tryCatch(logcondens::evaluateLogConDens(v[inside], g)[, 3],
+      val &lt;- tryCatch(logcondens::evaluateLogConDens(v[inside], g, which = 2)[, 3],   # fixT: column 3 = density
                       error = function(e) rep(NA_real_, sum(inside)))
       out[inside] &lt;- val
     }
@@ -4814,7 +4815,7 @@ responsibilities,<br>
   par(mfrow = c(1,2), pty = "s", cex = 0.7)
   for (k in seq_len(K)) {
     flow_den = dnorm(gridk, 0, sqrt(flow_sigma[k]))
-    LCD_den = logcondens::evaluateLogConDens(gridk, g_est[[k]])[,3]
+    LCD_den = logcondens::evaluateLogConDens(gridk, g_est[[k]], which = 2)[,3]   # fixT: column 3 = density
     ymax = max(flow_den, LCD_den, err_true_den)
     
     par(mfrow = c(1,2), pty = "s", cex = 0.7)

@@ -362,7 +362,7 @@ res_LCDmix_simul <- function(s){
   par(mfrow = c(1,2), pty = "s", cex = 0.7)
   for (k in seq_len(K)) {
     flow_den = dnorm(gridk, 0, sqrt(flow_sigma[k]))
-    LCD_den = logcondens::evaluateLogConDens(gridk, g_est[[k]])[,3]
+    LCD_den = logcondens::evaluateLogConDens(gridk, g_est[[k]], which = 2)[,3]   # fixT: column 3 = density
     ymax = max(flow_den, LCD_den, err_true_den)
     
     par(mfrow = c(1,2), pty = "s", cex = 0.7)

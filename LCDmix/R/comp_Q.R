@@ -131,7 +131,7 @@ comp_Q <- function(
 
       # Evaluate log-density for each residual under component k
       log_dens <- suppressWarnings(
-        logcondens::evaluateLogConDens(resi_tk, densities[[k]])[, 2]
+      logcondens::evaluateLogConDens(resi_tk, densities[[k]], which = 1)[, 2]   # fixT: which = 1 fills column 2 (log-density) only
       )
       finite_mask <- is.finite(log_dens)
       

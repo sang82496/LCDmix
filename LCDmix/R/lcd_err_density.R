@@ -11,7 +11,7 @@ lcd_err_density <- function(g) {
     out <- numeric(length(v))
     inside <- v >= sup[1] & v <= sup[2]
     if (any(inside)) {
-      val <- tryCatch(logcondens::evaluateLogConDens(v[inside], g)[, 3],
+      val <- tryCatch(logcondens::evaluateLogConDens(v[inside], g, which = 2)[, 3],   # fixT: column 3 = density
                       error = function(e) rep(NA_real_, sum(inside)))
       out[inside] <- val
     }
