@@ -141,13 +141,17 @@ mstep_theta_lp <- function(
   
   if (lp_res$status != 0) {
     print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
+    # fixS: lpSolve::lp() does not accept the sparse Matrix built above
+    # ("argument is not a matrix"), and a dense copy can need gigabytes, so
+    # pass the constraints as (row, column, value) triplets instead.
+    trip <- Matrix::summary(Matrix::Matrix(const_mat, sparse = TRUE))
     lp_res <- lpSolve::lp(
-    direction    = "max",
-    objective.in = obj_coef,
-    const.mat    = const_mat,
-    const.dir    = const_dir,
-    const.rhs    = const_vec
-  )
+      direction    = "max",
+      objective.in = obj_coef,
+      dense.const  = cbind(trip$i, trip$j, trip$x),
+      const.dir    = const_dir,
+      const.rhs    = const_vec
+    )
   }
   
   if (lp_res$status != 0) {
