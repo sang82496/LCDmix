@@ -18,6 +18,12 @@
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number. Bounds
+#'   the deviation of the component mean from its intercept,
+#'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} for all \eqn{t}, as in flowmix.
+#'   If the current slopes already exceed \code{maxdev} at some \eqn{t}, the bound
+#'   there is relaxed to the current deviation, so the LP stays feasible and the
+#'   update cannot decrease Q. How often that happens is returned.
 #'
 #' @return A list with components:
 #' \describe{
@@ -37,7 +43,8 @@ mstep_theta_lp <- function(
   slopes_k,
   lambda_theta,
   component,
-  lp_time_limit
+  lp_time_limit,
+  maxdev = NULL                     # NEW (fixP) - appended last
 ) {
   TT <- length(Y_bin)
   p  <- ncol(X)
@@ -112,6 +119,26 @@ mstep_theta_lp <- function(
   }
   const_vec <- c(const_vec, tmp_vec)
   
+  # NEW (fixP): maximum-deviation constraints (flowmix), |X_t' theta_k| <= maxdev
+  # for all t. Only the slopes enter, so mstep_shift() cannot break them later.
+  # Guard: if the current slopes exceed maxdev at some t, the bound there is
+  # the current deviation instead, so slopes_k stays feasible, the LP cannot
+  # become infeasible, and the theta-block cannot decrease Q. The guard is
+  # counted as active only above 1e-8, so rounding error is not counted.
+  maxdev_n_relaxed  <- NA_integer_
+  maxdev_max_excess <- NA_real_
+  if (!is.null(maxdev)) {
+    if (!is.numeric(maxdev) || length(maxdev) != 1L || !(maxdev > 0))
+      stop("mstep_theta_lp(): maxdev must be NULL or a single positive number.")
+    dev_now <- abs(as.vector(X %*% slopes_k))
+    maxdev_n_relaxed  <- sum(dev_now > maxdev + 1e-8)
+    maxdev_max_excess <- max(0, dev_now - maxdev)
+    dev_rhs <- pmax(maxdev, dev_now)
+    tmp2 <- cbind(matrix(0, nrow = TT, ncol = n + 1), X)
+    const_mat <- rbind(const_mat, cbind(tmp2, -tmp2), cbind(-tmp2, tmp2))
+    const_vec <- c(const_vec, dev_rhs, dev_rhs)
+  }
+  
   #–– Debugging: print size and memory usage of constraint matrix ––#
 #  print(dim(const_mat))
 #  print(format(object.size(as.matrix(const_mat)), "Gb"))
@@ -165,6 +192,8 @@ mstep_theta_lp <- function(
   
   return(list(
     theta0_k = theta0_new,
-    theta_k  = theta_new
+    theta_k  = theta_new,
+    maxdev_n_relaxed  = maxdev_n_relaxed,     # NEW (fixP)
+    maxdev_max_excess = maxdev_max_excess     # NEW (fixP)
   ))
 }

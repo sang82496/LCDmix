@@ -19,7 +19,8 @@ refit_onejob(
   save_dir,
   lp_time_limit,
   calc_Q_every = FALSE,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \description{

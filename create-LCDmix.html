@@ -407,6 +407,10 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number. 
+#'  Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
+#'  \code{maxdev} for all \eqn{t}, as in flowmix. It is passed to the flowmix
+#'  initialization and to the LP update of \eqn{\theta}. Requires \code{update = "lp"}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -450,7 +454,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   calc_Q_every   = FALSE,
   debug          = FALSE,
   lp_time_limit  = 3600,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update &lt;- match.arg(update)           # NEW
   #— Step 1: Binning (if needed) —#
@@ -472,7 +477,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     K,
     lambda_alpha,
     lambda_theta,
-    resp_threshold
+    resp_threshold,
+    maxdev = maxdev                     # NEW (fixP)
   )
   message("✔ Initialization complete")
   
@@ -490,7 +496,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     calc_Q_every,
     debug,
     lp_time_limit,
-    update = update                     # NEW
+    update = update,                    # NEW
+    maxdev = maxdev                     # NEW (fixP)
   )
   
   if (debug &amp;&amp; !is.null(iter_res$error)) {
@@ -644,6 +651,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
 #' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
 #' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
+#' @param maxdev \code{NULL} or a positive number; passed to \code{flowmix::flowmix()}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -682,7 +690,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   K,
   lambda_alpha,
   lambda_theta,
-  resp_threshold
+  resp_threshold,
+  maxdev = NULL                         # NEW (fixP) - appended
 ) {
   # 1) Fit Gaussian mixture regression via flowmix
   flow_res &lt;- flowmix::flowmix(
@@ -692,7 +701,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     numclust     = K,
     prob_lambda  = lambda_alpha,
     mean_lambda  = lambda_theta,
-    maxdev       = NULL,
+    maxdev       = maxdev,              # fixP: was NULL
     nrep         = 1
   )
   
@@ -1436,7 +1445,8 @@ responsibilities,<br>
   calc_Q_every   = FALSE,
   debug          = FALSE,
   lp_time_limit  = 3600,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update &lt;- match.arg(update)           # NEW
   TT &lt;- nrow(X)
@@ -1534,7 +1544,8 @@ responsibilities,<br>
       densities = g_old, idx = idx_old, intercepts = theta0_old,
       slopes = theta_old, lambda_theta = lambda_theta,
       lp_time_limit = lp_time_limit,
-      update = update                                   # NEW, for the ablation
+      update = update,                                  # NEW, for the ablation
+      maxdev = maxdev                                   # NEW (fixP)
     )
     theta0_lp  &lt;- theta_lp$theta0    # NEW: the update's own intercept, pre-shift
     theta0_new &lt;- theta0_lp
@@ -1879,6 +1890,8 @@ responsibilities,<br>
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
+#' @param maxdev \code{NULL} or a positive number; see \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}.
+#'    Only the LP update supports it.
 #'
 #' @return A list with elements:
 #' \describe{
@@ -1920,9 +1933,12 @@ responsibilities,<br>
   slopes,
   lambda_theta,
   lp_time_limit = 3600,
-  update        = c("lp", "optim")   # NEW; default preserves current behavior
+  update        = c("lp", "optim"),  # NEW; default preserves current behavior
+  maxdev        = NULL               # NEW (fixP) - appended last
 ) {
   update &lt;- match.arg(update)
+  if (!is.null(maxdev) &amp;&amp; update != "lp")                       # NEW (fixP)
+    stop("<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>(): maxdev is implemented only for update = \"lp\".")
 
   K &lt;- length(densities)
   theta0_new &lt;- vector("list", K)
@@ -1940,7 +1956,7 @@ responsibilities,<br>
         density_k = densities[[k]], idx = idx,
         intercept_k = intercepts[[k]], slopes_k = slopes[[k]],
         lambda_theta = lambda_theta, component = k,
-        lp_time_limit = lp_time_limit
+        lp_time_limit = lp_time_limit, maxdev = maxdev   # fixP
       ),
       optim = <a href="create-LCDmix.html#mstep_theta_optim">mstep_theta_optim</a>(
         Y_bin = Y_bin, X = X, weights = weights, residuals = residuals,
@@ -1978,7 +1994,10 @@ responsibilities,<br>
       n_outside   = sum(u_new &lt; g_ext$L | u_new &gt; g_ext$U),
       convergence = if (is.null(tmp$convergence)) NA_integer_ else tmp$convergence,
       obj_start   = if (is.null(tmp$obj_start))   NA_real_    else tmp$obj_start,
-      obj_end     = if (is.null(tmp$obj_end))     NA_real_    else tmp$obj_end
+      obj_end     = if (is.null(tmp$obj_end))     NA_real_    else tmp$obj_end,
+      # NEW (fixP): how often the maxdev guard was needed in this LP call
+      maxdev_n_relaxed  = if (is.null(tmp$maxdev_n_relaxed))  NA_integer_ else tmp$maxdev_n_relaxed,
+      maxdev_max_excess = if (is.null(tmp$maxdev_max_excess)) NA_real_    else tmp$maxdev_max_excess
     )
   }
 
@@ -2006,6 +2025,12 @@ responsibilities,<br>
 #' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
 #' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
 #' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number. Bounds
+#'   the deviation of the component mean from its intercept,
+#'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} for all \eqn{t}, as in flowmix.
+#'   If the current slopes already exceed \code{maxdev} at some \eqn{t}, the bound
+#'   there is relaxed to the current deviation, so the LP stays feasible and the
+#'   update cannot decrease Q. How often that happens is returned.
 #'
 #' @return A list with components:
 #' \describe{
@@ -2025,7 +2050,8 @@ responsibilities,<br>
   slopes_k,
   lambda_theta,
   component,
-  lp_time_limit
+  lp_time_limit,
+  maxdev = NULL                     # NEW (fixP) - appended last
 ) {
   TT &lt;- length(Y_bin)
   p  &lt;- ncol(X)
@@ -2100,6 +2126,26 @@ responsibilities,<br>
   }
   const_vec &lt;- c(const_vec, tmp_vec)
   
+  # NEW (fixP): maximum-deviation constraints (flowmix), |X_t' theta_k| &lt;= maxdev
+  # for all t. Only the slopes enter, so <a href="create-LCDmix.html#mstep_shift">mstep_shift</a>() cannot break them later.
+  # Guard: if the current slopes exceed maxdev at some t, the bound there is
+  # the current deviation instead, so slopes_k stays feasible, the LP cannot
+  # become infeasible, and the theta-block cannot decrease Q. The guard is
+  # counted as active only above 1e-8, so rounding error is not counted.
+  maxdev_n_relaxed  &lt;- NA_integer_
+  maxdev_max_excess &lt;- NA_real_
+  if (!is.null(maxdev)) {
+    if (!is.numeric(maxdev) || length(maxdev) != 1L || !(maxdev &gt; 0))
+      stop("<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>(): maxdev must be NULL or a single positive number.")
+    dev_now &lt;- abs(as.vector(X %*% slopes_k))
+    maxdev_n_relaxed  &lt;- sum(dev_now &gt; maxdev + 1e-8)
+    maxdev_max_excess &lt;- max(0, dev_now - maxdev)
+    dev_rhs &lt;- pmax(maxdev, dev_now)
+    tmp2 &lt;- cbind(matrix(0, nrow = TT, ncol = n + 1), X)
+    const_mat &lt;- rbind(const_mat, cbind(tmp2, -tmp2), cbind(-tmp2, tmp2))
+    const_vec &lt;- c(const_vec, dev_rhs, dev_rhs)
+  }
+  
   #–– Debugging: print size and memory usage of constraint matrix ––#
 #  print(dim(const_mat))
 #  print(format(object.size(as.matrix(const_mat)), "Gb"))
@@ -2153,7 +2199,9 @@ responsibilities,<br>
   
   return(list(
     theta0_k = theta0_new,
-    theta_k  = theta_new
+    theta_k  = theta_new,
+    maxdev_n_relaxed  = maxdev_n_relaxed,     # NEW (fixP)
+    maxdev_max_excess = maxdev_max_excess     # NEW (fixP)
   ))
 }</code></pre>
 <pre class="r"><code>#' Piecewise-linear log-density with linear extension beyond the support
@@ -2806,6 +2854,33 @@ responsibilities,<br>
   }
   "unknown failure (fit was not a list, or had no iter_partial)"
 }</code></pre>
+<pre class="r"><code>#' Summarize how often the maxdev guard was active in one fit
+#'
+#' @description
+#' Reads the per-LP-call records that \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} stores in
+#' \code{iter$theta_diag}. The guard is active in an LP call when the current
+#' slopes exceed \code{maxdev} at one or more time points (by more than 1e-8).
+#'
+#' @param iter The \code{iter} element of a \code{<a href="create-LCDmix.html#main">main</a>()} fit.
+#'
+#' @return A named numeric vector: \code{n_lp_calls} (LP calls, one per
+#'   iteration and component), \code{n_calls_active} (calls with the guard
+#'   active), \code{n_relaxed_total} (time points relaxed, summed over calls),
+#'   and \code{max_excess} (largest excess over \code{maxdev}). All but
+#'   \code{n_lp_calls} are \code{NA} when \code{maxdev} was \code{NULL}.
+#' @export
+<span id="maxdev_summary">maxdev_summary</span> &lt;- function(iter) {
+  d &lt;- unlist(iter$theta_diag, recursive = FALSE)   # one entry per (iteration, component)
+  n_rel  &lt;- vapply(d, function(z) if (is.null(z$maxdev_n_relaxed)) NA_real_ else as.numeric(z$maxdev_n_relaxed), numeric(1))
+  excess &lt;- vapply(d, function(z) if (is.null(z$maxdev_max_excess)) NA_real_ else as.numeric(z$maxdev_max_excess), numeric(1))
+  if (!length(d) || all(is.na(n_rel))) {
+    return(c(n_lp_calls = length(d), n_calls_active = NA, n_relaxed_total = NA, max_excess = NA))
+  }
+  return(c(n_lp_calls      = length(d),
+           n_calls_active  = sum(n_rel &gt; 0, na.rm = TRUE),
+           n_relaxed_total = sum(n_rel, na.rm = TRUE),
+           max_excess      = max(excess, na.rm = TRUE)))
+}</code></pre>
 <pre class="r"><code>#' @title Internal: run a single CV job (one fold/seed/λ-pair)
 #' @description Executes one CV job: fit on train split, evaluate on hold-out,
 #'   and write a per-job RDS file. Returns a concise log string.
@@ -2833,7 +2908,8 @@ responsibilities,<br>
   save_dir,
   lp_time_limit = 3600,
   calc_Q_every  = FALSE,                 # NEW
-  update         = c("lp", "optim")     # NEW
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update &lt;- match.arg(update)           # NEW
   alpha_idx     &lt;- job[["alpha_idx"]]
@@ -2882,7 +2958,8 @@ responsibilities,<br>
         debug           = TRUE,
         calc_Q_every    = calc_Q_every,      # NEW
         lp_time_limit   = lp_time_limit,
-        update          = update
+        update          = update,
+        maxdev          = maxdev             # NEW (fixP)
       ),
       error = function(e) { err_msg &lt;&lt;- e$message; NULL }
     ),
@@ -2918,6 +2995,7 @@ responsibilities,<br>
        Q_every = NULL, 
        n_outside_every = NULL, 
        lp_check_every = NULL,
+       maxdev_diag    = NULL,
         log_msg             = log_msg
       ),
       file = out_path
@@ -2964,6 +3042,7 @@ responsibilities,<br>
        Q_every             = if (isTRUE(calc_Q_every)) fit$iter$Q_every         else NULL,
        n_outside_every     = if (isTRUE(calc_Q_every)) fit$iter$n_outside_every else NULL,
        lp_check_every      = if (isTRUE(calc_Q_every)) fit$iter$lp_check_every  else NULL,
+       maxdev_diag         = <a href="create-LCDmix.html#maxdev_summary">maxdev_summary</a>(fit$iter),              # NEW (fixP)
        # ----------------------------------------------------------------------
        err_msg             = NA_character_,
        failed_iter         = NA_integer_,
@@ -2992,7 +3071,8 @@ responsibilities,<br>
   cv_reps            = NULL,
   blocksize          = 20,
   lp_time_limit      = 3600,
-  update             = c("lp", "optim")     # NEW - must be LAST
+  update             = c("lp", "optim"),    # NEW
+  maxdev             = NULL                 # NEW (fixP) - appended last
 ) {
   if (!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE)
 
@@ -3020,7 +3100,8 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit", "update"),
+                "trim_prob","save_dir","folds","index_matrix", "lp_time_limit", "update",
+                "maxdev"),                                                   # NEW (fixP)
     envir = environment()
   )
 
@@ -3059,7 +3140,8 @@ responsibilities,<br>
         trim_prob      = trim_prob,
         save_dir       = save_dir,
         lp_time_limit  = lp_time_limit,
-        update         = update
+        update         = update,
+        maxdev         = maxdev              # NEW (fixP)
       )
       return(res_ii)
     }
@@ -3167,7 +3249,8 @@ responsibilities,<br>
   n_cores        = "max",
   lp_time_limit  = 600,
   calc_Q_every   = FALSE,                # NEW - appended
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3210,7 +3293,8 @@ responsibilities,<br>
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
                 "resp_threshold", "trim_prob", "blocksize", "base_dir", 
-                "nfold", "lp_time_limit", "update", "calc_Q_every"),
+                "nfold", "lp_time_limit", "update", "calc_Q_every",
+                "maxdev"),                                                   # NEW (fixP)
     envir = environment()
   )
 
@@ -3266,7 +3350,8 @@ responsibilities,<br>
         save_dir       = sim_dir,
         lp_time_limit  = lp_time_limit,
         calc_Q_every   = calc_Q_every,       # NEW
-        update         = update
+        update         = update,
+        maxdev         = maxdev              # NEW (fixP)
       )
       return(res_ii)
   })
@@ -3487,7 +3572,8 @@ responsibilities,<br>
   save_dir,
   lp_time_limit,
   calc_Q_every = FALSE,         # NEW - appended
-  update = c("lp", "optim")     # NEW - must be LAST
+  update = c("lp", "optim"),    # NEW
+  maxdev = NULL                 # NEW (fixP) - appended last
 ) {
   update &lt;- match.arg(update)           # NEW
   seed_int &lt;- as.integer(seed)
@@ -3519,7 +3605,8 @@ responsibilities,<br>
         debug           = TRUE,
         calc_Q_every    = calc_Q_every,   # NEW
         lp_time_limit   = lp_time_limit,
-        update          = update
+        update          = update,
+        maxdev          = maxdev          # NEW (fixP)
       ),
       error = function(e) { err_msg &lt;&lt;- e$message; NULL }
     ),
@@ -3551,6 +3638,7 @@ responsibilities,<br>
       fit         = fit,
       fit_L       = fit_L,
       fit_L_unpen = fit_L_unpen,
+      maxdev_diag = <a href="create-LCDmix.html#maxdev_summary">maxdev_summary</a>(fit$iter),   # NEW (fixP)
       log_msg     = log_msg
     ), file = out_path)
   return(TRUE)
@@ -3625,7 +3713,8 @@ responsibilities,<br>
   save_dir = "./refits", 
   n_cores = "max",
   lp_time_limit = 3600,
-  update = c("lp", "optim")     # NEW - must be LAST
+  update = c("lp", "optim"),    # NEW
+  maxdev = NULL                 # NEW (fixP) - appended last
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3643,7 +3732,8 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("Y_bin","X","bin_mass","K","lambda_alpha","lambda_theta",
-                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir", "lp_time_limit", "update"),
+                "max_iter","iter_eta","resp_threshold","trim_prob","save_dir",
+                "lp_time_limit", "update","maxdev"), # NEW (fixP)
     envir = environment()
   )
 
@@ -3663,7 +3753,8 @@ responsibilities,<br>
       lambda_alpha = lambda_alpha, lambda_theta = lambda_theta,
       seed = ii, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
-      save_dir = save_dir, lp_time_limit = lp_time_limit, update = update)
+      save_dir = save_dir, lp_time_limit = lp_time_limit, update = update,
+      maxdev = maxdev)                                                     # NEW (fixP)
     return(res_ii)
   })
 
@@ -3773,7 +3864,8 @@ responsibilities,<br>
   n_cores = "max",
   lp_time_limit = 600,
   calc_Q_every = FALSE,
-  update = c("lp", "optim")     # NEW - must be LAST
+  update = c("lp", "optim"),    # NEW
+  maxdev = NULL                 # NEW (fixP) - appended last
 ) {
   if (is.null(seeds) &amp;&amp; is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds &lt;- seq_len(cv_reps)
@@ -3809,7 +3901,8 @@ responsibilities,<br>
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every"),
+                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every",
+                "maxdev"),   # NEW (fixP)
     envir = environment()
   )
 
@@ -3843,7 +3936,8 @@ responsibilities,<br>
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
       save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, 
-      update = update, calc_Q_every = calc_Q_every)
+      update = update, calc_Q_every = calc_Q_every,
+      maxdev = maxdev)     # NEW (fixP)
     return(res_ii)
     })
   
@@ -4906,6 +5000,7 @@ responsibilities,<br>
 ## Writing 'lcd_err_density.Rd'
 ## Writing 'main.Rd'
 ## Writing 'make_logdens_ext.Rd'
+## Writing 'maxdev_summary.Rd'
 ## Writing 'mixture_metric.Rd'
 ## Writing 'modified_logcondens.Rd'
 ## Writing 'mstep_alpha.Rd'

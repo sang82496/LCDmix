@@ -79,7 +79,8 @@ refit_lcd_simul <- function(
   n_cores = "max",
   lp_time_limit = 600,
   calc_Q_every = FALSE,
-  update = c("lp", "optim")     # NEW - must be LAST
+  update = c("lp", "optim"),    # NEW
+  maxdev = NULL                 # NEW (fixP) - appended last
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` or `cv_reps` required")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -115,7 +116,8 @@ refit_lcd_simul <- function(
   parallel::clusterExport(
     cl,
     varlist = c("sim_files","grand_jobs","K","max_iter","iter_eta","resp_threshold",
-                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every"),
+                "trim_prob","base_dir", "lp_time_limit", "update", "calc_Q_every",
+                "maxdev"),   # NEW (fixP)
     envir = environment()
   )
 
@@ -149,7 +151,8 @@ refit_lcd_simul <- function(
       seed = sd, max_iter = max_iter, iter_eta = iter_eta,
       resp_threshold = resp_threshold, trim_prob = trim_prob,
       save_dir = sim_refit_dir, lp_time_limit = lp_time_limit, 
-      update = update, calc_Q_every = calc_Q_every)
+      update = update, calc_Q_every = calc_Q_every,
+      maxdev = maxdev)     # NEW (fixP)
     return(res_ii)
     })
   

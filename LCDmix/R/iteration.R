@@ -53,7 +53,8 @@ iteration <- function(
   calc_Q_every   = FALSE,
   debug          = FALSE,
   lp_time_limit  = 3600,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update <- match.arg(update)           # NEW
   TT <- nrow(X)
@@ -151,7 +152,8 @@ iteration <- function(
       densities = g_old, idx = idx_old, intercepts = theta0_old,
       slopes = theta_old, lambda_theta = lambda_theta,
       lp_time_limit = lp_time_limit,
-      update = update                                   # NEW, for the ablation
+      update = update,                                  # NEW, for the ablation
+      maxdev = maxdev                                   # NEW (fixP)
     )
     theta0_lp  <- theta_lp$theta0    # NEW: the update's own intercept, pre-shift
     theta0_new <- theta0_lp

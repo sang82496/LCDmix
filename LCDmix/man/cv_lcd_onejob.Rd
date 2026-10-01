@@ -18,7 +18,8 @@ cv_lcd_onejob(
   save_dir,
   lp_time_limit = 3600,
   calc_Q_every = FALSE,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{

@@ -96,7 +96,8 @@ cv_lcd_simul <- function(
   n_cores        = "max",
   lp_time_limit  = 600,
   calc_Q_every   = FALSE,                # NEW - appended
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   if (is.null(seeds) && is.null(cv_reps)) stop("`seeds` and `cv_reps` cannot be both NULL")
   if (is.null(seeds)) seeds <- seq_len(cv_reps)
@@ -139,7 +140,8 @@ cv_lcd_simul <- function(
     cl,
     varlist = c("sim_files", "grand_jobs", "K", "max_iter", "iter_eta",
                 "resp_threshold", "trim_prob", "blocksize", "base_dir", 
-                "nfold", "lp_time_limit", "update", "calc_Q_every"),
+                "nfold", "lp_time_limit", "update", "calc_Q_every",
+                "maxdev"),                                                   # NEW (fixP)
     envir = environment()
   )
 
@@ -195,7 +197,8 @@ cv_lcd_simul <- function(
         save_dir       = sim_dir,
         lp_time_limit  = lp_time_limit,
         calc_Q_every   = calc_Q_every,       # NEW
-        update         = update
+        update         = update,
+        maxdev         = maxdev              # NEW (fixP)
       )
       return(res_ii)
   })

@@ -17,7 +17,8 @@ iteration(
   calc_Q_every = FALSE,
   debug = FALSE,
   lp_time_limit = 3600,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{

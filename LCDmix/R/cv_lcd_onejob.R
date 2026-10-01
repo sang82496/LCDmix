@@ -27,7 +27,8 @@ cv_lcd_onejob <- function(
   save_dir,
   lp_time_limit = 3600,
   calc_Q_every  = FALSE,                 # NEW
-  update         = c("lp", "optim")     # NEW
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update <- match.arg(update)           # NEW
   alpha_idx     <- job[["alpha_idx"]]
@@ -76,7 +77,8 @@ cv_lcd_onejob <- function(
         debug           = TRUE,
         calc_Q_every    = calc_Q_every,      # NEW
         lp_time_limit   = lp_time_limit,
-        update          = update
+        update          = update,
+        maxdev          = maxdev             # NEW (fixP)
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -112,6 +114,7 @@ cv_lcd_onejob <- function(
        Q_every = NULL, 
        n_outside_every = NULL, 
        lp_check_every = NULL,
+       maxdev_diag    = NULL,
         log_msg             = log_msg
       ),
       file = out_path
@@ -158,6 +161,7 @@ cv_lcd_onejob <- function(
        Q_every             = if (isTRUE(calc_Q_every)) fit$iter$Q_every         else NULL,
        n_outside_every     = if (isTRUE(calc_Q_every)) fit$iter$n_outside_every else NULL,
        lp_check_every      = if (isTRUE(calc_Q_every)) fit$iter$lp_check_every  else NULL,
+       maxdev_diag         = maxdev_summary(fit$iter),              # NEW (fixP)
        # ----------------------------------------------------------------------
        err_msg             = NA_character_,
        failed_iter         = NA_integer_,

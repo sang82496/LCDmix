@@ -16,6 +16,8 @@
 #' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
 #' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
 #' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
+#' @param maxdev \code{NULL} or a positive number; see \code{mstep_theta_lp()}.
+#'    Only the LP update supports it.
 #'
 #' @return A list with elements:
 #' \describe{
@@ -57,9 +59,12 @@ mstep_theta <- function(
   slopes,
   lambda_theta,
   lp_time_limit = 3600,
-  update        = c("lp", "optim")   # NEW; default preserves current behavior
+  update        = c("lp", "optim"),  # NEW; default preserves current behavior
+  maxdev        = NULL               # NEW (fixP) - appended last
 ) {
   update <- match.arg(update)
+  if (!is.null(maxdev) && update != "lp")                       # NEW (fixP)
+    stop("mstep_theta(): maxdev is implemented only for update = \"lp\".")
 
   K <- length(densities)
   theta0_new <- vector("list", K)
@@ -77,7 +82,7 @@ mstep_theta <- function(
         density_k = densities[[k]], idx = idx,
         intercept_k = intercepts[[k]], slopes_k = slopes[[k]],
         lambda_theta = lambda_theta, component = k,
-        lp_time_limit = lp_time_limit
+        lp_time_limit = lp_time_limit, maxdev = maxdev   # fixP
       ),
       optim = mstep_theta_optim(
         Y_bin = Y_bin, X = X, weights = weights, residuals = residuals,
@@ -115,7 +120,10 @@ mstep_theta <- function(
       n_outside   = sum(u_new < g_ext$L | u_new > g_ext$U),
       convergence = if (is.null(tmp$convergence)) NA_integer_ else tmp$convergence,
       obj_start   = if (is.null(tmp$obj_start))   NA_real_    else tmp$obj_start,
-      obj_end     = if (is.null(tmp$obj_end))     NA_real_    else tmp$obj_end
+      obj_end     = if (is.null(tmp$obj_end))     NA_real_    else tmp$obj_end,
+      # NEW (fixP): how often the maxdev guard was needed in this LP call
+      maxdev_n_relaxed  = if (is.null(tmp$maxdev_n_relaxed))  NA_integer_ else tmp$maxdev_n_relaxed,
+      maxdev_max_excess = if (is.null(tmp$maxdev_max_excess)) NA_real_    else tmp$maxdev_max_excess
     )
   }
 

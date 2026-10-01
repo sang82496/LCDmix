@@ -15,7 +15,8 @@ mstep_theta(
   slopes,
   lambda_theta,
   lp_time_limit = 3600,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{
@@ -36,6 +37,9 @@ mstep_theta(
 \item{slopes}{A list of length \code{K} of current slope vectors \(\theta_k\).}
 
 \item{lambda_theta}{Nonnegative numeric L1 penalty on slopes.}
+
+\item{maxdev}{\code{NULL} or a positive number; see \code{mstep_theta_lp()}.
+Only the LP update supports it.}
 }
 \value{
 A list with elements:

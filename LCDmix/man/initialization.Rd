@@ -11,7 +11,8 @@ initialization(
   K,
   lambda_alpha,
   lambda_theta,
-  resp_threshold
+  resp_threshold,
+  maxdev = NULL
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ initialization(
 \item{lambda_theta}{Numeric; L1 regularization parameter for regression slopes in GMR.}
 
 \item{resp_threshold}{Numeric; threshold on responsibilities for bin assignment.}
+
+\item{maxdev}{\code{NULL} or a positive number; passed to \code{flowmix::flowmix()}.}
 }
 \value{
 A list with components:

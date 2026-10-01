@@ -18,7 +18,8 @@ refit_onejob <- function(
   save_dir,
   lp_time_limit,
   calc_Q_every = FALSE,         # NEW - appended
-  update = c("lp", "optim")     # NEW - must be LAST
+  update = c("lp", "optim"),    # NEW
+  maxdev = NULL                 # NEW (fixP) - appended last
 ) {
   update <- match.arg(update)           # NEW
   seed_int <- as.integer(seed)
@@ -50,7 +51,8 @@ refit_onejob <- function(
         debug           = TRUE,
         calc_Q_every    = calc_Q_every,   # NEW
         lp_time_limit   = lp_time_limit,
-        update          = update
+        update          = update,
+        maxdev          = maxdev          # NEW (fixP)
       ),
       error = function(e) { err_msg <<- e$message; NULL }
     ),
@@ -82,6 +84,7 @@ refit_onejob <- function(
       fit         = fit,
       fit_L       = fit_L,
       fit_L_unpen = fit_L_unpen,
+      maxdev_diag = maxdev_summary(fit$iter),   # NEW (fixP)
       log_msg     = log_msg
     ), file = out_path)
   return(TRUE)

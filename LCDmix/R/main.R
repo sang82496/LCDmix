@@ -19,6 +19,10 @@
 #' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
 #' @param iter_eta Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number. 
+#'  Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
+#'  \code{maxdev} for all \eqn{t}, as in flowmix. It is passed to the flowmix
+#'  initialization and to the LP update of \eqn{\theta}. Requires \code{update = "lp"}.
 #'
 #' @return A list with components:
 #' \describe{
@@ -62,7 +66,8 @@ main <- function(
   calc_Q_every   = FALSE,
   debug          = FALSE,
   lp_time_limit  = 3600,
-  update         = c("lp", "optim")     # NEW - must be LAST
+  update         = c("lp", "optim"),    # NEW
+  maxdev         = NULL                 # NEW (fixP) - appended last
 ) {
   update <- match.arg(update)           # NEW
   #— Step 1: Binning (if needed) —#
@@ -84,7 +89,8 @@ main <- function(
     K,
     lambda_alpha,
     lambda_theta,
-    resp_threshold
+    resp_threshold,
+    maxdev = maxdev                     # NEW (fixP)
   )
   message("✔ Initialization complete")
   
@@ -102,7 +108,8 @@ main <- function(
     calc_Q_every,
     debug,
     lp_time_limit,
-    update = update                     # NEW
+    update = update,                    # NEW
+    maxdev = maxdev                     # NEW (fixP)
   )
   
   if (debug && !is.null(iter_res$error)) {

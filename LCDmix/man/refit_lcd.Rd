@@ -19,7 +19,8 @@ refit_lcd(
   save_dir = "./refits",
   n_cores = "max",
   lp_time_limit = 3600,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{

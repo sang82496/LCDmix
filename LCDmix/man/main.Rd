@@ -20,7 +20,8 @@ main(
   calc_Q_every = FALSE,
   debug = FALSE,
   lp_time_limit = 3600,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{
@@ -45,6 +46,11 @@ main(
 \item{iter_eta}{Numeric step‐size (learning rate) for parameter updates. Default: \code{1e-3}.}
 
 \item{resp_threshold}{Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
+\code{maxdev} for all \eqn{t}, as in flowmix. It is passed to the flowmix
+initialization and to the LP update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
 A list with components:

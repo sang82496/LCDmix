@@ -21,7 +21,8 @@ cv_lcd_simul(
   n_cores = "max",
   lp_time_limit = 600,
   calc_Q_every = FALSE,
-  update = c("lp", "optim")
+  update = c("lp", "optim"),
+  maxdev = NULL
 )
 }
 \arguments{

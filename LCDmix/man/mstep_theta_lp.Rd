@@ -15,7 +15,8 @@ mstep_theta_lp(
   slopes_k,
   lambda_theta,
   component,
-  lp_time_limit
+  lp_time_limit,
+  maxdev = NULL
 )
 }
 \arguments{
@@ -38,6 +39,13 @@ mstep_theta_lp(
 \item{lambda_theta}{Nonnegative numeric; L1 penalty on the slope parameters.}
 
 \item{component}{Integer in \(\{1,\dots,K\}\); index of the component to update.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number. Bounds
+the deviation of the component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} for all \eqn{t}, as in flowmix.
+If the current slopes already exceed \code{maxdev} at some \eqn{t}, the bound
+there is relaxed to the current deviation, so the LP stays feasible and the
+update cannot decrease Q. How often that happens is returned.}
 }
 \value{
 A list with components:
