@@ -22,7 +22,7 @@ simulate_and_save(
 \arguments{
 \item{sim_seeds}{Integer vector of random seeds.}
 
-\item{gaps}{Numeric vector of change‐point intercept gaps.}
+\item{gaps}{Numeric vector of intercept gaps between the two components.}
 
 \item{skew_alphas}{Numeric vector of skew‐normal shape parameters.}
 
@@ -37,7 +37,7 @@ Passed to \code{generate_skewed_data()}. Default: 1000.}
 \item{theta_par}{The slope magnitude for the “baseline” covariate.
 Default: 0.5.}
 
-\item{p}{Number of covariates (including baseline & change‐point).
+\item{p}{Number of covariates (including \code{par} and \code{ramp}).
 Default: 10.}
 
 \item{B}{Number of histogram bins for each time‐point.

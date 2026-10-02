@@ -33,9 +33,9 @@ gen_simul_data <- function(
   par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
 
   Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
-  X2 = c(seq(0.8, 1, length = TT/2), rep(1, TT/2))
+  X2 = c(seq(0, 1, length = TT/2), rep(1, TT/2))   # fixV: a ramp from 0 to 1, then flat (was 0.8 to 1)
   X = cbind(scale(par[1:TT]), X2, Xrest)
-  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+  colnames(X) = c("par", "ramp", paste0("noise", 1:(p-2)))   # fixV: "cp" renamed to "ramp"
 
   ## theta coefficients
   theta = matrix(0, ncol = K, nrow = p+1)
@@ -44,15 +44,17 @@ gen_simul_data <- function(
   theta[0+1,2] = gap
   theta[1+1,2] = -theta_par
   colnames(theta) = paste0("clust", 1:K)
-  rownames(theta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+  rownames(theta) = c("intercept", "par", "ramp", paste0("noise", 1:(p-2)))
 
   ## alpha coefficients
   alpha = matrix(0, ncol = K, nrow = p+1)
-  alpha[0+1, 2] = -10
-  alpha[2+1, 2] = 10 + log(1/4)
+  ## fixV: P(component 2) is 10% at ramp = 0 and 30% at ramp = 1
+  ## (was -10 and 10 + log(1/4): 4.3% at X2 = 0.8 and 20% at X2 = 1)
+  alpha[0+1, 2] = stats::qlogis(0.10)
+  alpha[2+1, 2] = stats::qlogis(0.30) - stats::qlogis(0.10)
 
   colnames(alpha) = paste0("clust", 1:K)
-  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+  rownames(alpha) = c("intercept", "par", "ramp", paste0("noise", 1:(p-2)))
 
   ## Generate means and probabilities
   mnmat = cbind(1, X) %*% theta

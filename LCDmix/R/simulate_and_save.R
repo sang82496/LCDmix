@@ -11,16 +11,16 @@
 #' row‐order as the saved files).
 #'
 #' @param sim_seeds      Integer vector of random seeds.
-#' @param gaps           Numeric vector of change‐point intercept gaps.
+#' @param gaps           Numeric vector of intercept gaps between the two components.
 #' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
 #' @param sim_dir        Character; directory to hold \code{sim_<i>.rds} files.
 #'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
 #' @param nt             Number of observations per time‐point in the second half.
 #'                       Passed to \code{generate_skewed_data()}. Default: 1000.
-#' @param TT             Total number of time‐points to simulate. Default: 100.               
+#' @param TT             Total number of time‐points to simulate. Default: 100.           
 #' @param theta_par      The slope magnitude for the “baseline” covariate.
 #'                       Default: 0.5.
-#' @param p              Number of covariates (including baseline & change‐point).
+#' @param p              Number of covariates (including \code{par} and \code{ramp}).
 #'                       Default: 10.
 #' @param B              Number of histogram bins for each time‐point.
 #'                       Default: 30.

@@ -6,7 +6,7 @@
 <meta name="generator" content="pandoc">
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE">
 <meta name="author" content="Sang-wook Lee">
-<meta name="date" content="2026-10-01">
+<meta name="date" content="2026-10-02">
 <title>Creating the LCDmix R package</title>
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -318,7 +318,7 @@ display: none;
 <h1 class="title toc-ignore">Creating the <code>LCDmix</code> R
 package</h1>
 <h4 class="author">Sang-wook Lee</h4>
-<h4 class="date">2026-10-01</h4>
+<h4 class="date">2026-10-02</h4>
 
 </div>
 
@@ -4029,9 +4029,9 @@ responsibilities,<br>
   par = readRDS(file.path(sim_helper_dir, "simul_helper.rds"))
 
   Xrest = do.call(cbind, lapply(1:(p-2), function(ii) rnorm(TT)) )
-  X2 = c(seq(0.8, 1, length = TT/2), rep(1, TT/2))
+  X2 = c(seq(0, 1, length = TT/2), rep(1, TT/2))   # fixV: a ramp from 0 to 1, then flat (was 0.8 to 1)
   X = cbind(scale(par[1:TT]), X2, Xrest)
-  colnames(X) = c("par", "cp", paste0("noise", 1:(p-2)))
+  colnames(X) = c("par", "ramp", paste0("noise", 1:(p-2)))   # fixV: "cp" renamed to "ramp"
 
   ## theta coefficients
   theta = matrix(0, ncol = K, nrow = p+1)
@@ -4040,15 +4040,17 @@ responsibilities,<br>
   theta[0+1,2] = gap
   theta[1+1,2] = -theta_par
   colnames(theta) = paste0("clust", 1:K)
-  rownames(theta) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+  rownames(theta) = c("intercept", "par", "ramp", paste0("noise", 1:(p-2)))
 
   ## alpha coefficients
   alpha = matrix(0, ncol = K, nrow = p+1)
-  alpha[0+1, 2] = -10
-  alpha[2+1, 2] = 10 + log(1/4)
+  ## fixV: P(component 2) is 10% at ramp = 0 and 30% at ramp = 1
+  ## (was -10 and 10 + log(1/4): 4.3% at X2 = 0.8 and 20% at X2 = 1)
+  alpha[0+1, 2] = stats::qlogis(0.10)
+  alpha[2+1, 2] = stats::qlogis(0.30) - stats::qlogis(0.10)
 
   colnames(alpha) = paste0("clust", 1:K)
-  rownames(alpha) = c("intercept", "par", "cp", paste0("noise", 1:(p-2)))
+  rownames(alpha) = c("intercept", "par", "ramp", paste0("noise", 1:(p-2)))
 
   ## Generate means and probabilities
   mnmat = cbind(1, X) %*% theta
@@ -4118,16 +4120,16 @@ responsibilities,<br>
 #' row‐order as the saved files).
 #'
 #' @param sim_seeds      Integer vector of random seeds.
-#' @param gaps           Numeric vector of change‐point intercept gaps.
+#' @param gaps           Numeric vector of intercept gaps between the two components.
 #' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
 #' @param sim_dir        Character; directory to hold \code{sim_&lt;i&gt;.rds} files.
 #'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
 #' @param nt             Number of observations per time‐point in the second half.
 #'                       Passed to \code{generate_skewed_data()}. Default: 1000.
-#' @param TT             Total number of time‐points to simulate. Default: 100.               
+#' @param TT             Total number of time‐points to simulate. Default: 100.           
 #' @param theta_par      The slope magnitude for the “baseline” covariate.
 #'                       Default: 0.5.
-#' @param p              Number of covariates (including baseline &amp; change‐point).
+#' @param p              Number of covariates (including \code{par} and \code{ramp}).
 #'                       Default: 10.
 #' @param B              Number of histogram bins for each time‐point.
 #'                       Default: 30.
