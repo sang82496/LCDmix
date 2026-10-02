@@ -13,8 +13,8 @@ main(
   K = 2,
   lambda_alpha = 0.001,
   lambda_theta = 0.001,
-  max_iter = 100,
-  iter_eta = 1e-06,
+  max_iter = 30,
+  iter_eta = 1e-04,
   resp_threshold = 0.001,
   trim_prob = 0.03,
   calc_Q_every = FALSE,
@@ -41,9 +41,9 @@ main(
 
 \item{lambda_theta}{Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.}
 
-\item{max_iter}{Integer maximum number of EM iterations. Default: \code{100}.}
+\item{max_iter}{Integer maximum number of EM iterations. Default: \code{30}.}
 
-\item{iter_eta}{Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-6}.}
+\item{iter_eta}{Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-4}.}
 
 \item{resp_threshold}{Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.}
 

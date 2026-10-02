@@ -16,8 +16,8 @@
 #' @param K Integer number of mixture components.
 #' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
 #' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
-#' @param max_iter Integer maximum number of EM iterations. Default: \code{100}.
-#' @param iter_eta Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-6}.
+#' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
+#' @param iter_eta Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-4}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
 #' @param maxdev \code{NULL} (default, no constraint) or a positive number. 
 #'  Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
@@ -59,8 +59,8 @@ main <- function(
   K              = 2,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,
-  max_iter       = 100,
-  iter_eta       = 1e-6,
+  max_iter       = 30,
+  iter_eta       = 1e-4,
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,

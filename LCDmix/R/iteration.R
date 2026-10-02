@@ -19,8 +19,8 @@
 #'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
 #' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
-#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
-#' @param max_iter Integer; maximum number of EM iterations. Default: \code{100}.
+#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-4}.
+#' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
 #'
 #' @return A list with components:
@@ -47,8 +47,8 @@ iteration <- function(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta       = 1e-6,
-  max_iter       = 100,
+  iter_eta       = 1e-4,
+  max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
   debug          = FALSE,

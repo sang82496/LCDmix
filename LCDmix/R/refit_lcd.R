@@ -16,8 +16,8 @@
 #' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
 #'   The seeds will be \code{1:cv_reps}.
-#' @param max_iter Integer; maximum EM iterations. Default \code{100}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-6}.
+#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.03}.
 #' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
@@ -63,8 +63,8 @@ refit_lcd <- function(
   opt_lambdas,
   seeds = NULL, 
   cv_reps = NULL,
-  max_iter = 100, 
-  iter_eta = 1e-6, 
+  max_iter = 30, 
+  iter_eta = 1e-4, 
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 

@@ -20,9 +20,9 @@
 #' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per refit. Default \code{100}.
+#' @param max_iter Integer; maximum EM iterations per refit. Default \code{30}.
 #' @param iter_eta Numeric; convergence tolerance for the surrogate objective.
-#'   Default \code{1e-6}.
+#'   Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
@@ -71,8 +71,8 @@ refit_lcd_simul <- function(
   K,
   seeds = NULL, 
   cv_reps = NULL,
-  max_iter = 100, 
-  iter_eta = 1e-6, 
+  max_iter = 30, 
+  iter_eta = 1e-4, 
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",

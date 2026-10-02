@@ -12,8 +12,8 @@ refit_lcd(
   opt_lambdas,
   seeds = NULL,
   cv_reps = NULL,
-  max_iter = 100,
-  iter_eta = 1e-06,
+  max_iter = 30,
+  iter_eta = 1e-04,
   resp_threshold = 0.001,
   trim_prob = 0.03,
   save_dir = "./refits",
@@ -39,9 +39,9 @@ refit_lcd(
 \item{cv_reps}{Integer; number of repeats used only when \code{seeds} is \code{NULL}.
 The seeds will be \code{1:cv_reps}.}
 
-\item{max_iter}{Integer; maximum EM iterations. Default \code{100}.}
+\item{max_iter}{Integer; maximum EM iterations. Default \code{30}.}
 
-\item{iter_eta}{Numeric; convergence tolerance for the surrogate objective. Default \code{1e-6}.}
+\item{iter_eta}{Numeric; convergence tolerance for the surrogate objective. Default \code{1e-4}.}
 
 \item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.}
 

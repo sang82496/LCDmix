@@ -11,8 +11,8 @@ iteration(
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta = 1e-06,
-  max_iter = 100,
+  iter_eta = 1e-04,
+  max_iter = 30,
   resp_threshold = 0.001,
   calc_Q_every = FALSE,
   debug = FALSE,
@@ -36,9 +36,9 @@ iteration(
 
 \item{lambda_theta}{Nonnegative numeric L1 penalty on regression slopes.}
 
-\item{iter_eta}{Numeric; relative change threshold for stopping. Default: \code{1e-6}.}
+\item{iter_eta}{Numeric; relative change threshold for stopping. Default: \code{1e-4}.}
 
-\item{max_iter}{Integer; maximum number of EM iterations. Default: \code{100}.}
+\item{max_iter}{Integer; maximum number of EM iterations. Default: \code{30}.}
 
 \item{resp_threshold}{Numeric in \link{0,1}; responsibilities below this are set to zero. Default: \code{1e-3}.}
 }

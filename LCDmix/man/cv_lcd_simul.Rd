@@ -12,8 +12,8 @@ cv_lcd_simul(
   nfold = 5,
   seeds = NULL,
   cv_reps = NULL,
-  max_iter = 100,
-  iter_eta = 1e-06,
+  max_iter = 30,
+  iter_eta = 1e-04,
   resp_threshold = 0.001,
   trim_prob = 0.03,
   blocksize = 10,
@@ -44,10 +44,10 @@ Files may be \code{.rds} (containing a list) or \code{.RData}.}
 \item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
 \code{NULL}. Default \code{NULL}.}
 
-\item{max_iter}{Integer; maximum EM iterations per fit. Default \code{100}.}
+\item{max_iter}{Integer; maximum EM iterations per fit. Default \code{30}.}
 
 \item{iter_eta}{Numeric; convergence threshold on relative change in the
-surrogate objective. Default \code{1e-6}.}
+surrogate objective. Default \code{1e-4}.}
 
 \item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are
 zeroed for stability. Default \code{1e-3}.}

@@ -21,9 +21,9 @@
 #'   \code{cv_reps}. Default \code{NULL}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{100}.
+#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
 #' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-6}.
+#'   surrogate objective. Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
@@ -87,8 +87,8 @@ cv_lcd_simul <- function(
   nfold          = 5,
   seeds          = NULL,
   cv_reps        = NULL,
-  max_iter       = 100,
-  iter_eta       = 1e-6,
+  max_iter       = 30,
+  iter_eta       = 1e-4,
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   blocksize      = 10,

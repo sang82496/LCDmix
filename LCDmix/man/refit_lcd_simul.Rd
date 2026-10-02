@@ -10,8 +10,8 @@ refit_lcd_simul(
   K,
   seeds = NULL,
   cv_reps = NULL,
-  max_iter = 100,
-  iter_eta = 1e-06,
+  max_iter = 30,
+  iter_eta = 1e-04,
   resp_threshold = 0.001,
   trim_prob = 0.03,
   base_dir = "./cv_saves",
@@ -37,10 +37,10 @@ is \code{c(lambda_alpha, lambda_theta)} to use for that simulation.}
 \item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
 \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.}
 
-\item{max_iter}{Integer; maximum EM iterations per refit. Default \code{100}.}
+\item{max_iter}{Integer; maximum EM iterations per refit. Default \code{30}.}
 
 \item{iter_eta}{Numeric; convergence tolerance for the surrogate objective.
-Default \code{1e-6}.}
+Default \code{1e-4}.}
 
 \item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are
 zeroed for stability. Default \code{1e-3}.}

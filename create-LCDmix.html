@@ -404,8 +404,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 #' @param K Integer number of mixture components.
 #' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
 #' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
-#' @param max_iter Integer maximum number of EM iterations. Default: \code{100}.
-#' @param iter_eta Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-6}.
+#' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
+#' @param iter_eta Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-4}.
 #' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
 #' @param maxdev \code{NULL} (default, no constraint) or a positive number. 
 #'  Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
@@ -447,8 +447,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   K              = 2,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,
-  max_iter       = 100,
-  iter_eta       = 1e-6,
+  max_iter       = 30,
+  iter_eta       = 1e-4,
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   calc_Q_every   = FALSE,
@@ -1438,8 +1438,8 @@ responsibilities,<br>
 #'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
 #' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
 #' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
-#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-6}.
-#' @param max_iter Integer; maximum number of EM iterations. Default: \code{100}.
+#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-4}.
+#' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
 #' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
 #'
 #' @return A list with components:
@@ -1466,8 +1466,8 @@ responsibilities,<br>
   init_res,
   lambda_alpha,
   lambda_theta,
-  iter_eta       = 1e-6,
-  max_iter       = 100,
+  iter_eta       = 1e-4,
+  max_iter       = 30,
   resp_threshold = 1e-3,
   calc_Q_every   = FALSE,
   debug          = FALSE,
@@ -3087,8 +3087,8 @@ responsibilities,<br>
   K,
   alpha_lambdas      = c(1e-4, 1e-3),
   theta_lambdas      = c(1e-4, 1e-3),
-  max_iter           = 100,
-  iter_eta           = 1e-6,
+  max_iter           = 30,
+  iter_eta           = 1e-4,
   resp_threshold     = 1e-3,
   nfold              = 5,
   seeds              = NULL,
@@ -3201,9 +3201,9 @@ responsibilities,<br>
 #'   \code{cv_reps}. Default \code{NULL}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL}. Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{100}.
+#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
 #' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-6}.
+#'   surrogate objective. Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
@@ -3267,8 +3267,8 @@ responsibilities,<br>
   nfold          = 5,
   seeds          = NULL,
   cv_reps        = NULL,
-  max_iter       = 100,
-  iter_eta       = 1e-6,
+  max_iter       = 30,
+  iter_eta       = 1e-4,
   resp_threshold = 1e-3,
   trim_prob      = 0.03,
   blocksize      = 10,
@@ -3686,8 +3686,8 @@ responsibilities,<br>
 #' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
 #'   The seeds will be \code{1:cv_reps}.
-#' @param max_iter Integer; maximum EM iterations. Default \code{100}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-6}.
+#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
+#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} during fitting. Default \code{0.03}.
 #' @param save_dir Character; directory to write/read cached refits (\code{refit_&lt;seed&gt;.rds}). Default \code{"./refits"}.
@@ -3733,8 +3733,8 @@ responsibilities,<br>
   opt_lambdas,
   seeds = NULL, 
   cv_reps = NULL,
-  max_iter = 100, 
-  iter_eta = 1e-6, 
+  max_iter = 30, 
+  iter_eta = 1e-4, 
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   save_dir = "./refits", 
@@ -3832,9 +3832,9 @@ responsibilities,<br>
 #' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
 #' @param cv_reps Integer; number of repeats used only when \code{seeds} is
 #'   \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per refit. Default \code{100}.
+#' @param max_iter Integer; maximum EM iterations per refit. Default \code{30}.
 #' @param iter_eta Numeric; convergence tolerance for the surrogate objective.
-#'   Default \code{1e-6}.
+#'   Default \code{1e-4}.
 #' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
 #'   zeroed for stability. Default \code{1e-3}.
 #' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
@@ -3883,8 +3883,8 @@ responsibilities,<br>
   K,
   seeds = NULL, 
   cv_reps = NULL,
-  max_iter = 100, 
-  iter_eta = 1e-6, 
+  max_iter = 30, 
+  iter_eta = 1e-4, 
   resp_threshold = 1e-3, 
   trim_prob = 0.03,
   base_dir = "./cv_saves",
