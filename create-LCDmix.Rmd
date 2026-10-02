@@ -872,14 +872,33 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
     conv <- res1$conv
     H <- res1$H
     iter1 <- 1
+    ## fixW: logcondens::LocalMLE() can return NaN, or stop with "missing value
+    ## where TRUE/FALSE needed", when a support point has a very small weight:
+    ## its log-density falls below about -745, exp() gives 0, and the Newton
+    ## step is NaN. lmle_safe() returns NULL in that case, and the search below
+    ## then keeps the last good fit instead of failing.
+    lmle_safe <- function(IsKnot, phi) {
+      r <- tryCatch(logcondens::LocalMLE(x, w, IsKnot, phi, prec), error = function(e) NULL)
+      if (is.null(r) || !all(is.finite(r$phi)) || !all(is.finite(r$H)) || !all(is.finite(r$conv))) {
+        return(NULL)
+      }
+      return(r)
+    }
+    refine_stop <- "none"                                  # fixW: why the search stopped early, if it did
     while ((iter1 < 500) & (max(H) > prec * mean(abs(H)))) {
         IsKnot_old <- IsKnot
+        phi_old <- phi; L_old <- L; H_old <- H; conv_old <- conv   # fixW: the state to return to
         iter1 <- iter1 + 1
         tmp <- max(H)
         k <- (1:n) * (H == tmp)
         k <- min(k[k > 0])
         IsKnot[k] <- 1
-        res2 <- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+        res2 <- lmle_safe(IsKnot, phi)                     # fixW: was logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+        if (is.null(res2)) {                               # fixW: discard the attempted knot, keep the last good fit
+          IsKnot <- IsKnot_old; phi <- phi_old; L <- L_old; H <- H_old; conv <- conv_old
+          refine_stop <- "LocalMLE failed"
+          break
+        }
         phi_new <- res2$phi
         L <- res2$L
         conv_new <- res2$conv
@@ -897,6 +916,7 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
               # in subscripted assignments". Stop refining here instead of
               # letting that happen.
               stalled <- TRUE                              # NEW
+              refine_stop <- "line search stalled"         # fixW
               break
               } 
             tmp <- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -906,7 +926,12 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
             IsKnot[JJ[KK]] <- 0
             phi <- (1 - lambda) * phi + lambda * phi_new
             conv <- pmin(c(logcondens::LocalConvexity(x, phi), 0))
-            res3 <- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+            res3 <- lmle_safe(IsKnot, phi)                 # fixW: was logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+            if (is.null(res3)) {                           # fixW
+              stalled <- TRUE
+              refine_stop <- "LocalMLE failed"
+              break
+            }
             phi_new <- res3$phi
             L <- res3$L
             conv_new <- res3$conv
@@ -914,6 +939,7 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
         }
         if (stalled) {                                     # NEW
           IsKnot <- IsKnot_old                              # NEW: discard this
+          phi <- phi_old; L <- L_old; H <- H_old; conv <- conv_old   # fixW: restore the whole state, not only the knots
           break                                             # NEW: outer iteration's
         }                                                   # NEW: attempted knot
         phi <- phi_new
@@ -931,7 +957,8 @@ modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){
     res <- list(xn = xn, x = x, w = w, phi = as.vector(phi), 
         IsKnot = IsKnot, L = L, Fhat = as.vector(Fhat), H = as.vector(H), 
         n = length(xn), m = n, knots = x[IsKnot == 1], mode = x[phi == 
-            max(phi)], sig = sig)
+            max(phi)], sig = sig,
+        refine_stop = refine_stop)                         # fixW: "none", "line search stalled" or "LocalMLE failed"
     return(res)
 }
 ```

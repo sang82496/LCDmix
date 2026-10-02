@@ -1148,14 +1148,33 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     conv &lt;- res1$conv
     H &lt;- res1$H
     iter1 &lt;- 1
+    ## fixW: logcondens::LocalMLE() can return NaN, or stop with "missing value
+    ## where TRUE/FALSE needed", when a support point has a very small weight:
+    ## its log-density falls below about -745, exp() gives 0, and the Newton
+    ## step is NaN. <a href="create-LCDmix.html#lmle_safe">lmle_safe</a>() returns NULL in that case, and the search below
+    ## then keeps the last good fit instead of failing.
+    <span id="lmle_safe">lmle_safe</span> &lt;- function(IsKnot, phi) {
+      r &lt;- tryCatch(logcondens::LocalMLE(x, w, IsKnot, phi, prec), error = function(e) NULL)
+      if (is.null(r) || !all(is.finite(r$phi)) || !all(is.finite(r$H)) || !all(is.finite(r$conv))) {
+        return(NULL)
+      }
+      return(r)
+    }
+    refine_stop &lt;- "none"                                  # fixW: why the search stopped early, if it did
     while ((iter1 &lt; 500) &amp; (max(H) &gt; prec * mean(abs(H)))) {
         IsKnot_old &lt;- IsKnot
+        phi_old &lt;- phi; L_old &lt;- L; H_old &lt;- H; conv_old &lt;- conv   # fixW: the state to return to
         iter1 &lt;- iter1 + 1
         tmp &lt;- max(H)
         k &lt;- (1:n) * (H == tmp)
         k &lt;- min(k[k &gt; 0])
         IsKnot[k] &lt;- 1
-        res2 &lt;- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+        res2 &lt;- <a href="create-LCDmix.html#lmle_safe">lmle_safe</a>(IsKnot, phi)                     # fixW: was logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+        if (is.null(res2)) {                               # fixW: discard the attempted knot, keep the last good fit
+          IsKnot &lt;- IsKnot_old; phi &lt;- phi_old; L &lt;- L_old; H &lt;- H_old; conv &lt;- conv_old
+          refine_stop &lt;- "LocalMLE failed"
+          break
+        }
         phi_new &lt;- res2$phi
         L &lt;- res2$L
         conv_new &lt;- res2$conv
@@ -1173,6 +1192,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
               # in subscripted assignments". Stop refining here instead of
               # letting that happen.
               stalled &lt;- TRUE                              # NEW
+              refine_stop &lt;- "line search stalled"         # fixW
               break
               } 
             tmp &lt;- conv[JJ]/(conv[JJ] - conv_new[JJ])
@@ -1182,7 +1202,12 @@ litr::render("create-LCDmix.Rmd")</code></pre>
             IsKnot[JJ[KK]] &lt;- 0
             phi &lt;- (1 - lambda) * phi + lambda * phi_new
             conv &lt;- pmin(c(logcondens::LocalConvexity(x, phi), 0))
-            res3 &lt;- logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+            res3 &lt;- <a href="create-LCDmix.html#lmle_safe">lmle_safe</a>(IsKnot, phi)                 # fixW: was logcondens::LocalMLE(x, w, IsKnot, phi, prec)
+            if (is.null(res3)) {                           # fixW
+              stalled &lt;- TRUE
+              refine_stop &lt;- "LocalMLE failed"
+              break
+            }
             phi_new &lt;- res3$phi
             L &lt;- res3$L
             conv_new &lt;- res3$conv
@@ -1190,6 +1215,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
         }
         if (stalled) {                                     # NEW
           IsKnot &lt;- IsKnot_old                              # NEW: discard this
+          phi &lt;- phi_old; L &lt;- L_old; H &lt;- H_old; conv &lt;- conv_old   # fixW: restore the whole state, not only the knots
           break                                             # NEW: outer iteration's
         }                                                   # NEW: attempted knot
         phi &lt;- phi_new
@@ -1207,7 +1233,8 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     res &lt;- list(xn = xn, x = x, w = w, phi = as.vector(phi), 
         IsKnot = IsKnot, L = L, Fhat = as.vector(Fhat), H = as.vector(H), 
         n = length(xn), m = n, knots = x[IsKnot == 1], mode = x[phi == 
-            max(phi)], sig = sig)
+            max(phi)], sig = sig,
+        refine_stop = refine_stop)                         # fixW: "none", "line search stalled" or "LocalMLE failed"
     return(res)
 }</code></pre>
 <p>Formally, <span class="math display">\[
