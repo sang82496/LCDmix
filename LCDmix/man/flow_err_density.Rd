@@ -2,13 +2,20 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{flow_err_density}
 \alias{flow_err_density}
-\title{Estimated error density of one flowmix component.}
+\title{Estimated error density of one flowmix component}
 \usage{
 flow_err_density(sigma_k)
 }
+\arguments{
+\item{sigma_k}{Variance of the component (one element of \code{sigma} of a
+flowmix fit).}
+}
+\value{
+A function of a numeric vector \code{v} that returns the densities
+at \code{v}.
+}
 \description{
-NOTE: flowmix stores a variance in \code{sigma}, so the standard deviation is
-sqrt(sigma_k). The work order's \code{dnorm(xs, 0, sigma_k)} passes a variance
-where a standard deviation belongs. dens_est_fun() uses sqrt(), and so does
-this function.
+Returns the normal density with mean 0 and variance \code{sigma_k}. flowmix
+stores the variance of each component in \code{sigma}, so the standard
+deviation is \code{sqrt(sigma_k)}, as in \code{dens_est_fun()}.
 }

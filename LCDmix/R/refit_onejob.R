@@ -1,6 +1,33 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' @title Internal: run one LCDmix refit (single seed) and cache
+#' Fit the model once with one seed and save the result
+#'
+#' @description
+#' Calls \code{set.seed(seed)} and \code{main()} on the full data with the
+#' given penalty pair, and saves the result to
+#' \code{save_dir/refit_<seed>.rds}. Called by \code{refit_lcd()} and
+#' \code{refit_lcd_simul()}, which run several seeds (restarts) and keep the
+#' best.
+#'
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param seed Seed (restart index); it selects the random flowmix start.
+#' @param save_dir Directory for the result file.
+#'
+#' @return \code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+#'   file is a list with components:
+#' \describe{
+#'   \item{fit}{The \code{main()} result; \code{NULL} on failure.}
+#'   \item{fit_L}{\code{fit$L$loglik}, the penalized training log-likelihood
+#'     (bins scored by probability), used to choose among seeds; \code{NULL}
+#'     on failure.}
+#'   \item{fit_L_unpen}{The same without the penalty, for reporting;
+#'     \code{NULL} on failure.}
+#'   \item{maxdev_diag}{The result of \code{maxdev_summary()} (success only).}
+#'   \item{err_msg, failed_iter}{The text from \code{fit_error_text()} and the
+#'     iteration at which the fit failed (failure only).}
+#'   \item{log_msg}{Printed output of the fit.}
+#' }
 #' @keywords internal
 #' @export
 refit_onejob <- function(

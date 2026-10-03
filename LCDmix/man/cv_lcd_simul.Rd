@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{cv_lcd_simul}
 \alias{cv_lcd_simul}
-\title{Run LCDmix CV across many simulated datasets (outer-parallel, chunked)}
+\title{Cross-validation of the penalty pair for many simulated datasets}
 \usage{
 cv_lcd_simul(
   sim_files,
@@ -26,73 +26,88 @@ cv_lcd_simul(
 )
 }
 \arguments{
-\item{sim_files}{Character vector of length \eqn{S}; paths to simulation files.
-Each file must provide objects named \code{Y_bin}, \code{X}, and \code{bin_mass}.
-Files may be \code{.rds} (containing a list) or \code{.RData}.}
+\item{sim_files}{Paths of \code{.rds} files, one per dataset; each holds a
+list with \code{Y_bin}, \code{X} and \code{bin_mass}, as written by
+\code{simulate_and_save()}.}
 
-\item{K}{Integer; number of mixture components.}
+\item{K}{Number of mixture components (experts).}
 
-\item{alpha_lambdas}{Numeric vector of candidate \code{lambda_alpha} values.}
+\item{alpha_lambdas, theta_lambdas}{Candidate values of \code{lambda_alpha}
+and \code{lambda_theta}. They are sorted in increasing order first.}
 
-\item{theta_lambdas}{Numeric vector of candidate \code{lambda_theta} values.}
+\item{nfold}{Number of folds.}
 
-\item{nfold}{Integer; number of CV folds per simulation. Default \code{5}.}
+\item{seeds}{Seeds (restarts) for every fold and penalty pair. If
+\code{NULL}, \code{1:cv_reps}.}
 
-\item{seeds}{Integer vector of seeds (one per repeat). If \code{NULL}, supply
-\code{cv_reps}. Default \code{NULL}.}
+\item{cv_reps}{Number of seeds, used only when \code{seeds} is \code{NULL}.}
 
-\item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
-\code{NULL}. Default \code{NULL}.}
+\item{max_iter}{Maximum number of EM iterations.}
 
-\item{max_iter}{Integer; maximum EM iterations per fit. Default \code{30}.}
+\item{iter_eta}{Stopping tolerance on the relative ascent of the surrogate
+objective in one iteration,
+\eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+The stopping rule is described in \code{iteration()}.}
 
-\item{iter_eta}{Numeric; convergence threshold on relative change in the
-surrogate objective. Default \code{1e-4}.}
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
 
-\item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are
-zeroed for stability. Default \code{1e-3}.}
+\item{trim_prob}{Fraction of the total weight that \code{eval_lcd()} trims
+for the trimmed log-likelihood in \code{L}. It does not change the fit.}
 
-\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used inside
-\code{eval_lcd()}. Default \code{0.03}.}
+\item{blocksize}{Block size passed to \code{flowmix::make_cv_folds()}.}
 
-\item{blocksize}{Integer; block size for \code{flowmix::make_cv_folds()}.
-Default \code{20}.}
+\item{base_dir}{Output directory.}
 
-\item{n_cores}{Integer or \code{"max"}; number of workers for the single
-outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.}
+\item{n_cores}{Number of worker processes, or \code{"max"} for all physical
+cores.}
 
-\item{save_dir}{Character; base directory for outputs. Per-simulation results
-are written to \code{save_dir/sim_<s>/}. Default \code{"./result"}.}
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
-A list with:
+A list with components:
 \describe{
-\item{\code{grand_index}}{Data frame of all jobs with a \code{sim_idx} column.}
-\item{\code{logs}}{Character vector of per-chunk log strings.}
+\item{\code{grand_jobs}}{Data frame with one row per job: \code{sim_idx}
+and the columns of \code{cv_idx_mat()}.}
+\item{\code{summary}}{A text with the number of failed jobs.}
 }
 }
 \description{
-Processes a collection of simulated datasets using a single parallel cluster
-(no nested parallel). For each simulation file, builds CV folds, constructs
-an index over folds × seeds × (\code{lambda_alpha}, \code{lambda_theta}),
-and evaluates all jobs. Results for each simulation are written into
-\code{save_dir/sim_<s>/}, one \code{*.rds} per job, and an
-\code{index_matrix.Rdata} for summary. Existing files are skipped, so runs
-are resumable.
-}
-\details{
-This function uses a single outer cluster to process a \emph{grand} index of
-all simulation jobs in chunks, avoiding nested parallel. For reproducibility,
-job seeds are  (\code{seed_idx})
-before fitting. Each per-job RDS file contains:
-\code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
-and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
-simulation's subdirectory to obtain per-sim CV scores and optimal penalties.
+Runs every cross-validation job of every dataset in one parallel cluster
+(no nested parallelism). For dataset \eqn{s}, the results go to
+\code{base_dir/sim_<s>/}: one file per job from \code{cv_lcd_onejob()},
+and \code{index_matrix.rds}. A job whose file already exists is not run
+again, so an interrupted run can be resumed. Each worker reads its dataset
+from \code{sim_files} and builds the folds with
+\code{flowmix::make_cv_folds()}. Use \code{cv_lcd_summary_simul()} to
+choose the penalty pair of each dataset, then \code{refit_lcd_simul()}.
+
+The workers load the installed LCDmix package, so install the current
+version before running.
 }
 \examples{
 \dontrun{
-# 25 simulations, 5x5 lambda grid, 10 repeats, 5 folds (31,250 jobs total):
-sims <- sprintf("sim_data_\%02d.rds", 1:25)
+# 25 datasets, 5 x 5 penalty grid, 10 seeds, 5 folds (31,250 jobs)
+sims <- file.path("sim_data", sprintf("sim_\%d.rds", 1:25))
 
 res <- cv_lcd_simul(
   sim_files     = sims,
@@ -101,21 +116,18 @@ res <- cv_lcd_simul(
   theta_lambdas = 10^seq(-4, -2, length.out = 5),
   nfold         = 5,
   seeds         = 1:10,
-  save_dir      = "cv_runs",
-  n_cores       = 64,          # USC CARC cap
+  base_dir      = "cv_runs",
+  n_cores       = 64
 )
 
-# Summarize each simulation (stored under cv_runs/sim_<s>/):
-for (s in seq_along(sims)) {
-  sim_dir <- file.path("cv_runs", sprintf("sim_\%d", s))
-  load(file.path(sim_dir, "index_matrix.Rdata"))  # loads index_matrix
-  summ <- cv_lcd_summary(index_matrix, save_dir = sim_dir)
-  print(list(sim = s, opt = summ$opt_lambdas, cv_score = max(summ$reduced_mat[, "cv_score"], na.rm = TRUE)))
-}
+# Chosen penalty pair of each dataset (results in cv_runs/sim_<s>/)
+summ <- cv_lcd_summary_simul(base_dir = "cv_runs", num_sims = 25)
+opt_list <- lapply(summ, function(x) x$opt_lambdas)
 }
 
 }
 \seealso{
-\code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
-\code{\link{eval_lcd}}, \code{\link[flowmix]{make_cv_folds}}
+\code{\link{cv_lcd}}, \code{\link{cv_lcd_summary_simul}},
+\code{\link{refit_lcd_simul}}, \code{\link{eval_lcd}},
+\code{\link[flowmix]{make_cv_folds}}
 }

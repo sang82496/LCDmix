@@ -1,10 +1,20 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Width of one bin on the binning grid.
+#' Width of one bin on the binning grid
 #'
-#' NOTE: binning() builds equally spaced cutpoints, so the smallest gap between
-#' distinct bin centers is the bin width. Empty grid positions leave gaps that
+#' @description
+#' \code{binning()} builds equally spaced cut points, so the smallest gap
+#' between distinct bin centers is the bin width. Empty bins leave gaps that
 #' are multiples of it, which is why the minimum is used and not the mean.
+#' Gives a warning if a gap is not a whole multiple of the minimum (relative
+#' tolerance 1e-6).
+#'
+#' @param Y_test A list of bin centers (vectors or one-column matrices), as in
+#'   \code{Y_bin}.
+#'
+#' @return The bin width, or \code{NA} if there are fewer than two distinct
+#'   bin centers.
+#' @keywords internal
 infer_bin_width <- function(Y_test) {
   centers <- sort(unique(as.numeric(unlist(Y_test))))
   if (length(centers) < 2L) {
@@ -17,57 +27,68 @@ infer_bin_width <- function(Y_test) {
   }
   return(width)
 }
-#' Evaluate held-out (penalized) log-likelihood for LCDmix
+#' Log-likelihood of a fitted LCDmix model on binned data
 #'
-#' Computes per-observation held-out log-likelihoods for a fitted LCDmix
-#' \code{model} on test data \code{(Y_test, X_test)} and returns the untrimmed
-#' and trimmed **penalized** weighted means. Trimming is performed over
-#' \emph{all rows, including \code{-Inf} rows}, so that models with different
-#' proportions of finite rows remain comparable. The trimmed threshold is a
-#' weighted quantile of the log-likelihoods using \code{weighted_quantile()}.
-#' The data are binned, so a bin is an interval. Scoring it by the density at
-#' its center rewards a fitted density that is peaked inside the bin, which is
-#' why the bin probability is used instead.
+#' @description
+#' Computes, for every bin \eqn{i} at every time point \eqn{t}, the log of the
+#' fitted mixture density,
+#' \deqn{\ell_{ti} = \log \sum_k \pi_{tk} \hat f_{k,ti},}
+#' and returns weighted means of \eqn{\ell_{ti}} (weights
+#' \code{biomass_test}) minus the L1 penalty of the model. With
+#' \code{score = "bin_prob"} (the default), \eqn{\hat f_{k,ti}} is the
+#' probability of the bin under component \eqn{k} divided by the bin width
+#' \eqn{h}, \eqn{(\hat F_k(u + h/2) - \hat F_k(u - h/2)) / h}, where \eqn{u} is
+#' the residual of the bin center. With \code{score = "center"} it is the
+#' density at the bin center. The data are binned, so a bin is an interval;
+#' scoring by the density at the center rewards a component that is peaked
+#' inside one bin, which is why the bin probability is the default. A bin
+#' outside the support of every component gets \eqn{\ell_{ti} = -\infty}.
 #'
-#' @param model List; fitted LCDmix object containing at least:
-#'   \code{g_new} (list of K log-concave density fits),
-#'   \code{theta_new} (list/array of slopes),
-#'   \code{theta0_new} (list of intercepts),
-#'   \code{alpha_new} (K × (p+1) gating coefficients),
-#'   \code{lambda_alpha}, \code{lambda_theta} (penalties).
-#' @param Y_test List of length \eqn{TT}; test responses for each time point
-#'   (\eqn{t = 1,\dots,TT}). Element \eqn{t} is a numeric vector of length
-#'   \eqn{n_t}.
-#' @param X_test Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#'   Row \eqn{t} is used with \code{Y_test[[t]]}.
-#' @param biomass_test List of length \eqn{TT}; per-time weights (flattened to
-#'   a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).
-#' @param trim_prob Numeric in \eqn{[0,1)}; fraction of weight to trim based on
-#'   the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).
-#' @param bin_width Numeric; the width of a bin. \code{NULL} (the default)
-#'   infers it from \code{Y_test}, which is correct for the equally spaced grid
-#'   that \code{binning()} builds.
-#' @param score Either \code{"bin_prob"} (the default) to score each bin by its
-#'   probability divided by the bin width, that is the average density over the
-#'   bin, or \code{"center"} for the density at the bin center, which was the
-#'   behavior before this fix.
+#' \code{main()} calls this function on the training data (the result is
+#' \code{fit$L}); \code{cv_lcd_onejob()} calls it on the held-out time points.
 #'
-#' @details
-#' For each time \eqn{t} and component \eqn{k}, residuals are
-#' \eqn{r_{t,i,k} = y_{t,i} - (\theta_{0k} + x_t^\top \theta_k)}.
-#' Densities are evaluated via
-#' \code{logcondens::evaluateLogConDens(r_{t,i,k}, g_k)[,3]} (density column).
-#' Mixture densities are \eqn{\sum_k \pi_{t,k} f_k(r_{t,i,k})}, with
-#' \eqn{\pi_{t,k}} from \code{pi_k(X_test, alpha)}; per-row log-likelihoods are
-#' the \eqn{\log} of those mixture densities. Penalization subtracts
-#' \eqn{\lambda_\alpha \lVert \alpha_{\cdot,-1}\rVert_1 + \lambda_\theta \sum_k \lVert \theta_k\rVert_1}.
+#' @param model A fitted model: the \code{iter} element of a \code{main()} fit.
+#'   The fields \code{g_new}, \code{theta0_new}, \code{theta_new},
+#'   \code{alpha_new}, \code{lambda_alpha} and \code{lambda_theta} are used.
+#' @param Y_test A list of length \eqn{TT}; element \eqn{t} holds the bin
+#'   centers at time \eqn{t} (a vector or a one-column matrix).
+#' @param X_test A numeric \eqn{TT \times p} covariate matrix; row \eqn{t}
+#'   goes with \code{Y_test[[t]]}.
+#' @param biomass_test A list of length \eqn{TT}; the weight of each bin.
+#' @param trim_prob A number in \eqn{[0, 1)}: the fraction of the total weight
+#'   trimmed from the bottom for \code{trimmed_loglik}. The threshold is the
+#'   weighted \code{trim_prob}-quantile (\code{weighted_quantile()}) of all
+#'   \eqn{\ell_{ti}}, \code{-Inf} included, so models with different numbers of
+#'   \code{-Inf} bins are trimmed in the same way.
+#' @param bin_width The width of a bin. \code{NULL} (the default) infers it
+#'   from \code{Y_test} with \code{infer_bin_width()}, which is correct for the
+#'   equally spaced grid that \code{binning()} builds. If it cannot be
+#'   inferred, the function warns and scores at the bin centers.
+#' @param score \code{"bin_prob"} (the default) to score each bin by its
+#'   probability divided by the bin width, that is, the average density over
+#'   the bin; \code{"center"} for the density at the bin center.
 #'
-#' @return A list with:
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{prop_inf}}{Proportion of rows where the per-row log-likelihood is not finite.}
-#'   \item{\code{finite_loglik}}{Untrimmed \emph{penalized} weighted mean over finite rows; \code{-Inf} if any \code{-Inf} present.}
-#'   \item{\code{trimmed_loglik}}{Trimmed \emph{penalized} weighted mean (trim over all rows, ties kept with \code{>=}).}
+#'   \item{\code{prop_inf}}{Share of the total weight in bins with
+#'     \eqn{\ell_{ti} = -\infty}.}
+#'   \item{\code{loglik}}{Weighted mean of \eqn{\ell_{ti}} over all bins, minus
+#'     the penalty; \code{-Inf} if any bin has \eqn{\ell_{ti} = -\infty}.}
+#'   \item{\code{finite_loglik}}{The same over the bins with finite
+#'     \eqn{\ell_{ti}} only.}
+#'   \item{\code{med_loglik}}{Weighted median of \eqn{\ell_{ti}}, minus the
+#'     penalty.}
+#'   \item{\code{trimmed_loglik}}{Weighted mean of \eqn{\ell_{ti}} over the
+#'     bins at or above the trimming threshold, minus the penalty.}
+#'   \item{\code{penalty}}{\eqn{\lambda_\alpha \sum_k \sum_{j \ge 1} |\alpha_{kj}| + \lambda_\theta \sum_k \|\theta_k\|_1},
+#'     with the penalties stored in \code{model}. Add it back to get an
+#'     unpenalized value.}
+#'   \item{\code{sum_w}}{Total weight.}
+#'   \item{\code{sum_trimmed_w}}{Weight of the bins kept after trimming.}
 #' }
+#' If every bin has \eqn{\ell_{ti} = -\infty}, \code{prop_inf} is 1, the four
+#' log-likelihoods are \code{-Inf}, and \code{penalty}, \code{sum_w} and
+#' \code{sum_trimmed_w} are \code{NA}.
 #'
 #' @seealso \code{\link{pi_k}}, \code{\link{weighted_quantile}},
 #'   \code{\link[logcondens]{evaluateLogConDens}}
@@ -81,7 +102,7 @@ infer_bin_width <- function(Y_test) {
 #'   biomass_test = bin_mass[test_idx],
 #'   trim_prob    = 0.03
 #' )
-#' res$trimmed_loglik
+#' res$trimmed_loglik + res$penalty   # unpenalized trimmed log-likelihood
 #' }
 #'
 #' @export

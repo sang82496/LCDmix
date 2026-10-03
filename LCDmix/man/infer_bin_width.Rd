@@ -2,12 +2,23 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{infer_bin_width}
 \alias{infer_bin_width}
-\title{Width of one bin on the binning grid.}
+\title{Width of one bin on the binning grid}
 \usage{
 infer_bin_width(Y_test)
 }
-\description{
-NOTE: binning() builds equally spaced cutpoints, so the smallest gap between
-distinct bin centers is the bin width. Empty grid positions leave gaps that
-are multiples of it, which is why the minimum is used and not the mean.
+\arguments{
+\item{Y_test}{A list of bin centers (vectors or one-column matrices), as in
+\code{Y_bin}.}
 }
+\value{
+The bin width, or \code{NA} if there are fewer than two distinct
+bin centers.
+}
+\description{
+\code{binning()} builds equally spaced cut points, so the smallest gap
+between distinct bin centers is the bin width. Empty bins leave gaps that
+are multiples of it, which is why the minimum is used and not the mean.
+Gives a warning if a gap is not a whole multiple of the minimum (relative
+tolerance 1e-6).
+}
+\keyword{internal}

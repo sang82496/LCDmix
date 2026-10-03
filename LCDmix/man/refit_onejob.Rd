@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{refit_onejob}
 \alias{refit_onejob}
-\title{Internal: run one LCDmix refit (single seed) and cache}
+\title{Fit the model once with one seed and save the result}
 \usage{
 refit_onejob(
   Y_bin,
@@ -23,7 +23,84 @@ refit_onejob(
   maxdev = NULL
 )
 }
+\arguments{
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
+
+\item{X}{A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+covariate vector at time \eqn{t}. It is used as given; see the Details
+of \code{main()} on covariate scale.}
+
+\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector
+of length \eqn{M_t}, the total weight (biomass) in each bin.}
+
+\item{K}{Number of mixture components (experts).}
+
+\item{lambda_alpha}{Nonnegative L1 penalty on the gate coefficients
+\eqn{\alpha}; the intercepts are not penalized.}
+
+\item{lambda_theta}{Nonnegative L1 penalty on the expert slopes
+\eqn{\theta}; the intercepts are not penalized.}
+
+\item{seed}{Seed (restart index); it selects the random flowmix start.}
+
+\item{max_iter}{Maximum number of EM iterations.}
+
+\item{iter_eta}{Stopping tolerance on the relative ascent of the surrogate
+objective in one iteration,
+\eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+The stopping rule is described in \code{iteration()}.}
+
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
+
+\item{trim_prob}{Fraction of the total weight that \code{eval_lcd()} trims
+for the trimmed log-likelihood in \code{L}. It does not change the fit.}
+
+\item{save_dir}{Directory for the result file.}
+
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
+}
+\value{
+\code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+file is a list with components:
+\describe{
+\item{fit}{The \code{main()} result; \code{NULL} on failure.}
+\item{fit_L}{\code{fit$L$loglik}, the penalized training log-likelihood
+(bins scored by probability), used to choose among seeds; \code{NULL}
+on failure.}
+\item{fit_L_unpen}{The same without the penalty, for reporting;
+\code{NULL} on failure.}
+\item{maxdev_diag}{The result of \code{maxdev_summary()} (success only).}
+\item{err_msg, failed_iter}{The text from \code{fit_error_text()} and the
+iteration at which the fit failed (failure only).}
+\item{log_msg}{Printed output of the fit.}
+}
+}
 \description{
-Internal: run one LCDmix refit (single seed) and cache
+Calls \code{set.seed(seed)} and \code{main()} on the full data with the
+given penalty pair, and saves the result to
+\code{save_dir/refit_<seed>.rds}. Called by \code{refit_lcd()} and
+\code{refit_lcd_simul()}, which run several seeds (restarts) and keep the
+best.
 }
 \keyword{internal}

@@ -2,37 +2,49 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{mstep_alpha}
 \alias{mstep_alpha}
-\title{Update mixture‐weight parameters via penalized multinomial regression}
+\title{Update the gate coefficients by penalized multinomial regression}
 \usage{
 mstep_alpha(X, weights, idx, lambda_alpha)
 }
 \arguments{
-\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{weights}{A list of length \eqn{TT}, each element an \eqn{M_t \times K}
-matrix of posterior weights (e.g.\ responsibilities × biomass) for each bin and component.}
+\item{weights}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of posterior weights.}
 
-\item{idx}{A list of length \eqn{TT}, each element an \eqn{M_t \times K}
-logical matrix indicating which bins have effectively nonzero posterior weight.}
+\item{idx}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} logical matrix of active bins.}
 
-\item{lambda_alpha}{Positive numeric L1 penalty on the non‐intercept mixture‐weight coefficients.}
+\item{lambda_alpha}{Positive L1 penalty on the non-intercept gate
+coefficients.}
 }
 \value{
-A numeric \eqn{K \times (p+1)} matrix \code{alpha}, where each row corresponds to
-one mixture component, the first column is the intercept, and the remaining \eqn{p}
-columns are the slope coefficients.
+A numeric \eqn{K \times (p+1)} matrix: row \eqn{k} holds the
+intercept and the \eqn{p} slopes of component \eqn{k}; row 1 is 0.
 }
 \description{
-Fits a weighted multinomial logistic regression of component‐assignment weights
-on covariates with an L1 penalty to update the mixture‐weight parameters \code{alpha}.
+Fits an L1-penalized multinomial logistic regression with \code{glmnet}.
+The response at time \eqn{t} is the vector of summed posterior weights of
+the active bins, \eqn{s_{tk} = \sum_{i \in I_{tk}} w_{tik}}; glmnet treats
+each row as proportions with weight \eqn{\sum_k s_{tk}}. glmnet runs on a
+path of 30 values from \code{100 * lambda_alpha} down to
+\code{lambda_alpha}, and the coefficients at \code{lambda_alpha} are
+returned, centered so that component 1 is the reference (row 1 is 0).
+
+If the proportions \eqn{s_{tk} / \sum_l s_{tl}} are the same at every time
+point (to 1e-10), or if glmnet fails, the exact intercept-only solution is
+returned: the log of the total weight of each component, with all slopes 0.
+
+glmnet uses its default \code{standardize = TRUE}, so the penalty acts on
+the coefficients of the standardized covariates. See the Details of
+\code{main()} on covariate scale.
 }
 \examples{
 \dontrun{
 TT <- 5; p <- 3; K <- 2
 X <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-# Simulate posterior weights and threshold mask
 post_w <- lapply(1:TT, function(i) matrix(runif(4 * K), ncol = K))
-mask  <- lapply(post_w, function(w) w > 0.1)
-alpha <- mstep_alpha(X, post_w, mask, lambda_alpha = 1e-3)
+mask   <- lapply(post_w, function(w) w > 0.1)
+alpha  <- mstep_alpha(X, post_w, mask, lambda_alpha = 1e-3)
 }
 }

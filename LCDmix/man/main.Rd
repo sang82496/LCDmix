@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{main}
 \alias{main}
-\title{Fit a log-concave mixture-of-experts model with optional binning}
+\title{Fit a log-concave mixture-of-experts model}
 \usage{
 main(
   Y,
@@ -25,65 +25,131 @@ main(
 )
 }
 \arguments{
-\item{Y}{A list of length \code{TT}, where \code{Y[[t]]} is an \eqn{n_t}-row vector or single‐column matrix of responses at time \eqn{t}.}
+\item{Y}{A list of length \code{TT}; \code{Y[[t]]} is a numeric vector or a
+one-column matrix of responses at time \eqn{t}. If \code{binned = TRUE},
+the bin centers, as returned in \code{Y_bin} by \code{binning()}.}
 
-\item{X}{A numeric matrix of dimension \eqn{TT \times p}, where each row \code{X[t, ]} is the covariate vector at time \eqn{t}.}
+\item{X}{A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+covariate vector at time \eqn{t}. It is used as given; see the Details
+of \code{main()} on covariate scale.}
 
-\item{biomass}{A list of length \code{TT}, where \code{biomass[[t]]} is a numeric vector of biomass weights per observation or bin at time \eqn{t}.}
+\item{biomass}{A list of length \code{TT}; \code{biomass[[t]]} holds one
+nonnegative weight per element of \code{Y[[t]]} (per observation, or per
+bin if \code{binned = TRUE}).}
 
-\item{binned}{Logical; if \code{TRUE}, \code{Y} and \code{biomass} are assumed already binned. Default: \code{FALSE}.}
+\item{binned}{Logical; \code{TRUE} if \code{Y} and \code{biomass} are
+already binned. Then they are used as given and \code{n_bins} is ignored.}
 
-\item{n_bins}{Integer number of equal‐width bins if \code{binned = FALSE}. Default: \code{40}.}
+\item{n_bins}{Number of equal-width bins over the pooled range of \code{Y},
+used when \code{binned = FALSE}. \code{0} makes each distinct response
+value its own bin.}
 
-\item{K}{Integer number of mixture components.}
+\item{K}{Number of mixture components (experts).}
 
-\item{lambda_alpha}{Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.}
+\item{lambda_alpha}{Nonnegative L1 penalty on the gate coefficients
+\eqn{\alpha}; the intercepts are not penalized.}
 
-\item{lambda_theta}{Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.}
+\item{lambda_theta}{Nonnegative L1 penalty on the expert slopes
+\eqn{\theta}; the intercepts are not penalized.}
 
-\item{max_iter}{Integer maximum number of EM iterations. Default: \code{30}.}
+\item{max_iter}{Maximum number of EM iterations.}
 
-\item{iter_eta}{Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-4}.}
+\item{iter_eta}{Stopping tolerance on the relative ascent of the surrogate
+objective in one iteration,
+\eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+The stopping rule is described in \code{iteration()}.}
 
-\item{resp_threshold}{Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.}
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
+
+\item{trim_prob}{Fraction of the total weight that \code{eval_lcd()} trims
+for the trimmed log-likelihood in \code{L}. It does not change the fit.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{debug}{Logical; if \code{TRUE}, an error inside the EM loop does not
+stop \code{main()}: the partial result is returned with the error message
+(see Value).}
+
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
 
 \item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
-Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
-\code{maxdev} for all \eqn{t}, as in flowmix. It is passed to the flowmix
-initialization and to the LP update of \eqn{\theta}. Requires \code{update = "lp"}.}
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
 A list with components:
 \describe{
-\item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
+\item{Y_bin}{List of binned responses (\code{Y} itself if \code{binned = TRUE}).}
 \item{X}{Covariate matrix (unchanged).}
-\item{bin_mass}{List of biomass‐per‐bin weights.}
-\item{initial}{List returned by \code{initialization()}, containing starting parameters.}
-\item{iter}{List returned by \code{iteration()}, containing fitted parameters over EM iterations.}
+\item{bin_mass}{List of the total weight in each bin.}
+\item{K}{Number of components.}
+\item{initial}{The list returned by \code{initialization()}.}
+\item{iter}{The list returned by \code{iteration()}: the fitted parameters
+(\code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}),
+the trace of \eqn{Q} and diagnostics.}
+\item{L}{The list returned by \code{eval_lcd()} on the training data.
+\code{L$loglik} is the penalized mean log-likelihood that
+\code{refit_lcd()} uses to choose among restarts.}
 }
+If \code{debug = TRUE} and the EM loop fails, a warning is given and the
+list holds \code{Y_bin}, \code{X}, \code{bin_mass}, \code{initial},
+\code{iter_partial} (the list returned by \code{iteration()}, with
+\code{error} and \code{failed_iter} set) and \code{iter = NULL}.
 }
 \description{
-Runs the full pipeline for fitting a log-concave mixture-of-experts model:
+Runs the whole fitting pipeline for one dataset:
 \enumerate{
-\item (Optional) Bin responses by biomass
-\item Initialize via Gaussian mixture regression (GMR) with \code{flowmix}
-\item Perform EM‐style iterations on mixture parameters
+\item If \code{binned = FALSE}, bins the responses with \code{binning()}.
+\item Computes starting values with \code{initialization()}, which fits a
+Gaussian mixture of regressions with \code{flowmix::flowmix()}.
+\item Runs the EM-type iterations with \code{iteration()}.
+\item Evaluates the fitted model on the training data with \code{eval_lcd()}:
+penalized log-likelihood, each bin scored by its probability.
 }
+
+The flowmix start in step 2 is random. Call \code{set.seed()} first for a
+reproducible fit.
+}
+\details{
+Covariate scale. The package does not standardize \code{X}. The gate update
+calls \code{glmnet} with its default \code{standardize = TRUE}, so in the
+original scale the gate penalty is
+\eqn{\lambda_\alpha \sum_k \sum_j \mathrm{sd}(x_j) |\alpha_{kj}|}, while
+\code{comp_Q()} and \code{eval_lcd()} use
+\eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|}. The two agree when every
+column of \code{X} has standard deviation 1. flowmix behaves the same way.
+Center and scale continuous covariates before fitting (0/1 indicators can
+stay as they are), and give the same \code{X} to both methods.
 }
 \examples{
 \dontrun{
-# Simulate TT = 50 time points, p = 3 covariates
+# TT = 50 time points, p = 3 covariates
 set.seed(123)
-Y_list   <- lapply(1:50, function(t) matrix(rnorm(sample(20:50,1)), ncol = 1))
-biomass  <- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
-X_mat    <- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
-# Fit a 2‐component mixture
-result   <- main(
+Y_list  <- lapply(1:50, function(t) matrix(rnorm(sample(20:50, 1)), ncol = 1))
+biomass <- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
+X_mat   <- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
+# Fit a 2-component mixture
+result  <- main(
   Y       = Y_list,
   X       = X_mat,
   biomass = biomass,
   K       = 2
 )
-plot(result$iter$logLik)
+plot(result$iter$Q, type = "b")   # surrogate objective per iteration
+result$L$loglik                   # penalized training log-likelihood
 }
 }

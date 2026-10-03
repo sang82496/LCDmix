@@ -2,12 +2,24 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{tv_grid}
 \alias{tv_grid}
-\title{Integration grid: the central range of the true density, widened to cover
-the estimated support.}
+\title{Integration range for tv_density()}
 \usage{
 tv_grid(qfun, est_support = NULL, p = 5e-04)
 }
+\arguments{
+\item{qfun}{Quantile function of the true distribution.}
+
+\item{est_support}{Optional \code{c(lower, upper)}, the support of the
+estimated density.}
+
+\item{p}{Probability left out in each tail.}
+}
+\value{
+\code{c(lo, hi)}.
+}
 \description{
-Integration grid: the central range of the true density, widened to cover
-the estimated support.
+Takes the central range of the true distribution, from its
+\code{p}-quantile to its \code{(1 - p)}-quantile, widens it to cover
+\code{est_support} if that is given, and adds 2 percent of the width on
+each side.
 }

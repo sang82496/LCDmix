@@ -2,34 +2,30 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{comp_resi}
 \alias{comp_resi}
-\title{Compute residuals for binned responses given mixture parameters}
+\title{Compute residuals for binned responses given the expert coefficients}
 \usage{
 comp_resi(Y_bin, X, intercepts, slopes)
 }
 \arguments{
-\item{Y_bin}{A list of length \code{TT}; each element is an \eqn{M_t \times 1}
-matrix of binned response values at time point \code{t}.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{A numeric matrix of size \eqn{TT \times p}; row \code{X[t, ]} is the
-covariate vector for time point \code{t}.}
+\item{X}{A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+covariate vector at time \eqn{t}.}
 
 \item{intercepts}{A list of length \code{K}; \code{intercepts[[k]]} is the
-intercept parameter \eqn{\theta_{0k}} for component \eqn{k}.}
+intercept \eqn{\theta_{0k}}.}
 
-\item{slopes}{A list of length \code{K}; \code{slopes[[k]]} is a numeric vector
-of length \eqn{p} containing the slope parameters \(\boldsymbol{\theta}_k\).}
+\item{slopes}{A list of length \code{K}; \code{slopes[[k]]} is the slope
+vector \eqn{\theta_k} of length \eqn{p}.}
 }
 \value{
-A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix
-of residuals, where row \(i\), column \(k\) is the residual for bin \(i\)
-at time \(t\) and component \(k\).
+A list of length \code{TT}; element \eqn{t} is an
+\eqn{M_t \times K} matrix whose entry \code{[i, k]} is \eqn{u_{tik}}.
 }
 \description{
-For each time point \(t\) and mixture component \(k\), compute the residuals
-[
-r_{t,i,k} \;=\; Y_{\mathrm{bin},t,i}
-\;-\;\bigl(\,\text{intercepts}[\link{k}] \;+\; X\link{t, } \,\cdot\, \text{slopes}[\link{k}]\bigr).
-]
+For each time point \eqn{t}, bin \eqn{i} and component \eqn{k}, computes
+\deqn{u_{tik} = y_{ti} - \theta_{0k} - X_t^\top \theta_k.}
 }
 \examples{
 \dontrun{

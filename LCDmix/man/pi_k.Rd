@@ -2,35 +2,35 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{pi_k}
 \alias{pi_k}
-\title{Compute posterior mixing probabilities π_{t,k} = P(Z^{(t)} = k | X^{(t)})}
+\title{Gate probabilities of the mixture components}
 \usage{
 pi_k(X, alpha)
 }
 \arguments{
-\item{X}{A numeric matrix with \code{TT} rows (time points) and \code{p} covariate columns.}
+\item{X}{A numeric matrix with \code{TT} rows (time points) and \code{p}
+covariate columns.}
 
-\item{alpha}{A numeric matrix of dimension \eqn{K \times (p+1)}, where each row
-corresponds to one mixture component \code{k}. Column 1 is the intercept,
-and columns 2 through \eqn{p+1} are the slopes for that component.}
+\item{alpha}{A numeric \eqn{K \times (p+1)} matrix; row \eqn{k} belongs to
+component \eqn{k}. Column 1 is the intercept and columns 2 to
+\eqn{p+1} are the slopes.}
 }
 \value{
-A numeric \eqn{TT \times K} matrix \code{pi_mat}, where
-\code{pi_mat[t, k]} is the posterior probability of component \code{k}
-at time point \code{t}. Each row of \code{pi_mat} sums to 1.
+A numeric \eqn{TT \times K} matrix; entry \code{[t, k]} is
+\eqn{\pi_{tk}}. Each row sums to 1.
 }
 \description{
-Given a sequence of covariate vectors over \code{TT} time points and a parameter
-matrix \code{alpha} of size \eqn{K \times (p+1)}, this function computes the
-\eqn{TT \times K} matrix of posterior probabilities
-\eqn{\pi_{t,k} = P(Z^{(t)} = k \mid X^{(t)})} via a row-wise softmax of the linear predictors.
+Computes, for every time point \eqn{t} and component \eqn{k},
+\deqn{\pi_{tk} = P(Z_t = k \mid X_t) = \frac{\exp(\alpha_{k0} + X_t^\top \alpha_k)}{\sum_{l=1}^K \exp(\alpha_{l0} + X_t^\top \alpha_l)}.}
+These are the gate (prior) probabilities: they depend on the covariates
+only, not on the response.
 }
 \examples{
 \dontrun{
-# Simulate 3 time points, 2 covariates, 2 mixture components
+# 3 time points, 2 covariates, 2 components
 X     <- matrix(rnorm(3 * 2), nrow = 3, ncol = 2)
 alpha <- matrix(
-  c(0.1,  1.0, -0.5,   # component 1: intercept = 0.1, slopes = (1, -0.5)
-    0.2, -1.0,  0.3),  # component 2: intercept = 0.2, slopes = (-1, 0.3)
+  c(0.1,  1.0, -0.5,   # component 1: intercept 0.1, slopes (1, -0.5)
+    0.2, -1.0,  0.3),  # component 2: intercept 0.2, slopes (-1, 0.3)
   nrow = 2, byrow = TRUE
 )
 pi_mat <- pi_k(X, alpha)

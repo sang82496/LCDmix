@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{cv_lcd_onejob}
 \alias{cv_lcd_onejob}
-\title{Internal: run a single CV job (one fold/seed/λ-pair)}
+\title{Run one cross-validation job and save its result}
 \usage{
 cv_lcd_onejob(
   job,
@@ -23,22 +23,97 @@ cv_lcd_onejob(
 )
 }
 \arguments{
-\item{job}{named numeric vector/data.frame row with fields:
-alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta}
+\item{job}{A named numeric vector with \code{alpha_idx}, \code{theta_idx},
+\code{seed_idx}, \code{fold_idx}, \code{lambda_alpha} and
+\code{lambda_theta}: one row of \code{cv_idx_mat()}.}
 
-\item{Y_bin}{list of responses; @param X matrix; @param bin_mass list of weights}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{folds}{list of fold indices as from flowmix::make_cv_folds()}
+\item{X}{A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+covariate vector at time \eqn{t}. It is used as given; see the Details
+of \code{main()} on covariate scale.}
 
-\item{K, max_iter, iter_eta, resp_threshold, trim_prob}{standard LCDmix args}
+\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector
+of length \eqn{M_t}, the total weight (biomass) in each bin.}
 
-\item{save_dir}{directory to write "\if{html}{\out{<alpha>}}-\if{html}{\out{<theta>}}-\if{html}{\out{<seed>}}-\if{html}{\out{<fold>}}.rds"}
+\item{folds}{A list with one element per fold, the indices of the held-out
+time points, as returned by \code{flowmix::make_cv_folds()}.}
+
+\item{K}{Number of mixture components (experts).}
+
+\item{max_iter}{Maximum number of EM iterations.}
+
+\item{iter_eta}{Stopping tolerance on the relative ascent of the surrogate
+objective in one iteration,
+\eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+The stopping rule is described in \code{iteration()}.}
+
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
+
+\item{trim_prob}{Fraction of the total weight that \code{eval_lcd()} trims
+for the trimmed log-likelihood in \code{L}. It does not change the fit.}
+
+\item{save_dir}{Directory for the result file.}
+
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
-character (one log line); writes result file as side-effect
+\code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+file is a list with components:
+\describe{
+\item{eval_trimmed_loglik, eval_finite_loglik, eval_med_loglik}{Held-out
+log-likelihoods from \code{eval_lcd()} (bins scored by probability)
+with the penalty added back, that is, unpenalized.}
+\item{eval_prop_inf, eval_penalty, eval_w, eval_trimmed_w}{Held-out share
+of weight with log-likelihood \code{-Inf}, penalty, total held-out
+weight, and held-out weight kept after trimming.}
+\item{fit_loglik, fit_trimmed_loglik, fit_med_loglik}{Training
+log-likelihoods from \code{fit$L}, penalized. \code{cv_lcd_summary()}
+uses \code{fit_trimmed_loglik} to choose among seeds.}
+\item{iter_num}{Number of EM iterations.}
+\item{n_outside_total}{Sum of \code{n_outside_every}.}
+\item{lp_max_over, lp_n_out_total}{Largest distance outside the support
+and total count from \code{lp_check_every}; \code{NA} unless
+\code{calc_Q_every = TRUE}.}
+\item{n_ascent_violations}{Number of iterations with
+\eqn{Q_E < Q_{ref}}; \code{NA} unless \code{calc_Q_every = TRUE}.}
+\item{Q_every, n_outside_every, lp_check_every}{Traces from
+\code{iteration()}; \code{NULL} unless \code{calc_Q_every = TRUE}.}
+\item{maxdev_diag}{The result of \code{maxdev_summary()}.}
+\item{err_msg, failed_iter}{\code{NA} on success; on failure, the text
+from \code{fit_error_text()} and the iteration at which the fit
+failed.}
+\item{log_msg}{Printed output of the fit.}
+}
+On failure all numeric fields are \code{NA} and the traces are \code{NULL}.
 }
 \description{
-Executes one CV job: fit on train split, evaluate on hold-out,
-and write a per-job RDS file. Returns a concise log string.
+Fits the model with one penalty pair and one seed on all time points except
+one fold, evaluates it on the held-out fold with \code{eval_lcd()}, and
+saves the result to
+\code{save_dir/<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.rds}. It calls
+\code{set.seed(seed_idx)} before \code{main()}, so the seed selects the
+random flowmix start. Called by \code{cv_lcd()} and \code{cv_lcd_simul()}.
 }
 \keyword{internal}

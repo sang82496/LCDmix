@@ -2,50 +2,51 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{mstep_shift}
 \alias{mstep_shift}
-\title{Update component intercepts in the M-step using binned data}
+\title{Update the component intercepts (centering step)}
 \usage{
 mstep_shift(Y_bin, X, weights, idx, slopes)
 }
 \arguments{
-\item{Y_bin}{A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix
-of binned response values for time point \eqn{t}, where \eqn{M_t \le n\_bins}.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{A numeric matrix of size \eqn{TT \times p}, where each row \code{X[t, ]} is
-the covariate vector at time \eqn{t}.}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{weights}{A list of length \code{TT}; each element is a numeric vector of length
-\eqn{M_t} giving the total biomass per bin (i.e.\ the \code{bin_mass} output
-from \code{binning()}, with empty bins removed).}
+\item{weights}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of posterior weights (responsibility times bin
+weight), as returned in \code{weight} by \code{estep_lcd()}.}
 
-\item{idx}{A list of length \code{TT}; each element is an \eqn{M_t \times K}
-logical or integer matrix where \code{idx[[t]][i, k]} is \code{TRUE} if the
-\(i\)th bin at time \emph{t} contributes to component \emph{k}.}
+\item{idx}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} logical matrix; \code{idx[[t]][i, k]} is \code{TRUE}
+if bin \eqn{i} at time \eqn{t} is active for component \eqn{k}.}
 
-\item{slopes}{A list of length \code{K}; each element is a numeric vector of length
-\eqn{p} giving the current slope parameters \eqn{\boldsymbol{\theta}_k}.}
+\item{slopes}{A list of length \code{K}; each element is the slope vector
+\eqn{\theta_k} of length \eqn{p}.}
 }
 \value{
-A list of length \code{K}, where element \code{k} is the updated intercept
-\eqn{\theta_{0k}} for component \eqn{k}.
+A list of length \code{K}; element \eqn{k} is the new intercept
+\eqn{\theta_{0k}}. It is \code{NaN} if component \eqn{k} has no active bin.
 }
 \description{
-Computes the updated intercepts \eqn{\theta_{0k}} for each mixture component \eqn{k}
-by solving the weighted shift equations on binned responses. Here \code{Y_bin} and
-\code{weights} both have at most \code{n_bins} rows per time point (empty bins removed).
+For each component \eqn{k}, sets the intercept to the weighted mean of
+\eqn{y - X_t^\top \theta_k} over the active bins:
+\deqn{\theta_{0k} = \frac{\sum_t \sum_{i \in I_{tk}} w_{tik} (y_{ti} - X_t^\top \theta_k)}{\sum_t \sum_{i \in I_{tk}} w_{tik}}.}
+Afterwards the weighted mean residual of each component is 0.
+
+This is the exact maximizer of \eqn{Q} over the intercept only when the
+component density is Gaussian. For a general log-concave density it centers
+the residuals but does not maximize \eqn{Q}, which is why the algorithm is a
+generalized EM algorithm and not an ECM algorithm. \code{iteration()}
+checks the ascent of the whole iteration.
 }
 \examples{
 \dontrun{
-TT      <- 3; K <- 2; p <- 2; n_bins <- 5
-# Simulate binned responses and bin_mass
+TT <- 3; K <- 2; p <- 2; n_bins <- 5
 Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
-bin_mass<- lapply(Y_bin, function(m) runif(nrow(m)))
-# Dummy X and idx
 X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-idx <- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
-                      length(m) * K, replace = TRUE),
-                      ncol = K))
+weights <- lapply(Y_bin, function(m) matrix(runif(nrow(m) * K), ncol = K))
+idx     <- lapply(weights, function(w) w > 0.1)
 slopes  <- replicate(K, runif(p), simplify = FALSE)
-# Compute updated intercepts
-intercepts <- mstep_shift(Y_bin, X, bin_mass, idx, slopes)
+intercepts <- mstep_shift(Y_bin, X, weights, idx, slopes)
 }
 }

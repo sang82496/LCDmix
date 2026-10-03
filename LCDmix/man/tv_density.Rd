@@ -2,10 +2,23 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{tv_density}
 \alias{tv_density}
-\title{Half the L1 integral between two densities, so the value lies in \link{0, 1}.}
+\title{Total variation distance between two densities on an interval}
 \usage{
 tv_density(fhat, ftrue, lo, hi, n = 2001)
 }
+\arguments{
+\item{fhat, ftrue}{Density functions that accept a vector.}
+
+\item{lo, hi}{Integration limits.}
+
+\item{n}{Number of grid points.}
+}
+\value{
+A single number.
+}
 \description{
-Half the L1 integral between two densities, so the value lies in \link{0, 1}.
+Computes \eqn{\frac{1}{2} \int_{lo}^{hi} |\hat f(x) - f(x)|\, dx} with the
+trapezoid rule on \code{n} equally spaced points. The value lies in
+\eqn{[0, 1]} when both functions are densities and the interval holds
+almost all of their mass.
 }

@@ -1,17 +1,54 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' @title Internal: run a single CV job (one fold/seed/λ-pair)
-#' @description Executes one CV job: fit on train split, evaluate on hold-out,
-#'   and write a per-job RDS file. Returns a concise log string.
-#' @param job named numeric vector/data.frame row with fields:
-#'   alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta
-#' @param Y_bin list of responses; @param X matrix; @param bin_mass list of weights
-#' @param folds list of fold indices as from flowmix::make_cv_folds()
-#' @param K,max_iter,iter_eta,resp_threshold,trim_prob standard LCDmix args
-#' @param save_dir directory to write "<alpha>-<theta>-<seed>-<fold>.rds"
-#' @return character (one log line); writes result file as side-effect
+#' Run one cross-validation job and save its result
+#'
+#' @description
+#' Fits the model with one penalty pair and one seed on all time points except
+#' one fold, evaluates it on the held-out fold with \code{eval_lcd()}, and
+#' saves the result to
+#' \code{save_dir/<alpha_idx>-<theta_idx>-<seed_idx>-<fold_idx>.rds}. It calls
+#' \code{set.seed(seed_idx)} before \code{main()}, so the seed selects the
+#' random flowmix start. Called by \code{cv_lcd()} and \code{cv_lcd_simul()}.
+#'
+#' @param job A named numeric vector with \code{alpha_idx}, \code{theta_idx},
+#'   \code{seed_idx}, \code{fold_idx}, \code{lambda_alpha} and
+#'   \code{lambda_theta}: one row of \code{cv_idx_mat()}.
+#' @param folds A list with one element per fold, the indices of the held-out
+#'   time points, as returned by \code{flowmix::make_cv_folds()}.
+#' @param save_dir Directory for the result file.
+#' @inheritParams main
+#' @inheritParams initialization
+#'
+#' @return \code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+#'   file is a list with components:
+#' \describe{
+#'   \item{eval_trimmed_loglik, eval_finite_loglik, eval_med_loglik}{Held-out
+#'     log-likelihoods from \code{eval_lcd()} (bins scored by probability)
+#'     with the penalty added back, that is, unpenalized.}
+#'   \item{eval_prop_inf, eval_penalty, eval_w, eval_trimmed_w}{Held-out share
+#'     of weight with log-likelihood \code{-Inf}, penalty, total held-out
+#'     weight, and held-out weight kept after trimming.}
+#'   \item{fit_loglik, fit_trimmed_loglik, fit_med_loglik}{Training
+#'     log-likelihoods from \code{fit$L}, penalized. \code{cv_lcd_summary()}
+#'     uses \code{fit_trimmed_loglik} to choose among seeds.}
+#'   \item{iter_num}{Number of EM iterations.}
+#'   \item{n_outside_total}{Sum of \code{n_outside_every}.}
+#'   \item{lp_max_over, lp_n_out_total}{Largest distance outside the support
+#'     and total count from \code{lp_check_every}; \code{NA} unless
+#'     \code{calc_Q_every = TRUE}.}
+#'   \item{n_ascent_violations}{Number of iterations with
+#'     \eqn{Q_E < Q_{ref}}; \code{NA} unless \code{calc_Q_every = TRUE}.}
+#'   \item{Q_every, n_outside_every, lp_check_every}{Traces from
+#'     \code{iteration()}; \code{NULL} unless \code{calc_Q_every = TRUE}.}
+#'   \item{maxdev_diag}{The result of \code{maxdev_summary()}.}
+#'   \item{err_msg, failed_iter}{\code{NA} on success; on failure, the text
+#'     from \code{fit_error_text()} and the iteration at which the fit
+#'     failed.}
+#'   \item{log_msg}{Printed output of the fit.}
+#' }
+#' On failure all numeric fields are \code{NA} and the traces are \code{NULL}.
 #' @keywords internal
-#' 
+#'
 #' @export
 cv_lcd_onejob <- function(
   job,

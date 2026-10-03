@@ -1,5 +1,38 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Cross-validation of the penalty pair for one dataset
+#'
+#' @description
+#' Runs \code{cv_lcd_onejob()} in parallel for every combination of fold,
+#' seed, \code{lambda_alpha} and \code{lambda_theta}, and saves one file per
+#' job in \code{save_dir}, together with \code{index_matrix.rds}. A job whose
+#' file already exists is not run again, so an interrupted run can be resumed.
+#' The folds are blocks of consecutive time points from
+#' \code{flowmix::make_cv_folds()}. Use \code{cv_lcd_summary()} on
+#' \code{save_dir} to choose the penalty pair, then \code{refit_lcd()}.
+#'
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
+#'
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param alpha_lambdas,theta_lambdas Candidate values of \code{lambda_alpha}
+#'   and \code{lambda_theta}. They are sorted in increasing order first.
+#' @param nfold Number of folds.
+#' @param seeds Seeds (restarts) for every fold and penalty pair. If
+#'   \code{NULL}, \code{1:cv_reps}.
+#' @param save_dir Output directory; it is created if needed.
+#' @param n_cores Number of worker processes, or \code{"max"} for all physical
+#'   cores.
+#' @param cv_reps Number of seeds, used only when \code{seeds} is \code{NULL}.
+#' @param blocksize Block size passed to \code{flowmix::make_cv_folds()}.
+#'
+#' @return A list with \code{index_matrix} (from \code{cv_idx_mat()}) and
+#'   \code{summary} (a text with the number of failed jobs).
+#'
+#' @seealso \code{\link{cv_lcd_simul}} for many datasets,
+#'   \code{\link{cv_lcd_summary}}, \code{\link{refit_lcd}}
+#'
 #' @export
 cv_lcd <- function(
   Y_bin,

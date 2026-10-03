@@ -1,57 +1,51 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Refit LCDmix multiple times and select the best training fit
+#' Refit the model with several seeds and keep the best fit
 #'
-#' Runs multiple refits of an LCDmix model on the full training data using a
-#' grid of random seeds (one outer parallel cluster; no nested parallel). Each
-#' refit is cached to \code{save_dir/refit_<seed>.rds} so the procedure is
-#' fully resumable. The best fit is chosen by the largest training objective
-#' \eqn{L} among the completed refits.
+#' @description
+#' Runs \code{refit_onejob()} for every seed in parallel (one cluster, no
+#' nested parallelism) on the full data with the chosen penalty pair. Each
+#' refit is saved to \code{save_dir/refit_<seed>.rds}; a seed whose file
+#' already exists is not run again, so an interrupted run can be resumed.
+#' After the run, the saved files are read and the fit with the largest
+#' \code{fit_L} (the penalized training log-likelihood) is returned.
 #'
-#' @param Y_bin List of responses (one element per time point/bin), as used by \code{main()}.
-#' @param X Numeric matrix of covariates with \code{nrow(X) == length(Y_bin)}.
-#' @param bin_mass List of nonnegative weights aligned with \code{Y_bin}.
-#' @param K Integer; number of mixture components.
-#' @param opt_lambdas Numeric vector of length 2 giving \code{c(lambda_alpha, lambda_theta)}.
-#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
-#'   The seeds will be \code{1:cv_reps}.
-#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-4}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{eval_lcd()} during fitting. Default \code{0.03}.
-#' @param save_dir Character; directory to write/read cached refits (\code{refit_<seed>.rds}). Default \code{"./refits"}.
-#' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{main()} for verbose diagnostics. Default \code{FALSE}.
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
 #'
-#' @details
-#' Each seed triggers a call to \code{refit_onejob()}, which caches its result to
-#' disk and returns a log string and the final training objective \eqn{L}.
-#' Existing cache files are reused and not recomputed.
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param opt_lambdas \code{c(lambda_alpha, lambda_theta)}, for example the
+#'   \code{opt_lambdas} of \code{cv_lcd_summary()}.
+#' @param seeds Seeds to run. If \code{NULL}, \code{1:cv_reps}.
+#' @param cv_reps Number of seeds, used only when \code{seeds} is \code{NULL}.
+#' @param save_dir Directory for the refit files; it is created if needed.
+#' @param n_cores Number of worker processes, or \code{"max"} for all physical
+#'   cores.
 #'
-#' @return A list with:
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{logs}}{Character vector of log messages (one per seed plus a summary line).}
-#'   \item{\code{refit_scores}}{Numeric vector of per-seed training objectives \eqn{L} (may contain \code{NA}).}
-#'   \item{\code{best_fit}}{The list returned by \code{refit_onejob()} for the best seed
-#'     (largest \eqn{L}); \code{NULL} if all refits failed.}
+#'   \item{\code{summary}}{A text with the number of failed refits.}
+#'   \item{\code{loglik}}{Numeric vector, \code{fit_L} of each seed
+#'     (\code{NA} for a failed seed).}
+#'   \item{\code{best_fit}}{The \code{main()} result of the seed with the
+#'     largest \code{fit_L}; \code{NULL}, with a warning, if every refit
+#'     failed.}
 #' }
 #'
-#' @seealso \code{\link{refit_onejob}}
+#' @seealso \code{\link{refit_onejob}}, \code{\link{cv_lcd}}
 #'
 #' @examples
 #' \dontrun{
-#' # Given Y_bin, X, bin_mass, and chosen penalties:
-#' opt <- c(lambda_alpha = 1e-3, lambda_theta = 1e-3)
 #' out <- refit_lcd(
 #'   Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = 2,
-#'   opt_lambdas = opt,
+#'   opt_lambdas = c(1e-3, 1e-3),
 #'   seeds = 1:10,
 #'   save_dir = "refits",
 #'   n_cores = 8
 #' )
-#' out$best_fit$L       # best training objective
-#' out$best_fit$file    # path to the cached best refit
+#' out$loglik                  # penalized training log-likelihood per seed
+#' out$best_fit$iter$theta_new # slopes of the best fit
 #' }
 #'
 #' @export

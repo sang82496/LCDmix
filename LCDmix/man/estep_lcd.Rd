@@ -2,63 +2,61 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{estep_lcd}
 \alias{estep_lcd}
-\title{Perform the E-step using log-concave component densities}
+\title{E-step with log-concave component densities}
 \usage{
 estep_lcd(X, bin_mass, residuals, alpha, densities, resp_threshold = 0.001)
 }
 \arguments{
-\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{bin_mass}{A list of length \code{TT}, where each element is a numeric
-vector of length \eqn{M_t} giving the biomass weight per bin at time \(t\).}
+\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector
+of length \eqn{M_t}, the weight of each bin.}
 
-\item{residuals}{A list of length \code{TT}; each element is an \eqn{M_t \times K}
-matrix of residuals for bins at time \(t\).}
+\item{residuals}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of residuals.}
 
-\item{alpha}{A numeric \eqn{K \times (p+1)} matrix of mixture parameters
-(column 1 = intercepts, columns 2:\(p+1\) = slopes).}
+\item{alpha}{A numeric \eqn{K \times (p+1)} matrix of gate coefficients
+(column 1 holds the intercepts).}
 
-\item{densities}{A list of length \code{K}, each an object returned by
-\code{modified_logcondens()} representing the log‐concave density for one component.}
+\item{densities}{A list of length \code{K} of \code{modified_logcondens()}
+fits.}
 
-\item{resp_threshold}{Numeric in \(\link{0,1}\); responsibilities below this value
-are set to zero. Default: \code{1e-3}.}
+\item{resp_threshold}{A number in \eqn{[0, 1]}; responsibilities below it
+are set to 0.}
 }
 \value{
 A list with components:
 \describe{
-\item{resp}{List of length \code{TT} of \eqn{M_t \times K} matrices of responsibilities.}
-\item{weight}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights.}
-\item{idx}{List of length \code{TT} of \eqn{M_t \times K} logical matrices, where
-\code{idx[[t]][i,k]} = \code{TRUE} if \code{resp[[t]][i,k]} > 0.}
+\item{resp}{List of \code{TT} \eqn{M_t \times K} matrices of
+responsibilities, after thresholding.}
+\item{weight}{List of \code{TT} \eqn{M_t \times K} matrices of posterior
+weights, \code{resp} times \code{bin_mass}.}
+\item{idx}{List of \code{TT} \eqn{M_t \times K} logical matrices;
+\code{TRUE} where \code{resp} is positive.}
 }
 }
 \description{
-Given current model parameters and log-concave density estimates, computes:
-\itemize{
-\item Soft responsibilities \(\mathrm{resp}_{t,i,k}\)
-\item Posterior weights (responsibilities × biomass per bin)
-\item Logical indices of “effectively nonzero” responsibilities
-for each time point \(t\) and component \(k\), thresholding responsibilities
-below \code{resp_threshold} to zero for numerical stability and speed.
-}
+Computes, for each time point \eqn{t}, bin \eqn{i} and component \eqn{k},
+the responsibility
+\deqn{r_{tik} = \frac{\pi_{tk} \hat f_k(u_{tik})}{\sum_l \pi_{tl} \hat f_l(u_{til})},}
+with each density evaluated at the residual of the bin center.
+Responsibilities below \code{resp_threshold} are set to 0. The others are
+not renormalized, so a row can sum to slightly less than 1. A bin outside
+the support of every component gives 0/0, that is \code{NaN}.
 }
 \examples{
 \dontrun{
 TT <- 4; K <- 3; p <- 2
-# Simulate residuals (5 bins × K) and biomass
-residuals <- lapply(1:TT, function(t) matrix(rnorm(5*K), ncol = K))
+# Residuals (5 bins, K components) and bin weights
+residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
 bin_mass  <- lapply(residuals, function(m) runif(nrow(m)))
-# Dummy densities
 densities <- replicate(K,
   modified_logcondens(rnorm(100), w = rep(1/100, 100)),
   simplify = FALSE
 )
-# Random mixture parameters
-alpha <- matrix(rnorm(K*(p+1)), nrow = K)
-# One E‐step
+alpha <- matrix(rnorm(K * (p + 1)), nrow = K)
 e_res <- estep_lcd(
-  X              = matrix(rnorm(TT*p), nrow = TT),
+  X              = matrix(rnorm(TT * p), nrow = TT),
   bin_mass       = bin_mass,
   residuals      = residuals,
   alpha          = alpha,

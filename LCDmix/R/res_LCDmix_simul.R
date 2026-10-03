@@ -1,5 +1,31 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Plots and printed summaries for one simulated dataset (analysis script)
+#'
+#' @description
+#' Prints the chosen penalty pair, and the LCDmix and flowmix estimates with
+#' their sparsity next to the true values. Draws the Q trace, the binned
+#' data, the mean, median and gate curves, the error densities, and the
+#' mixture densities at \eqn{t = 1} and \eqn{t = 51}. A heatmap of the CV
+#' score is built but not drawn.
+#'
+#' This is an analysis script, not a general-purpose function. It reads
+#' objects from the calling environment and files from the working
+#' directory:
+#'
+#' - \code{summ}: a list of \code{cv_lcd_summary()} results, one per dataset;
+#' - \code{refit_bests}: a list of best refits (\code{main()} results), one
+#'   per dataset;
+#' - \code{sim_data/sim_<s>.rds} and \code{flow_res_bests.rds}.
+#'
+#' It also calls functions of dplyr, ggplot2 and scales without the package
+#' prefix, so those packages must be attached.
+#'
+#' @param s Dataset index.
+#'
+#' @return \code{NULL}, invisibly. The function is called for its printed
+#'   output and plots.
+#'
 #' @export
 res_LCDmix_simul <- function(s){
   mat = summ[[s]]$reduced_mat

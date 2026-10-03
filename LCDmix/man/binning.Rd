@@ -2,44 +2,45 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{binning}
 \alias{binning}
-\title{Bin responses by biomass weights into fixed or data-driven bins}
+\title{Bin responses into equal-width bins and sum their weights}
 \usage{
 binning(Y, biomass, n_bins = 40)
 }
 \arguments{
-\item{Y}{A list of length \code{TT}, where \code{Y[[t]]} is a numeric vector or single-column matrix of responses at time \(t\).}
+\item{Y}{A list of length \code{TT}; \code{Y[[t]]} is a numeric vector or a
+one-column matrix of responses at time \eqn{t}.}
 
-\item{biomass}{A list of the same length \code{TT}, where \code{biomass[[t]]} is a numeric vector of weights for each observation in \code{Y[[t]]}.}
+\item{biomass}{A list of length \code{TT}; \code{biomass[[t]]} holds one
+nonnegative weight per element of \code{Y[[t]]}.}
 
-\item{n_bins}{Integer number of equal-width bins to create across the pooled range of \code{Y}.
-If \code{n_bins = 0}, no binning is performed and each unique response value is treated as its own “bin.”
-Default: \code{40}.}
+\item{n_bins}{Number of equal-width bins, or \code{0} for no binning.}
 }
 \value{
 A list with components:
 \describe{
-\item{Y_bin}{List of length \code{TT}; each element is a single-column matrix of bin centers (numeric) with positive total weight.}
-\item{bin_mass}{List of length \code{TT}; each element is a numeric vector of total biomass weights per bin, aligned with \code{Y_bin[[t]]}.}
+\item{Y_bin}{List of length \code{TT}; element \eqn{t} is an
+\eqn{M_t \times 1} matrix of the centers of the occupied bins, in
+increasing order.}
+\item{bin_mass}{List of length \code{TT}; element \eqn{t} is a numeric
+vector of length \eqn{M_t}, the total weight in each of those bins.}
 }
+The names of \code{Y} are kept when \code{n_bins > 0}.
 }
 \description{
-Given a list of response vectors/matrices \code{Y} and corresponding biomass weights,
-this function either treats them as already binned (when \code{n_bins = 0}) or
-partitions the range of pooled responses into \code{n_bins} equal-width bins,
-computing for each time point \(t\):
-\itemize{
-\item \code{Y_bin[[t]]}: the bin centers with nonzero total weight
-\item \code{bin_mass[[t]]}: the sum of biomass weights in each occupied bin
-}
+Pools the responses of all time points, cuts their range into
+\code{n_bins} equal-width bins, and returns for each time point the centers
+of the occupied bins and the total weight in each. All time points share
+the same grid. With \code{n_bins = 0} there is no binning: each distinct
+response value is its own bin, and the weights of equal values are summed.
 }
 \examples{
 \dontrun{
-Y_list     <- list(rnorm(100), rnorm(150))
+Y_list       <- list(rnorm(100), rnorm(150))
 biomass_list <- lapply(Y_list, function(y) runif(length(y), 0.5, 2))
-# Data-driven bins
+# 20 equal-width bins
 binned <- binning(Y_list, biomass_list, n_bins = 20)
 str(binned)
-# No binning: treat each unique Y as its own bin
+# No binning: each distinct Y value is its own bin
 binned2 <- binning(Y_list, biomass_list, n_bins = 0)
 }
 }

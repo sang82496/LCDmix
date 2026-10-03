@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{mstep_theta}
 \alias{mstep_theta}
-\title{M‐step update of all component regression parameters under log‐concavity}
+\title{Update the expert coefficients of all components}
 \usage{
 mstep_theta(
   Y_bin,
@@ -20,59 +20,83 @@ mstep_theta(
 )
 }
 \arguments{
-\item{Y_bin}{A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses at time \(t\).}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{A numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{weights}{A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.}
+\item{weights}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of posterior weights.}
 
-\item{residuals}{A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.}
+\item{residuals}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of current residuals. Only their range over the
+active bins of the component is used, as \eqn{[L_k, U_k]}.}
 
-\item{densities}{A list of length \code{K}, each an object returned by \code{modified_logcondens()} for one component.}
+\item{densities}{A list of length \code{K} of \code{modified_logcondens()}
+fits, one per component.}
 
-\item{idx}{A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.}
+\item{idx}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} logical matrix of active bins. \code{iteration()}
+passes the active bins of the previous E-step, the bins that
+\code{density_k} was fitted to.}
 
-\item{intercepts}{A list of length \code{K} of current intercept parameters \(\theta_{0k}\).}
+\item{intercepts}{A list of length \code{K} of current intercepts.}
 
-\item{slopes}{A list of length \code{K} of current slope vectors \(\theta_k\).}
+\item{slopes}{A list of length \code{K} of current slope vectors.}
 
-\item{lambda_theta}{Nonnegative numeric L1 penalty on slopes.}
+\item{lambda_theta}{Nonnegative L1 penalty on the slopes.}
 
-\item{maxdev}{\code{NULL} or a positive number; see \code{mstep_theta_lp()}.
-Only the LP update supports it.}
+\item{lp_time_limit}{Time limit in seconds for Rsymphony. If it is reached,
+lpSolve is tried without a time limit.}
+
+\item{update}{\code{"lp"} or \code{"optim"}; see \code{main()}.}
+
+\item{maxdev}{\code{NULL} or a positive number; see
+\code{mstep_theta_lp()}. Only \code{update = "lp"} supports it; with
+\code{"optim"} a non-\code{NULL} value is an error.}
 }
 \value{
-A list with elements:
+A list with components:
 \describe{
-\item{theta0}{List of length \code{K} of updated intercepts \(\theta_{0k}\).}
-\item{theta}{List of length \code{K} of updated slope vectors \(\theta_k\).}
+\item{theta0}{List of \code{K} updated intercepts.}
+\item{theta}{List of \code{K} updated slope vectors.}
+\item{diag}{List of \code{K} diagnostic lists, each with \code{arm}
+(the value of \code{update}), \code{seconds} (time of the update),
+\code{n_active} (number of active bins), \code{n_outside} (active bins
+whose new residual lies outside the support of the density),
+\code{convergence}, \code{obj_start}, \code{obj_end} (from
+\code{mstep_theta_optim()}; \code{NA} for the LP), and
+\code{maxdev_n_relaxed}, \code{maxdev_max_excess} (from
+\code{mstep_theta_lp()} with \code{maxdev}; \code{NA} otherwise).}
 }
 }
 \description{
-For each mixture component \(k\), performs the M‐step update of intercept \(\theta_{0k}\)
-and slope vector \(\theta_k\) by invoking the LP solver with log‐concave constraints
-(\code{mstep_theta_lp()}), returning updated lists of intercepts and slopes.
+For each component \eqn{k}, updates the intercept and the slopes with
+\code{mstep_theta_lp()} (\code{update = "lp"}, the method of the paper) or
+\code{mstep_theta_optim()} (\code{update = "optim"}, the comparison arm of
+the LP ablation), and records diagnostics that are computed the same way
+for both. The returned intercept is the update's own intercept;
+\code{iteration()} then replaces it with \code{mstep_shift()}.
 }
 \examples{
 \dontrun{
-TT      <- 3; K <- 2; p <- 2; n_bins <- 5
-Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol=1))
-X       <- matrix(rnorm(TT*p), nrow=TT, ncol=p)
-weights <- lapply(Y_bin, function(m) matrix(runif(length(m)*K), ncol=K))
-resi    <- lapply(Y_bin, function(m) matrix(rnorm(length(m)*K), ncol=K))
-mask    <- lapply(Y_bin, function(m) matrix(TRUE, nrow(m), ncol=K))
-densities <- replicate(K,
-  modified_logcondens(rnorm(50), w = rep(1/50,50)),
-  simplify = FALSE
-)
-intercepts <- replicate(K, 0, simplify = FALSE)
+TT <- 6; K <- 2; p <- 2
+X          <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+Y_bin      <- lapply(1:TT, function(t) matrix(sort(rnorm(20)), ncol = 1))
+intercepts <- list(-0.5, 0.5)
 slopes     <- replicate(K, rep(0, p), simplify = FALSE)
+resi       <- comp_resi(Y_bin, X, intercepts, slopes)
+weights    <- lapply(Y_bin, function(m) matrix(runif(nrow(m) * K), ncol = K))
+idx        <- lapply(weights, function(w) w > 0)
+# The densities must be fitted to the current residuals, or the
+# linear program has no feasible point
+densities  <- mstep_g(resi, weights, idx)
 result <- mstep_theta(
   Y_bin, X, weights, resi,
-  densities, mask,
+  densities, idx,
   intercepts, slopes,
   lambda_theta = 1e-3
 )
-str(result)
+str(result$theta)
 }
 }

@@ -1,55 +1,66 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Modified log‐concave density estimation with optional preprocessing
+#' Weighted log-concave maximum likelihood estimate with safeguards
 #'
 #' @description
-#' Fits a univariate log‐concave density to data \code{x} using the
-#' \pkg{logcondens} routines.  If \code{w} is \code{NA}, a preprocessing step
-#' chooses an appropriate weight vector and grid; otherwise \code{x} and \code{w}
-#' are assumed sorted and used directly.  The estimator is refined by adding
-#' knots until convergence.
+#' A modified copy of \code{logcondens::activeSetLogCon()}, the active-set
+#' algorithm for the log-concave maximum likelihood estimate. Knots are added
+#' one at a time until the estimate converges. Two changes stop the knot
+#' search early and keep the last good fit instead of failing:
 #'
-#' @param x Numeric vector of data points at which to estimate a log‐concave density.
-#' @param xgrid Optional numeric vector of grid points for preprocessing.  If
-#'   provided, \code{w} must be \code{NA}.  Default: \code{NULL}.
-#' @param print Logical; if \code{TRUE}, iteration progress and likelihood values
-#'   are printed.  Default: \code{FALSE}.
-#' @param w Numeric vector of nonnegative weights for each \code{x}, or \code{NA}
-#'   to compute weights automatically.  Default: \code{NA}.
+#' - When the line search stalls. Continuing has been seen to drive the
+#'   log-density to numerical divergence a few iterations later.
+#' - When \code{logcondens::LocalMLE()} fails or returns non-finite values
+#'   (fixW). This happens when a support point has a very small weight: its
+#'   log-density falls below about -745, \code{exp()} returns 0, and the Newton
+#'   step is \code{NaN}.
+#'
+#' The field \code{refine_stop} records which of the two, if any, applied.
+#'
+#' @param x Numeric vector of data points. It need not be sorted.
+#' @param xgrid Optional grid for \code{logcondens::preProcess()}; allowed only
+#'   when \code{w = NA}.
+#' @param print Logical; if \code{TRUE}, prints the log-likelihood and the
+#'   number of knots at each step.
+#' @param w \code{NA}, to compute weights with \code{logcondens::preProcess()},
+#'   or a vector of nonnegative weights, one per element of \code{x}, that
+#'   sums to 1 (\code{mstep_g()} passes normalized weights).
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{\code{xn}}{Sorted original \code{x} values.}
-#'   \item{\code{x}}{Processed \code{x} after any preprocessing.}
-#'   \item{\code{w}}{Weights corresponding to \code{x}.}
-#'   \item{\code{phi}}{Numeric vector of estimated log‐density values at \code{x}.}
-#'   \item{\code{IsKnot}}{Integer or logical vector indicating which points are knots.}
-#'   \item{\code{L}}{Final log‐likelihood value.}
-#'   \item{\code{Fhat}}{Estimated CDF values at \code{x}.}
-#'   \item{\code{H}}{Numeric vector of directional derivatives (used in knot selection).}
-#'   \item{\code{n}}{Number of original data points (\code{length(xn)}).}
-#'   \item{\code{m}}{Same as \code{n}.}
-#'   \item{\code{knots}}{Vector of \code{x} values selected as knots.}
-#'   \item{\code{mode}}{Value of \code{x} at which \code{phi} is maximized.}
-#'   \item{\code{sig}}{Estimated standard deviation used for preprocessing.}
+#'   \item{\code{xn}}{The input \code{x}, sorted.}
+#'   \item{\code{x}}{The sorted support points of the fit (equal to \code{xn}
+#'     when \code{w} is given).}
+#'   \item{\code{w}}{The weights, in the order of \code{x}.}
+#'   \item{\code{phi}}{The log-density at \code{x}. It is linear between
+#'     consecutive points and \code{-Inf} outside \code{range(x)}.}
+#'   \item{\code{IsKnot}}{0/1 vector; 1 where \code{x} is a knot of \code{phi}.}
+#'   \item{\code{L}}{Final value of the log-likelihood.}
+#'   \item{\code{Fhat}}{Distribution function at \code{x}.}
+#'   \item{\code{H}}{Directional derivatives used to choose the next knot.}
+#'   \item{\code{n}}{\code{length(xn)}.}
+#'   \item{\code{m}}{\code{length(x)}, the number of support points.}
+#'   \item{\code{knots}}{\code{x[IsKnot == 1]}.}
+#'   \item{\code{mode}}{The value(s) of \code{x} where \code{phi} is largest.}
+#'   \item{\code{sig}}{Standard deviation estimate of \code{x} (weighted when
+#'     \code{w} is given).}
+#'   \item{\code{refine_stop}}{\code{"none"}, \code{"line search stalled"} or
+#'     \code{"LocalMLE failed"}.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Example: estimate log‐concave density of a mixture sample
 #' set.seed(42)
-#' x1 <- rnorm(100, mean = -2)
-#' x2 <- rnorm(150, mean =  3)
-#' x  <- c(x1, x2)
+#' x <- c(rnorm(100, mean = -2), rnorm(150, mean = 3))
 #'
-#' # Default call (weights computed automatically)
+#' # Weights computed by logcondens::preProcess()
 #' res1 <- modified_logcondens(x)
-#' plot(res1$xn, res1$phi, type = "l", xlab = "x", ylab = "log‐density")
+#' plot(res1$x, res1$phi, type = "l", xlab = "x", ylab = "log-density")
 #'
-#' # Provide custom weights (e.g., uniform)
-#' w <- rep(1, length(x))
-#' res2 <- modified_logcondens(x, w = w)
-#' lines(res2$xn, res2$phi, col = "blue")
+#' # Equal weights that sum to 1
+#' res2 <- modified_logcondens(x, w = rep(1 / length(x), length(x)))
+#' lines(res2$x, res2$phi, col = "blue")
+#' res2$refine_stop
 #' }
 #' @export
 modified_logcondens <- function(x, xgrid = NULL, print = FALSE, w = NA){

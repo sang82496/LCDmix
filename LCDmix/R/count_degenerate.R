@@ -1,5 +1,21 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Count cross-validation fits that stopped at a degenerate component
+#'
+#' @description
+#' Reads every cross-validation result file under \code{base_dir}
+#' (recursively; files named \code{<a>-<t>-<s>-<f>.rds}, as written by
+#' \code{cv_lcd_onejob()}) and counts the fits whose error message starts
+#' with "degenerate component". \code{mstep_g()} gives this error when a
+#' component has fewer than two distinct residuals. Prints the count and, if
+#' there are any, how many happened at initialization and how many during the
+#' EM iterations.
+#'
+#' @param base_dir Directory to search.
+#'
+#' @return Invisibly, a data frame with the file name and the error message of
+#'   each degenerate fit.
+#'
 #' @export
 count_degenerate <- function(base_dir = "cv_saves") {
   fs  <- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",

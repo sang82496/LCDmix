@@ -1,67 +1,60 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Refit LCDmix across many simulations and record best files (no rereads)
+#' Refit the model with several seeds for many simulated datasets
 #'
-#' For each simulation, runs multiple refits across the given seeds using a
-#' single outer parallel cluster (no nested parallel). Each refit is cached to
-#' \code{base_dir/sim_<s>/refit/refit_<seed>.rds}. The function returns:
-#' (i) a per-job table with refit metrics, (ii) logs, and (iii) a per-simulation
-#' \emph{best table} giving the simulation index, its \code{lambda_alpha} and
-#' \code{lambda_theta}, and the filename of the best refit chosen by the largest
-#' training objective \eqn{L}. The best table is built directly from in-memory
-#' results—no disk rereads.
+#' @description
+#' Runs \code{refit_onejob()} for every combination of dataset and seed in one
+#' parallel cluster (no nested parallelism), each dataset with its own
+#' penalty pair. Refit \code{seed} of dataset \eqn{s} is saved to
+#' \code{base_dir/sim_<s>/refit/refit_<seed>.rds}; a file that already exists
+#' is not computed again. After the run, the saved files are read and, for
+#' each dataset, the seed with the largest \code{fit_L} (the penalized
+#' training log-likelihood) is recorded.
 #'
-#' @param sim_files Character vector; paths to simulation files. Each file must
-#'   contain \code{Y_bin}, \code{X}, and \code{bin_mass}. Files may be \code{.rds}
-#'   (containing a list) or \code{.RData}.
-#' @param opt_lambdas_list List of length \code{length(sim_files)}; each element
-#'   is \code{c(lambda_alpha, lambda_theta)} to use for that simulation.
-#' @param K Integer; number of mixture components.
-#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per refit. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective.
-#'   Default \code{1e-4}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-#'   Default \code{0.03}.
-#' @param base_dir Character; base directory for outputs. Refit caches are written
-#'   under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.
-#' @param n_cores Integer or \code{"max"}; number of workers for the single outer
-#'   cluster. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{main()} for verbose diagnostics.
-#'   Default \code{FALSE}.
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
 #'
-#' @return A list with:
+#' @param sim_files Paths of \code{.rds} files, one per dataset; each holds a
+#'   list with \code{Y_bin}, \code{X} and \code{bin_mass}.
+#' @param opt_lambdas_list A list of the same length as \code{sim_files};
+#'   element \eqn{s} is \code{c(lambda_alpha, lambda_theta)} for dataset
+#'   \eqn{s}.
+#' @param base_dir Output directory, usually the \code{base_dir} of
+#'   \code{cv_lcd_simul()}.
+#' @inheritParams refit_lcd
+#' @inheritParams main
+#'
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{jobs}}{Data frame of per-job metrics with columns
-#'         \code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta},
-#'         \code{L}, and \code{file}.}
-#'   \item{\code{logs}}{Character vector of chunk logs.}
-#'   \item{\code{best_table}}{Data frame with columns
-#'         \code{sim}, \code{lambda_alpha}, \code{lambda_theta}, \code{best_file};
-#'         one row per simulation, where \code{best_file} is the cached filename
-#'         of the refit with the largest \eqn{L} (or \code{NA} if none succeeded).}
+#'   \item{\code{grand_jobs}}{Data frame with one row per refit:
+#'     \code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta}.}
+#'   \item{\code{summary}}{A text with the number of failed refits.}
+#'   \item{\code{loglik_lst}}{List with one numeric vector per dataset:
+#'     \code{fit_L} of each seed (\code{NA} for a failed seed).}
+#'   \item{\code{best_table}}{Data frame with one row per dataset: \code{sim},
+#'     \code{lambda_alpha}, \code{lambda_theta}, \code{best_idx} (seed of the
+#'     best refit), \code{loglik} (its \code{fit_L}), \code{best_file} (path of
+#'     its file) and \code{n_failed_seeds}. \code{best_idx}, \code{loglik}
+#'     and \code{best_file} are \code{NA}, with a warning, for a dataset whose
+#'     refits all failed.}
 #' }
 #'
 #' @seealso \code{\link{refit_onejob}}, \code{\link{cv_lcd_simul}}
 #'
 #' @examples
 #' \dontrun{
-#' sims <- sprintf("sim_%02d.rds", 1:10)
-#' # suppose each sim has its own chosen penalties from CV:
-#' opt_list <- replicate(10, c(1e-3, 1e-3), simplify = FALSE)
-#' out <- refit_lcd_simul(
+#' sims <- file.path("sim_data", sprintf("sim_%d.rds", 1:10))
+#' summ <- cv_lcd_summary_simul(base_dir = "cv_saves", num_sims = 10)
+#' out  <- refit_lcd_simul(
 #'   sim_files        = sims,
-#'   opt_lambdas_list = opt_list,
+#'   opt_lambdas_list = lapply(summ, function(x) x$opt_lambdas),
 #'   K                = 2,
-#'   seeds            = 1:8,
+#'   seeds            = 1:10,
 #'   base_dir         = "cv_saves",
 #'   n_cores          = 32
 #' )
 #' out$best_table
+#' best_fit_1 <- readRDS(out$best_table$best_file[1])$fit
 #' }
 #'
 #' @export

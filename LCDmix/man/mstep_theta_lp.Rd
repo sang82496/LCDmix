@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{mstep_theta_lp}
 \alias{mstep_theta_lp}
-\title{M‐step update of intercept and slopes via linear programming under log-concavity}
+\title{Update the coefficients of one expert by linear programming}
 \usage{
 mstep_theta_lp(
   Y_bin,
@@ -20,43 +20,81 @@ mstep_theta_lp(
 )
 }
 \arguments{
-\item{Y_bin}{List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{Numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{weights}{List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.}
+\item{weights}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of posterior weights.}
 
-\item{residuals}{List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.}
+\item{residuals}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of current residuals. Only their range over the
+active bins of the component is used, as \eqn{[L_k, U_k]}.}
 
-\item{density_k}{An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.}
+\item{density_k}{The \code{modified_logcondens()} fit of the component
+(fields \code{x}, \code{phi} and \code{IsKnot} are used).}
 
-\item{idx}{List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.}
+\item{idx}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} logical matrix of active bins. \code{iteration()}
+passes the active bins of the previous E-step, the bins that
+\code{density_k} was fitted to.}
 
-\item{intercept_k}{Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.}
+\item{intercept_k}{Current intercept. Not used by the linear program; it is
+an argument so that both updates take the same arguments.}
 
-\item{slopes_k}{Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.}
+\item{slopes_k}{Current slope vector of length \eqn{p}. Used only by the
+\code{maxdev} guard.}
 
-\item{lambda_theta}{Nonnegative numeric; L1 penalty on the slope parameters.}
+\item{lambda_theta}{Nonnegative L1 penalty on the slopes.}
 
-\item{component}{Integer in \(\{1,\dots,K\}\); index of the component to update.}
+\item{component}{Index \eqn{k} of the component to update.}
 
-\item{maxdev}{\code{NULL} (default, no constraint) or a positive number. Bounds
-the deviation of the component mean from its intercept,
-\eqn{|X_t^\top \theta_k| \le} \code{maxdev} for all \eqn{t}, as in flowmix.
-If the current slopes already exceed \code{maxdev} at some \eqn{t}, the bound
-there is relaxed to the current deviation, so the LP stays feasible and the
-update cannot decrease Q. How often that happens is returned.}
+\item{lp_time_limit}{Time limit in seconds for Rsymphony. If it is reached,
+lpSolve is tried without a time limit.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of the component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. If the current slopes already exceed \code{maxdev} at some
+\eqn{t}, the bound there is relaxed to the current deviation (the guard),
+so the linear program stays feasible and the update cannot decrease
+\eqn{Q}. The return value reports how often that happened.}
 }
 \value{
 A list with components:
 \describe{
-\item{theta0_k}{Numeric; updated intercept for component \eqn{k}.}
-\item{theta_k}{Numeric vector of length \eqn{p}; updated slopes for component \eqn{k}.}
+\item{theta0_k}{Updated intercept.}
+\item{theta_k}{Updated slope vector of length \eqn{p}.}
+\item{maxdev_n_relaxed}{Number of time points where the guard relaxed the
+bound (current deviation above \code{maxdev} by more than 1e-8);
+\code{NA} when \code{maxdev} is \code{NULL}.}
+\item{maxdev_max_excess}{Largest amount by which the current deviation
+exceeds \code{maxdev} (0 if never); \code{NA} when \code{maxdev} is
+\code{NULL}.}
 }
 }
 \description{
-Updates the intercept \eqn{\theta_{0k}} and slope vector \eqn{\theta_k} for mixture
-component \eqn{k} by solving a linear program that enforces the log‐concave density
-constraints given by \code{density_k}, maximizes the weighted log‐likelihood, and
-applies an L1 penalty on the slopes.
+The fitted log-density \eqn{\hat g_k} of component \eqn{k} is concave and
+piecewise linear, so maximizing
+\deqn{\sum_i w_i \hat g_k(y_i - \theta_{0k} - x_i^\top \theta_k) - N \lambda_\theta \|\theta_k\|_1}
+over \eqn{(\theta_{0k}, \theta_k)} is a linear program. The sum runs over the
+active bins of component \eqn{k}, and \eqn{N} is the sum of all posterior
+weights, so the objective is \eqn{N} times the part of \eqn{Q} that depends
+on \eqn{\theta_k}. The linear program has
+\itemize{
+\item one variable \eqn{z_i} per active bin, with
+\eqn{z_i \le \phi_j + b_j (u_i - x_j)} for every linear piece \eqn{j}
+of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j});
+\item support constraints: at every time point with active bins, all residuals
+stay in \eqn{[L_k, U_k]}, the range of the current residuals, which is
+the support of \eqn{\hat g_k};
+\item optionally, the \code{maxdev} constraints;
+\item the objective \eqn{\sum_i w_i z_i - N \lambda_\theta \|\theta_k\|_1}.
+}
+
+Every variable is split into a positive and a negative part. The program is
+solved with \code{Rsymphony::Rsymphony_solve_LP()}; if that does not return
+an optimal solution, with \code{lpSolve::lp()}. The function stops with an
+error if neither does.
 }

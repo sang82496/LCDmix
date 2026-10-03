@@ -1,33 +1,26 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Simulate multiple skew‐normal mixture datasets and save to disk
+#' Simulate many datasets and save them to disk
 #'
 #' @description
-#' For each combination of \code{seed}, \code{intercept_gap}, and
-#' \code{skew_alpha}, this function calls \code{generate_skewed_data()}
-#' with the supplied simulation parameters and writes the result out
-#' (one list per file) as \code{sim_<i>.rds} in \code{sim_dir}.  
-#' It returns the data‐frame of all parameter combinations (in the same
-#' row‐order as the saved files).
+#' Calls \code{gen_simul_data()} once for every combination of
+#' \code{sim_seeds}, \code{gaps} and, depending on \code{noisetype},
+#' \code{skew_alphas} (\code{"skewed"}) or \code{df} (\code{"heavytail"}), and
+#' saves dataset \eqn{i} as \code{sim_dir/sim_<i>.rds}.
 #'
-#' @param sim_seeds      Integer vector of random seeds.
-#' @param gaps           Numeric vector of intercept gaps between the two components.
-#' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
-#' @param sim_dir        Character; directory to hold \code{sim_<i>.rds} files.
-#'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
-#' @param nt             Number of observations per time‐point in the second half.
-#'                       Passed to \code{generate_skewed_data()}. Default: 1000.
-#' @param TT             Total number of time‐points to simulate. Default: 100.           
-#' @param theta_par      The slope magnitude for the “baseline” covariate.
-#'                       Default: 0.5.
-#' @param p              Number of covariates (including \code{par} and \code{ramp}).
-#'                       Default: 10.
-#' @param B              Number of histogram bins for each time‐point.
-#'                       Default: 30.
-#' 
-#' @return A data.frame with columns \code{seed}, \code{intercept_gap},
-#'   \code{skew_alpha}, where each row \code{i} corresponds to file
-#'   \code{sim_dir/sim_i.rds}.
+#' @param sim_seeds Seeds, one dataset each.
+#' @param gaps Values of \code{gap}, the intercept of component 2.
+#' @param df Degrees of freedom for \code{"heavytail"}; a vector gives one
+#'   dataset per value.
+#' @param skew_alphas Shape parameters for \code{"skewed"}; a vector gives one
+#'   dataset per value.
+#' @param sim_dir Output directory; it is created if needed.
+#' @inheritParams gen_simul_data
+#'
+#' @return The data frame of combinations from \code{expand.grid()}, with
+#'   columns \code{sim_seed} and \code{gap}, and \code{skew_alpha}
+#'   (\code{"skewed"}) or \code{df} (\code{"heavytail"}). Row \eqn{i} belongs
+#'   to the file \code{sim_<i>.rds}; \code{sim_seed} varies fastest.
 #'
 #' @export
 simulate_and_save <- function(

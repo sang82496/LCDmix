@@ -2,32 +2,39 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{weighted_quantile}
 \alias{weighted_quantile}
-\title{Compute the weighted quantile of a numeric sample}
+\title{Weighted quantile with linear interpolation}
 \usage{
 weighted_quantile(x, w, prob = 0.05)
 }
 \arguments{
-\item{x}{Numeric vector of data values.}
+\item{x}{Numeric vector of values; \code{-Inf} is allowed.}
 
-\item{w}{Numeric vector of nonnegative weights of the same length as \code{x}.}
+\item{w}{Numeric vector of weights of the same length as \code{x}.}
 
-\item{prob}{Numeric scalar in [0,1]; the desired quantile level (e.g.\ 0.05 for
-the 5th percentile). Default: \code{0.05}.}
+\item{prob}{The quantile level, a number in \eqn{[0, 1]}.}
 }
 \value{
-Numeric scalar: the weighted \code{prob}-quantile of \code{x}.
+A single number, or \code{NA} if no point is left after dropping.
 }
 \description{
-Returns the \code{prob}-th weighted quantile of the values \code{x} with
-corresponding nonnegative weights \code{w}. The observations are sorted by
-\code{x}, and the smallest \code{x} such that the cumulative weight
-reaches \code{prob * sum(w)} is returned.
+Returns the \code{prob}-quantile of \code{x} with weights \code{w}. Points
+with \code{NA} in \code{x}, or with a weight that is 0, negative or not
+finite, are dropped. After sorting, let \eqn{C_j} be the cumulative weight
+and \eqn{c} = \code{prob} times the total weight, and let \eqn{j} be the
+first index with \eqn{C_j \ge c}. The result is
+\deqn{x_{(j-1)} + \frac{c - C_{j-1}}{w_{(j)}} (x_{(j)} - x_{(j-1)}),}
+kept within \eqn{[x_{(j-1)}, x_{(j)}]}. If \eqn{j = 1}, the smallest
+\code{x} is returned; if a neighbor is not finite (for example
+\code{-Inf}), \eqn{x_{(j)}} is returned without interpolation.
+\code{eval_lcd()} uses this function for the median and for the trimming
+threshold.
 }
 \examples{
 \dontrun{
-x   <- c(10, 20, 30, 40, 50)
-w   <- c(1, 1, 1, 1, 6)     # more weight on the largest value
-q05 <- weighted_quantile(x, w, prob = 0.05)  # should be 10
-q95 <- weighted_quantile(x, w, prob = 0.95)  # should be 50
+x <- c(10, 20, 30, 40, 50)
+w <- c(1, 1, 1, 1, 6)                 # more weight on the largest value
+weighted_quantile(x, w, prob = 0.05)  # 10
+weighted_quantile(x, w, prob = 0.5)   # 41.67
+weighted_quantile(x, w, prob = 0.95)  # 49.17
 }
 }

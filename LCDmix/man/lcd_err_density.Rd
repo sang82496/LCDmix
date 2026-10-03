@@ -2,12 +2,20 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{lcd_err_density}
 \alias{lcd_err_density}
-\title{Estimated error density of one LCDmix component, zero outside the support.}
+\title{Estimated error density of one LCDmix component}
 \usage{
 lcd_err_density(g)
 }
-\description{
-NOTE: evaluateLogConDens() returns a matrix, not a list, so the work order's
-\verb{$log.density} does not work. Column 3 is the density, which is what the
-package's own dens_est_fun() uses.
+\arguments{
+\item{g}{One element of \code{g_new}, a \code{modified_logcondens()} fit.}
 }
+\value{
+A function of a numeric vector \code{v} that returns the densities
+at \code{v}.
+}
+\description{
+Returns a function that evaluates a fitted log-concave density at residual
+values: \code{logcondens::evaluateLogConDens()} (column 3, the density)
+inside the support, and 0 outside it or wherever the evaluation fails.
+}
+\keyword{internal}

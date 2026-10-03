@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{comp_Q}
 \alias{comp_Q}
-\title{Compute the surrogate log-likelihood Q}
+\title{Compute the surrogate objective Q}
 \usage{
 comp_Q(
   X,
@@ -19,59 +19,76 @@ comp_Q(
 )
 }
 \arguments{
-\item{X}{A numeric \eqn{TT \times p} covariate matrix (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{densities}{A list of length \eqn{K} of \code{modified_logcondens()} objects.}
+\item{densities}{A list of length \eqn{K} of \code{modified_logcondens()}
+fits.}
 
-\item{residuals}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
-residuals. Ignored when both \code{Y_bin} and \code{intercepts} are supplied.}
+\item{residuals}{A list of length \eqn{TT}, each an \eqn{M_t \times K}
+matrix of residuals. Ignored when both \code{Y_bin} and
+\code{intercepts} are supplied.}
 
 \item{slopes}{A list of length \eqn{K} of slope vectors.}
 
-\item{alpha}{A numeric \eqn{K \times (p+1)} matrix of gating parameters.}
+\item{alpha}{A numeric \eqn{K \times (p+1)} matrix of gate coefficients.}
 
-\item{idx}{A list of length \eqn{TT}, each an \eqn{M_t \times K} logical matrix.}
+\item{idx}{A list of length \eqn{TT}, each an \eqn{M_t \times K} logical
+matrix of active bins.}
 
 \item{resp}{A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
 posterior weights \eqn{w_{tik}}.}
 
-\item{lambda_alpha}{Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.}
+\item{lambda_alpha}{Nonnegative L1 penalty on the non-intercept columns of
+\code{alpha}.}
 
-\item{lambda_theta}{Nonnegative numeric L1 penalty on \code{slopes}.}
+\item{lambda_theta}{Nonnegative L1 penalty on \code{slopes}.}
 
-\item{Y_bin}{Optional list of length \eqn{TT} of binned responses. Supply
-together with \code{intercepts} to recompute residuals internally.}
+\item{Y_bin}{Optional list of length \eqn{TT} of bin centers. Supply it
+together with \code{intercepts} to recompute the residuals.}
 
-\item{intercepts}{Optional list of length \eqn{K} of intercepts. Supply
-together with \code{Y_bin} to recompute residuals internally.}
+\item{intercepts}{Optional list of length \eqn{K} of intercepts. Supply it
+together with \code{Y_bin} to recompute the residuals.}
 }
 \value{
-A single numeric: the normalized surrogate log-likelihood minus the
-L1 penalties. Carries three attributes, used by the LP ablation and ignored
-by ordinary arithmetic:
+A single number: the normalized surrogate log-likelihood minus the
+L1 penalties. It carries four attributes, which ordinary arithmetic
+ignores:
 \describe{
 \item{\code{n_eval}}{Number of active bins evaluated.}
 \item{\code{n_outside}}{Number of those whose residual fell outside the
-fitted support, so the log-density was \code{-Inf} and the bin was
-dropped from the sum.}
+support of the fitted density, so the log-density was \code{-Inf}
+and the bin was dropped from the sum.}
 \item{\code{mass_outside}}{Total posterior weight of the dropped bins.}
+\item{\code{max_over}}{Largest distance by which a dropped residual lies
+outside the support (0 if no bin was dropped).}
 }
-Bins outside the support are silently excluded from \eqn{Q}; a larger
-\code{n_outside} therefore means \eqn{Q} is computed over less of the data,
-and \eqn{Q} values with different \code{n_outside} are not comparable.
+Bins outside the support are excluded from \eqn{Q} without an error. A
+larger \code{n_outside} therefore means that \eqn{Q} is computed over
+less of the data, and \eqn{Q} values with different \code{n_outside} are
+not comparable.
 }
 \description{
-Evaluates the (normalized) surrogate log-likelihood
-\deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in \mathcal{I}_{tk}}
-  w_{tik}\left[\log \hat f_k(u_{tik}) + \log \pi_k(X_t)\right]
-  - \lambda_\alpha \|\alpha\|_1 - \lambda_\theta \|\theta\|_1 .}
+Evaluates the normalized surrogate objective
+\deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in I_{tk}} w_{tik}\left[\log \hat f_k(u_{tik}) + \log \pi_{tk}\right] - \lambda_\alpha \sum_k \sum_{j \ge 1} |\alpha_{kj}| - \lambda_\theta \sum_k \|\theta_k\|_1,}
+where \eqn{I_{tk}} is the set of active bins (\code{idx}), \eqn{w_{tik}} are
+the posterior weights (\code{resp}), \eqn{N} is the sum of all entries of
+\code{resp}, \eqn{\hat f_k} is the fitted density of component \eqn{k},
+\eqn{u_{tik}} is the residual and \eqn{\pi_{tk}} is the gate probability.
+The intercept column of \code{alpha} is not penalized. The log-density is
+evaluated at the residual of the bin center; it is not integrated over the
+bin (\code{eval_lcd()} scores bins by their probability).
 
-Residuals may either be supplied directly through \code{residuals}, or
-recomputed internally from \code{(intercepts, slopes)} when both
-\code{Y_bin} and \code{intercepts} are given. The second form exists because
-\code{slopes} otherwise enters only through the L1 penalty: passing stale
-residuals alongside updated slopes measures the penalty change and nothing
-else, which makes the M-step diagnostic in \code{iteration()} vacuous.
+Residuals may be supplied directly through \code{residuals}, or recomputed
+from \code{(intercepts, slopes)} when both \code{Y_bin} and
+\code{intercepts} are given. The second form exists because \code{slopes}
+otherwise enters only through the L1 penalty: passing old residuals with
+new slopes measures the change in the penalty and nothing else, which makes
+the checkpoint diagnostics in \code{iteration()} meaningless.
+}
+\details{
+Note for developers: \code{iteration()} and \code{initialization()} call
+\code{comp_Q()} with positional arguments. Add new arguments only at the
+end of the signature, and keep the return value a single number.
 }
 \examples{
 \dontrun{
@@ -87,7 +104,7 @@ resp   <- lapply(idx, function(ii) matrix(runif(length(ii)), nrow = nrow(ii)))
 slopes <- replicate(K, rnorm(p), simplify = FALSE)
 alpha  <- matrix(rnorm(K * (p + 1)), nrow = K)
 
-## (a) residuals supplied directly -- unchanged behavior
+## (a) residuals supplied directly
 Q_val <- comp_Q(
   X, densities, residuals, slopes, alpha,
   idx, resp,

@@ -2,12 +2,25 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{ovl}
 \alias{ovl}
-\title{Overlap coefficient between a density and its shift by delta.
-Both components share one error density, so this is the whole story.}
+\title{Overlap of a density and its shifted copy}
 \usage{
 ovl(f, delta, lo = -Inf, hi = Inf)
 }
+\arguments{
+\item{f}{A density function that accepts a vector.}
+
+\item{delta}{The shift.}
+
+\item{lo, hi}{Integration limits.}
+}
+\value{
+The overlap, a number in \eqn{[0, 1]}.
+}
 \description{
-Overlap coefficient between a density and its shift by delta.
-Both components share one error density, so this is the whole story.
+Computes \eqn{\int \min\{f(v), f(v - \delta)\}\, dv}, the overlap coefficient
+of \eqn{f} and \eqn{f} shifted by \eqn{\delta}. In the simulation both
+components share one error density and their means differ by a shift, so
+this measures how much the components overlap: 1 when they are identical,
+0 when they do not overlap. If the integration fails, it is repeated with
+the infinite limits replaced by -40 and \code{40 + delta}.
 }

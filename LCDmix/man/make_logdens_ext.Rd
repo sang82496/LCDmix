@@ -7,20 +7,22 @@
 make_logdens_ext(density_k)
 }
 \arguments{
-\item{density_k}{Object from \code{modified_logcondens()} with fields
-\code{x}, \code{phi}, \code{IsKnot}.}
+\item{density_k}{A \code{modified_logcondens()} fit (fields \code{x},
+\code{phi} and \code{IsKnot} are used). It needs at least two knots.}
 }
 \value{
-A list with \code{value(u)}, \code{slope(u)}, and the support
-endpoints \code{L}, \code{U}.
+A list with \code{value(u)} (the log-density at \code{u}),
+\code{slope(u)} (its slope at \code{u}; the right-hand slope at a knot)
+and the support endpoints \code{L} and \code{U}.
 }
 \description{
-Builds an evaluator for the fitted log-concave log-density \eqn{\hat g_k},
-linear between knots and extended beyond \eqn{[L_k, U_k]} using the boundary
-slopes. The extension keeps the function finite, concave, and piecewise
-linear everywhere, which is what makes the quasi-Newton arm a fair
-comparator rather than a strawman: with the honest \code{-Inf} convention
-\code{optim} stalls on its first step outside the support and the comparison
-proves nothing.
+Builds an evaluator for the fitted log-concave log-density
+\eqn{\hat g_k}: linear between knots, and continued beyond
+\eqn{[L_k, U_k]} with the slopes of the two boundary pieces. The function
+is then finite, concave and piecewise linear everywhere. This is
+deliberate: the quasi-Newton arm of the LP ablation needs a finite
+objective outside the support. With the \code{-Inf} convention,
+\code{optim} stops at its first step outside the support and the
+comparison shows nothing.
 }
 \keyword{internal}

@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{iteration}
 \alias{iteration}
-\title{Run EM-style iterations for log-concave mixture-of-experts model}
+\title{Run the EM-type iterations of the log-concave mixture-of-experts model}
 \usage{
 iteration(
   Y_bin,
@@ -22,53 +22,120 @@ iteration(
 )
 }
 \arguments{
-\item{Y_bin}{List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{Numeric \eqn{TT \times p} covariate matrix (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+covariate vector at time \eqn{t}. It is used as given; see the Details
+of \code{main()} on covariate scale.}
 
-\item{bin_mass}{List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.}
+\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector
+of length \eqn{M_t}, the total weight (biomass) in each bin.}
 
-\item{init_res}{List returned by \code{initialization()}, containing:\cr
-\code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
-\code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.}
+\item{init_res}{The list returned by \code{initialization()}.}
 
-\item{lambda_alpha}{Nonnegative numeric L1 penalty on mixture‐weight coefficients.}
+\item{lambda_alpha}{Nonnegative L1 penalty on the gate coefficients
+\eqn{\alpha}; the intercepts are not penalized.}
 
-\item{lambda_theta}{Nonnegative numeric L1 penalty on regression slopes.}
+\item{lambda_theta}{Nonnegative L1 penalty on the expert slopes
+\eqn{\theta}; the intercepts are not penalized.}
 
-\item{iter_eta}{Numeric; relative change threshold for stopping. Default: \code{1e-4}.}
+\item{iter_eta}{Stopping tolerance on the relative ascent \eqn{inc}; see the
+stopping rule above.}
 
-\item{max_iter}{Integer; maximum number of EM iterations. Default: \code{30}.}
+\item{max_iter}{Maximum number of EM iterations.}
 
-\item{resp_threshold}{Numeric in \link{0,1}; responsibilities below this are set to zero. Default: \code{1e-3}.}
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{debug}{Logical; if \code{TRUE}, an error inside the EM loop does not
+stop \code{main()}: the partial result is returned with the error message
+(see Value).}
+
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
 A list with components:
 \describe{
-\item{idx_new}{Final list of \eqn{TT} logical matrices of “active” bins per component.}
-\item{resp_new}{Final list of \eqn{TT} responsibility matrices.}
-\item{weight_new}{Final list of \eqn{TT} posterior‐weight matrices.}
-\item{resi_new}{Final list of \eqn{TT} residual matrices.}
-\item{alpha_new}{Final \eqn{K \times (p+1)} mixture‐weight matrix.}
-\item{theta0_new}{List of length \eqn{K} of final intercepts.}
-\item{theta_new}{List of length \eqn{K} of final slope vectors.}
-\item{g_new}{List of length \eqn{K} of final log‐concave densities.}
-\item{lambda_alpha}{Echo of input penalty on α.}
-\item{lambda_theta}{Echo of input penalty on θ.}
-\item{Q}{Vector of surrogate log‐likelihood values at each iteration.}
-\item{Q_every}{Same as \code{Q}, for compatibility with initialization.}
+\item{idx_new, resp_new, weight_new}{E-step output that belongs to the
+returned parameters.}
+\item{resi_new}{Residuals at the returned parameters.}
+\item{alpha_new}{\eqn{K \times (p+1)} gate coefficients; row 1 is 0.}
+\item{theta0_new, theta_new}{Lists of \code{K} intercepts and \code{K}
+slope vectors.}
+\item{g_new}{List of \code{K} log-concave fits.}
+\item{lambda_alpha, lambda_theta}{The penalties, returned unchanged.}
+\item{Q}{The starting \eqn{Q}, then \eqn{Q_E} of each iteration,
+including a last iteration that was discarded because \eqn{Q}
+decreased.}
+\item{Q_every}{With \code{calc_Q_every = FALSE}, the same as \code{Q}.
+With \code{TRUE}, \eqn{1 + 5 \times} \code{iter_num} values: the
+starting \eqn{Q}, then checkpoints A to E of each iteration.
+\code{Q_every[5 * m + 1] - Q_every[5 * m - 3]} is the ascent of
+iteration \eqn{m}.}
+\item{n_outside_every}{Attribute \code{n_outside} of \code{comp_Q()} at
+each recorded checkpoint: 5 values per iteration with
+\code{calc_Q_every = TRUE} (no starting value), otherwise 1.}
+\item{theta_diag}{List with one element per iteration: the \code{diag}
+list returned by \code{mstep_theta()}.}
+\item{lp_check_every}{With \code{calc_Q_every = TRUE}, one
+\eqn{K \times 2} matrix per iteration with columns \code{n_out} (bins
+given to the \eqn{\theta} update whose new residual lies outside the
+support \eqn{[L_k, U_k]}, tolerance 1e-8) and \code{max_over} (largest
+distance outside). Empty otherwise.}
+\item{error, failed_iter}{\code{NULL}, or with \code{debug = TRUE} the
+error message and the iteration at which the loop failed.}
+\item{iter_num}{Number of the last iteration that was started. If it was
+discarded, the returned parameters come from iteration
+\code{iter_num - 1}.}
 }
+After an error with \code{debug = TRUE}, the parameter fields hold the
+values at the moment of the error, which can be partly updated by the
+failed iteration.
 }
 \description{
-Performs up to \code{max_iter} iterations of the EM algorithm:
+Starts from \code{init_res} and repeats, for \eqn{m = 1, 2, \ldots}:
 \enumerate{
-\item E-step via \code{estep_lcd()}
-\item M-steps:
-\itemize{
-\item Update mixture weights with \code{mstep_alpha()}
-\item Update regression slopes/intercepts via \code{mstep_theta()} and \code{mstep_shift()}
-\item Update log‐concave component densities with \code{mstep_g()}
-Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
+\item E-step with \code{estep_lcd()}. Then
+\eqn{Q_{ref} = Q(\Theta^{(m)} \mid \Theta^{(m)})}, the objective at the
+current parameters under the new responsibilities (checkpoint A).
+\item Gate update with \code{mstep_alpha()} (checkpoint B).
+\item Expert coefficient update with \code{mstep_theta()} (checkpoint C). It
+uses the active bins of the previous E-step (\code{idx_old}) on purpose:
+the support bounds of the linear program must match the density that was
+fitted to those residuals, or the current point can be infeasible.
+\item Intercept centering with \code{mstep_shift()} (checkpoint D).
+\item Density update with \code{mstep_g()}.
+\item \eqn{Q_E = Q(\Theta^{(m+1)} \mid \Theta^{(m)})} with \code{comp_Q()}
+(checkpoint E).
 }
+
+Stopping rule: let \eqn{inc = (Q_E - Q_{ref}) / |Q_{ref}|}. If
+\eqn{inc < 0}, the iteration is discarded, the parameters of the previous
+iteration are kept, and the loop stops. Otherwise the loop stops when
+\eqn{inc \le} \code{iter_eta} or \eqn{m =} \code{max_iter}, with the new
+parameters.
 }
+\details{
+Note for developers: \code{main()} calls \code{iteration()} with positional
+arguments. Add new arguments only at the end of the signature.
 }

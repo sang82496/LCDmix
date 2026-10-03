@@ -1,5 +1,23 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Estimated component densities at one time point
+#'
+#' @description
+#' Evaluates the density of each fitted component at time \eqn{t}, for an
+#' LCDmix fit or a flowmix fit. For LCDmix (\code{est_res} has
+#' \code{alpha_new}), component \eqn{k} is the log-concave density at
+#' \eqn{y - \theta_{0k} - X_t^\top \theta_k}, and 0 outside its support. For
+#' flowmix, it is the normal density with mean \code{est_res$mn[t, 1, k]} and
+#' variance \code{est_res$sigma[k]}. The gate probabilities are not included.
+#'
+#' @param est_res The \code{iter} element of a \code{main()} fit, or a flowmix
+#'   fit (fields \code{mn} and \code{sigma}).
+#' @param t Time point.
+#' @param y_grid Numeric vector of response values.
+#' @param X Covariate matrix; used for LCDmix only.
+#'
+#' @return A \code{length(y_grid)} \eqn{\times K} matrix of densities.
+#'
 #' @export
 dens_est_fun <- function(
   est_res,

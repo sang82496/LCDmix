@@ -1,43 +1,76 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Run EM-style iterations for log-concave mixture-of-experts model
+#' Run the EM-type iterations of the log-concave mixture-of-experts model
 #'
 #' @description
-#' Performs up to \code{max_iter} iterations of the EM algorithm:
-#' 1. E-step via \code{estep_lcd()}  
-#' 2. M-steps:
-#'    - Update mixture weights with \code{mstep_alpha()}  
-#'    - Update regression slopes/intercepts via \code{mstep_theta()} and \code{mstep_shift()}  
-#'    - Update log‐concave component densities with \code{mstep_g()}  
-#' Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
+#' Starts from \code{init_res} and repeats, for \eqn{m = 1, 2, \ldots}:
 #'
-#' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
-#' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
-#' @param bin_mass List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.
-#' @param init_res List returned by \code{initialization()}, containing:\cr
-#'   \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
-#'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
-#' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
-#' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
-#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-4}.
-#' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
-#' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
+#' 1. E-step with \code{estep_lcd()}. Then
+#'    \eqn{Q_{ref} = Q(\Theta^{(m)} \mid \Theta^{(m)})}, the objective at the
+#'    current parameters under the new responsibilities (checkpoint A).
+#' 2. Gate update with \code{mstep_alpha()} (checkpoint B).
+#' 3. Expert coefficient update with \code{mstep_theta()} (checkpoint C). It
+#'    uses the active bins of the previous E-step (\code{idx_old}) on purpose:
+#'    the support bounds of the linear program must match the density that was
+#'    fitted to those residuals, or the current point can be infeasible.
+#' 4. Intercept centering with \code{mstep_shift()} (checkpoint D).
+#' 5. Density update with \code{mstep_g()}.
+#' 6. \eqn{Q_E = Q(\Theta^{(m+1)} \mid \Theta^{(m)})} with \code{comp_Q()}
+#'    (checkpoint E).
+#'
+#' Stopping rule: let \eqn{inc = (Q_E - Q_{ref}) / |Q_{ref}|}. If
+#' \eqn{inc < 0}, the iteration is discarded, the parameters of the previous
+#' iteration are kept, and the loop stops. Otherwise the loop stops when
+#' \eqn{inc \le} \code{iter_eta} or \eqn{m =} \code{max_iter}, with the new
+#' parameters.
+#'
+#' @param init_res The list returned by \code{initialization()}.
+#' @param iter_eta Stopping tolerance on the relative ascent \eqn{inc}; see the
+#'   stopping rule above.
+#' @inheritParams main
+#' @inheritParams initialization
+#'
+#' @details
+#' Note for developers: \code{main()} calls \code{iteration()} with positional
+#' arguments. Add new arguments only at the end of the signature.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{idx_new}{Final list of \eqn{TT} logical matrices of “active” bins per component.}
-#'   \item{resp_new}{Final list of \eqn{TT} responsibility matrices.}
-#'   \item{weight_new}{Final list of \eqn{TT} posterior‐weight matrices.}
-#'   \item{resi_new}{Final list of \eqn{TT} residual matrices.}
-#'   \item{alpha_new}{Final \eqn{K \times (p+1)} mixture‐weight matrix.}
-#'   \item{theta0_new}{List of length \eqn{K} of final intercepts.}
-#'   \item{theta_new}{List of length \eqn{K} of final slope vectors.}
-#'   \item{g_new}{List of length \eqn{K} of final log‐concave densities.}
-#'   \item{lambda_alpha}{Echo of input penalty on α.}
-#'   \item{lambda_theta}{Echo of input penalty on θ.}
-#'   \item{Q}{Vector of surrogate log‐likelihood values at each iteration.}
-#'   \item{Q_every}{Same as \code{Q}, for compatibility with initialization.}
+#'   \item{idx_new, resp_new, weight_new}{E-step output that belongs to the
+#'     returned parameters.}
+#'   \item{resi_new}{Residuals at the returned parameters.}
+#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients; row 1 is 0.}
+#'   \item{theta0_new, theta_new}{Lists of \code{K} intercepts and \code{K}
+#'     slope vectors.}
+#'   \item{g_new}{List of \code{K} log-concave fits.}
+#'   \item{lambda_alpha, lambda_theta}{The penalties, returned unchanged.}
+#'   \item{Q}{The starting \eqn{Q}, then \eqn{Q_E} of each iteration,
+#'     including a last iteration that was discarded because \eqn{Q}
+#'     decreased.}
+#'   \item{Q_every}{With \code{calc_Q_every = FALSE}, the same as \code{Q}.
+#'     With \code{TRUE}, \eqn{1 + 5 \times} \code{iter_num} values: the
+#'     starting \eqn{Q}, then checkpoints A to E of each iteration.
+#'     \code{Q_every[5 * m + 1] - Q_every[5 * m - 3]} is the ascent of
+#'     iteration \eqn{m}.}
+#'   \item{n_outside_every}{Attribute \code{n_outside} of \code{comp_Q()} at
+#'     each recorded checkpoint: 5 values per iteration with
+#'     \code{calc_Q_every = TRUE} (no starting value), otherwise 1.}
+#'   \item{theta_diag}{List with one element per iteration: the \code{diag}
+#'     list returned by \code{mstep_theta()}.}
+#'   \item{lp_check_every}{With \code{calc_Q_every = TRUE}, one
+#'     \eqn{K \times 2} matrix per iteration with columns \code{n_out} (bins
+#'     given to the \eqn{\theta} update whose new residual lies outside the
+#'     support \eqn{[L_k, U_k]}, tolerance 1e-8) and \code{max_over} (largest
+#'     distance outside). Empty otherwise.}
+#'   \item{error, failed_iter}{\code{NULL}, or with \code{debug = TRUE} the
+#'     error message and the iteration at which the loop failed.}
+#'   \item{iter_num}{Number of the last iteration that was started. If it was
+#'     discarded, the returned parameters come from iteration
+#'     \code{iter_num - 1}.}
 #' }
+#' After an error with \code{debug = TRUE}, the parameter fields hold the
+#' values at the moment of the error, which can be partly updated by the
+#' failed iteration.
 #'
 #' @export
 iteration <- function(
@@ -75,21 +108,6 @@ iteration <- function(
   n_outside_every <- integer(0)      # NEW: parallel to Q_every
   theta_diag <- list()
   lp_check_every  <- list()                       # NEW
-  
-  last_state <- list(
-    idx_old     = idx_old,
-    resp_old    = resp_old,
-    weight_old  = weight_old,
-    resi_old    = resi_old,
-    alpha_old   = alpha_old,
-    theta0_old  = theta0_old,
-    theta_old   = theta_old, 
-    g_old       = g_old,
-    Q           = Q,
-    Q_every     = Q_every,
-    theta_diag  = theta_diag,
-    n_outside_every = n_outside_every,
-    iter_num    = 0)
   
   idx_new    <- idx_old
   resp_new   <- resp_old
@@ -251,33 +269,13 @@ iteration <- function(
     theta0_old <- theta0_new
     theta_old  <- theta_new
     g_old      <- g_new
-    
-    # Store the current parameters
-    last_state <- list(
-      idx_old     = idx_old,
-      resp_old    = resp_old,
-      weight_old  = weight_old,
-      resi_old    = resi_old,
-      alpha_old   = alpha_old,
-      theta0_old  = theta0_old,
-      theta_old   = theta_old, 
-      g_old       = g_old,
-      Q           = Q,
-      Q_every     = Q_every,
-      n_outside_every = n_outside_every,
-      theta_diag      = theta_diag,
-      lp_check_every  = lp_check_every,               # NEW
-      iter_num        = i
-      )
   }
-    list(final = last_state,
-         error = NULL)
+    list(error = NULL)
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
-      # return the last successful state + the error message
+      # return the error message and the iteration at which it happened
       list(
-        final       = last_state,
         error       = conditionMessage(e),
         failed_iter = i
       )

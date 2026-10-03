@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{refit_lcd_simul}
 \alias{refit_lcd_simul}
-\title{Refit LCDmix across many simulations and record best files (no rereads)}
+\title{Refit the model with several seeds for many simulated datasets}
 \usage{
 refit_lcd_simul(
   sim_files,
@@ -23,77 +23,101 @@ refit_lcd_simul(
 )
 }
 \arguments{
-\item{sim_files}{Character vector; paths to simulation files. Each file must
-contain \code{Y_bin}, \code{X}, and \code{bin_mass}. Files may be \code{.rds}
-(containing a list) or \code{.RData}.}
+\item{sim_files}{Paths of \code{.rds} files, one per dataset; each holds a
+list with \code{Y_bin}, \code{X} and \code{bin_mass}.}
 
-\item{opt_lambdas_list}{List of length \code{length(sim_files)}; each element
-is \code{c(lambda_alpha, lambda_theta)} to use for that simulation.}
+\item{opt_lambdas_list}{A list of the same length as \code{sim_files};
+element \eqn{s} is \code{c(lambda_alpha, lambda_theta)} for dataset
+\eqn{s}.}
 
-\item{K}{Integer; number of mixture components.}
+\item{K}{Number of mixture components (experts).}
 
-\item{seeds}{Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.}
+\item{seeds}{Seeds to run. If \code{NULL}, \code{1:cv_reps}.}
 
-\item{cv_reps}{Integer; number of repeats used only when \code{seeds} is
-\code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.}
+\item{cv_reps}{Number of seeds, used only when \code{seeds} is \code{NULL}.}
 
-\item{max_iter}{Integer; maximum EM iterations per refit. Default \code{30}.}
+\item{max_iter}{Maximum number of EM iterations.}
 
-\item{iter_eta}{Numeric; convergence tolerance for the surrogate objective.
-Default \code{1e-4}.}
+\item{iter_eta}{Stopping tolerance on the relative ascent of the surrogate
+objective in one iteration,
+\eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+The stopping rule is described in \code{iteration()}.}
 
-\item{resp_threshold}{Numeric in \eqn{[0,1]}; responsibilities below this are
-zeroed for stability. Default \code{1e-3}.}
+\item{resp_threshold}{Responsibilities below this value are set to 0 in the
+E-step, and those bins are left out of the M-step for that component.}
 
-\item{trim_prob}{Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-Default \code{0.03}.}
+\item{trim_prob}{Fraction of the total weight that \code{eval_lcd()} trims
+for the trimmed log-likelihood in \code{L}. It does not change the fit.}
 
-\item{base_dir}{Character; base directory for outputs. Refit caches are written
-under \code{base_dir/sim_<s>/refit/}. Default \code{"./cv_saves"}.}
+\item{base_dir}{Output directory, usually the \code{base_dir} of
+\code{cv_lcd_simul()}.}
 
-\item{n_cores}{Integer or \code{"max"}; number of workers for the single outer
-cluster. Default \code{"max"}.}
+\item{n_cores}{Number of worker processes, or \code{"max"} for all physical
+cores.}
 
-\item{debug}{Logical; forwarded to \code{main()} for verbose diagnostics.
-Default \code{FALSE}.}
+\item{lp_time_limit}{Time limit in seconds for each linear program
+(Rsymphony) in the \eqn{\theta} update.}
+
+\item{calc_Q_every}{Logical; if \code{TRUE}, \code{iteration()} records
+\eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+bins outside the support (\code{n_outside_every}) and the feasibility
+check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+\code{comp_Q()} calls per iteration; leave it \code{FALSE} for production
+runs.}
+
+\item{update}{\code{"lp"} (default) solves the \eqn{\theta} update as a
+linear program with \code{mstep_theta_lp()}. \code{"optim"} uses the
+unconstrained quasi-Newton update \code{mstep_theta_optim()}, which exists
+as the comparison arm of the LP ablation.}
+
+\item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
+Bounds the deviation of each component mean from its intercept,
+\eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+as in flowmix. It is passed to the flowmix initialization and to the LP
+update of \eqn{\theta}. Requires \code{update = "lp"}.}
 }
 \value{
-A list with:
+A list with components:
 \describe{
-\item{\code{jobs}}{Data frame of per-job metrics with columns
-\code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta},
-\code{L}, and \code{file}.}
-\item{\code{logs}}{Character vector of chunk logs.}
-\item{\code{best_table}}{Data frame with columns
-\code{sim}, \code{lambda_alpha}, \code{lambda_theta}, \code{best_file};
-one row per simulation, where \code{best_file} is the cached filename
-of the refit with the largest \eqn{L} (or \code{NA} if none succeeded).}
+\item{\code{grand_jobs}}{Data frame with one row per refit:
+\code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta}.}
+\item{\code{summary}}{A text with the number of failed refits.}
+\item{\code{loglik_lst}}{List with one numeric vector per dataset:
+\code{fit_L} of each seed (\code{NA} for a failed seed).}
+\item{\code{best_table}}{Data frame with one row per dataset: \code{sim},
+\code{lambda_alpha}, \code{lambda_theta}, \code{best_idx} (seed of the
+best refit), \code{loglik} (its \code{fit_L}), \code{best_file} (path of
+its file) and \code{n_failed_seeds}. \code{best_idx}, \code{loglik}
+and \code{best_file} are \code{NA}, with a warning, for a dataset whose
+refits all failed.}
 }
 }
 \description{
-For each simulation, runs multiple refits across the given seeds using a
-single outer parallel cluster (no nested parallel). Each refit is cached to
-\code{base_dir/sim_<s>/refit/refit_<seed>.rds}. The function returns:
-(i) a per-job table with refit metrics, (ii) logs, and (iii) a per-simulation
-\emph{best table} giving the simulation index, its \code{lambda_alpha} and
-\code{lambda_theta}, and the filename of the best refit chosen by the largest
-training objective \eqn{L}. The best table is built directly from in-memory
-results—no disk rereads.
+Runs \code{refit_onejob()} for every combination of dataset and seed in one
+parallel cluster (no nested parallelism), each dataset with its own
+penalty pair. Refit \code{seed} of dataset \eqn{s} is saved to
+\code{base_dir/sim_<s>/refit/refit_<seed>.rds}; a file that already exists
+is not computed again. After the run, the saved files are read and, for
+each dataset, the seed with the largest \code{fit_L} (the penalized
+training log-likelihood) is recorded.
+
+The workers load the installed LCDmix package, so install the current
+version before running.
 }
 \examples{
 \dontrun{
-sims <- sprintf("sim_\%02d.rds", 1:10)
-# suppose each sim has its own chosen penalties from CV:
-opt_list <- replicate(10, c(1e-3, 1e-3), simplify = FALSE)
-out <- refit_lcd_simul(
+sims <- file.path("sim_data", sprintf("sim_\%d.rds", 1:10))
+summ <- cv_lcd_summary_simul(base_dir = "cv_saves", num_sims = 10)
+out  <- refit_lcd_simul(
   sim_files        = sims,
-  opt_lambdas_list = opt_list,
+  opt_lambdas_list = lapply(summ, function(x) x$opt_lambdas),
   K                = 2,
-  seeds            = 1:8,
+  seeds            = 1:10,
   base_dir         = "cv_saves",
   n_cores          = 32
 )
 out$best_table
+best_fit_1 <- readRDS(out$best_table$best_file[1])$fit
 }
 
 }

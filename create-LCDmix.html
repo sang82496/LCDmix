@@ -367,6 +367,9 @@ usethis::use_package("flowmix")</code></pre>
 <pre class="r"><code>usethis::use_package("lpSolve")</code></pre>
 <pre><code>## ✔ Adding lpSolve to 'Imports' field in DESCRIPTION.</code></pre>
 <pre><code>## ☐ Refer to functions with `lpSolve::fun()`.</code></pre>
+<pre class="r"><code>usethis::use_package("Rsymphony")</code></pre>
+<pre><code>## ✔ Adding Rsymphony to 'Imports' field in DESCRIPTION.</code></pre>
+<pre><code>## ☐ Refer to functions with `Rsymphony::fun()`.</code></pre>
 <pre class="r"><code>usethis::use_package("ggplot2")</code></pre>
 <pre><code>## ✔ Adding ggplot2 to 'Imports' field in DESCRIPTION.</code></pre>
 <pre><code>## ☐ Refer to functions with `ggplot2::fun()`.</code></pre>
@@ -388,54 +391,116 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 <div id="define-a-function" class="section level3">
 <h3>Define a function</h3>
 <p>Let’s define a function for our R package:</p>
-<pre class="r"><code>#' Fit a log-concave mixture-of-experts model with optional binning
+<pre class="r"><code>#' Fit a log-concave mixture-of-experts model
 #'
 #' @description
-#' Runs the full pipeline for fitting a log-concave mixture-of-experts model:
-#' 1. (Optional) Bin responses by biomass  
-#' 2. Initialize via Gaussian mixture regression (GMR) with \code{flowmix}  
-#' 3. Perform EM‐style iterations on mixture parameters  
+#' Runs the whole fitting pipeline for one dataset:
 #'
-#' @param Y A list of length \code{TT}, where \code{Y[[t]]} is an \eqn{n_t}-row vector or single‐column matrix of responses at time \eqn{t}.
-#' @param X A numeric matrix of dimension \eqn{TT \times p}, where each row \code{X[t, ]} is the covariate vector at time \eqn{t}.
-#' @param biomass A list of length \code{TT}, where \code{biomass[[t]]} is a numeric vector of biomass weights per observation or bin at time \eqn{t}.
-#' @param binned Logical; if \code{TRUE}, \code{Y} and \code{biomass} are assumed already binned. Default: \code{FALSE}.
-#' @param n_bins Integer number of equal‐width bins if \code{binned = FALSE}. Default: \code{40}.
-#' @param K Integer number of mixture components.
-#' @param lambda_alpha Positive numeric L1 penalty on mixture‐weight coefficients. Default: \code{1e-3}.
-#' @param lambda_theta Positive numeric L1 penalty on regression‐slope coefficients. Default: \code{1e-3}.
-#' @param max_iter Integer maximum number of EM iterations. Default: \code{30}.
-#' @param iter_eta Numeric; the EM stops when the relative increase in the surrogate objective Q falls below this value. Default: \code{1e-4}.
-#' @param resp_threshold Numeric threshold on responsibilities for soft‐assignment: any posterior probability below this value is treated as zero to improve numerical stability and computational speed. Default: \code{1e-3}.
-#' @param maxdev \code{NULL} (default, no constraint) or a positive number. 
-#'  Bounds the deviation of each component mean from its intercept, \eqn{|X_t^\top \theta_k| \le}
-#'  \code{maxdev} for all \eqn{t}, as in flowmix. It is passed to the flowmix
-#'  initialization and to the LP update of \eqn{\theta}. Requires \code{update = "lp"}.
+#' 1. If \code{binned = FALSE}, bins the responses with \code{<a href="create-LCDmix.html#binning">binning</a>()}.
+#' 2. Computes starting values with \code{<a href="create-LCDmix.html#initialization">initialization</a>()}, which fits a
+#'    Gaussian mixture of regressions with \code{flowmix::flowmix()}.
+#' 3. Runs the EM-type iterations with \code{<a href="create-LCDmix.html#iteration">iteration</a>()}.
+#' 4. Evaluates the fitted model on the training data with \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()}:
+#'    penalized log-likelihood, each bin scored by its probability.
+#'
+#' The flowmix start in step 2 is random. Call \code{set.seed()} first for a
+#' reproducible fit.
+#'
+#' @param Y A list of length \code{TT}; \code{Y[[t]]} is a numeric vector or a
+#'   one-column matrix of responses at time \eqn{t}. If \code{binned = TRUE},
+#'   the bin centers, as returned in \code{Y_bin} by \code{<a href="create-LCDmix.html#binning">binning</a>()}.
+#' @param X A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+#'   covariate vector at time \eqn{t}. It is used as given; see the Details
+#'   of \code{<a href="create-LCDmix.html#main">main</a>()} on covariate scale.
+#' @param biomass A list of length \code{TT}; \code{biomass[[t]]} holds one
+#'   nonnegative weight per element of \code{Y[[t]]} (per observation, or per
+#'   bin if \code{binned = TRUE}).
+#' @param binned Logical; \code{TRUE} if \code{Y} and \code{biomass} are
+#'   already binned. Then they are used as given and \code{n_bins} is ignored.
+#' @param n_bins Number of equal-width bins over the pooled range of \code{Y},
+#'   used when \code{binned = FALSE}. \code{0} makes each distinct response
+#'   value its own bin.
+#' @param K Number of mixture components (experts).
+#' @param lambda_alpha Nonnegative L1 penalty on the gate coefficients
+#'   \eqn{\alpha}; the intercepts are not penalized.
+#' @param lambda_theta Nonnegative L1 penalty on the expert slopes
+#'   \eqn{\theta}; the intercepts are not penalized.
+#' @param max_iter Maximum number of EM iterations.
+#' @param iter_eta Stopping tolerance on the relative ascent of the surrogate
+#'   objective in one iteration,
+#'   \eqn{(Q(\Theta^{(m+1)} \mid \Theta^{(m)}) - Q(\Theta^{(m)} \mid \Theta^{(m)})) / |Q(\Theta^{(m)} \mid \Theta^{(m)})|}.
+#'   The stopping rule is described in \code{<a href="create-LCDmix.html#iteration">iteration</a>()}.
+#' @param resp_threshold Responsibilities below this value are set to 0 in the
+#'   E-step, and those bins are left out of the M-step for that component.
+#' @param trim_prob Fraction of the total weight that \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} trims
+#'   for the trimmed log-likelihood in \code{L}. It does not change the fit.
+#' @param calc_Q_every Logical; if \code{TRUE}, \code{<a href="create-LCDmix.html#iteration">iteration</a>()} records
+#'   \eqn{Q} at five checkpoints per iteration (\code{Q_every}), the number of
+#'   bins outside the support (\code{n_outside_every}) and the feasibility
+#'   check of the \eqn{\theta} update (\code{lp_check_every}). This adds four
+#'   \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()} calls per iteration; leave it \code{FALSE} for production
+#'   runs.
+#' @param debug Logical; if \code{TRUE}, an error inside the EM loop does not
+#'   stop \code{<a href="create-LCDmix.html#main">main</a>()}: the partial result is returned with the error message
+#'   (see Value).
+#' @param lp_time_limit Time limit in seconds for each linear program
+#'   (Rsymphony) in the \eqn{\theta} update.
+#' @param update \code{"lp"} (default) solves the \eqn{\theta} update as a
+#'   linear program with \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}. \code{"optim"} uses the
+#'   unconstrained quasi-Newton update \code{<a href="create-LCDmix.html#mstep_theta_optim">mstep_theta_optim</a>()}, which exists
+#'   as the comparison arm of the LP ablation.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number.
+#'   Bounds the deviation of each component mean from its intercept,
+#'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+#'   as in flowmix. It is passed to the flowmix initialization and to the LP
+#'   update of \eqn{\theta}. Requires \code{update = "lp"}.
+#'
+#' @details
+#' Covariate scale. The package does not standardize \code{X}. The gate update
+#' calls \code{glmnet} with its default \code{standardize = TRUE}, so in the
+#' original scale the gate penalty is
+#' \eqn{\lambda_\alpha \sum_k \sum_j \mathrm{sd}(x_j) |\alpha_{kj}|}, while
+#' \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()} and \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} use
+#' \eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|}. The two agree when every
+#' column of \code{X} has standard deviation 1. flowmix behaves the same way.
+#' Center and scale continuous covariates before fitting (0/1 indicators can
+#' stay as they are), and give the same \code{X} to both methods.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{Y_bin}{List of binned responses (or original \code{Y} if \code{binned = TRUE}).}
+#'   \item{Y_bin}{List of binned responses (\code{Y} itself if \code{binned = TRUE}).}
 #'   \item{X}{Covariate matrix (unchanged).}
-#'   \item{bin_mass}{List of biomass‐per‐bin weights.}
-#'   \item{initial}{List returned by \code{<a href="create-LCDmix.html#initialization">initialization</a>()}, containing starting parameters.}
-#'   \item{iter}{List returned by \code{<a href="create-LCDmix.html#iteration">iteration</a>()}, containing fitted parameters over EM iterations.}
+#'   \item{bin_mass}{List of the total weight in each bin.}
+#'   \item{K}{Number of components.}
+#'   \item{initial}{The list returned by \code{<a href="create-LCDmix.html#initialization">initialization</a>()}.}
+#'   \item{iter}{The list returned by \code{<a href="create-LCDmix.html#iteration">iteration</a>()}: the fitted parameters
+#'     (\code{alpha_new}, \code{theta0_new}, \code{theta_new}, \code{g_new}),
+#'     the trace of \eqn{Q} and diagnostics.}
+#'   \item{L}{The list returned by \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} on the training data.
+#'     \code{L$loglik} is the penalized mean log-likelihood that
+#'     \code{<a href="create-LCDmix.html#refit_lcd">refit_lcd</a>()} uses to choose among restarts.}
 #' }
+#' If \code{debug = TRUE} and the EM loop fails, a warning is given and the
+#' list holds \code{Y_bin}, \code{X}, \code{bin_mass}, \code{initial},
+#' \code{iter_partial} (the list returned by \code{<a href="create-LCDmix.html#iteration">iteration</a>()}, with
+#' \code{error} and \code{failed_iter} set) and \code{iter = NULL}.
 #'
 #' @examples
 #' \dontrun{
-#' # Simulate TT = 50 time points, p = 3 covariates
+#' # TT = 50 time points, p = 3 covariates
 #' set.seed(123)
-#' Y_list   &lt;- lapply(1:50, function(t) matrix(rnorm(sample(20:50,1)), ncol = 1))
-#' biomass  &lt;- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
-#' X_mat    &lt;- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
-#' # Fit a 2‐component mixture
-#' result   &lt;- <a href="create-LCDmix.html#main">main</a>(
+#' Y_list  &lt;- lapply(1:50, function(t) matrix(rnorm(sample(20:50, 1)), ncol = 1))
+#' biomass &lt;- lapply(Y_list, function(y) runif(nrow(y), 0.5, 2))
+#' X_mat   &lt;- matrix(rnorm(50 * 3), nrow = 50, ncol = 3)
+#' # Fit a 2-component mixture
+#' result  &lt;- <a href="create-LCDmix.html#main">main</a>(
 #'   Y       = Y_list,
 #'   X       = X_mat,
 #'   biomass = biomass,
 #'   K       = 2
 #' )
-#' plot(result$iter$logLik)
+#' plot(result$iter$Q, type = "b")   # surrogate objective per iteration
+#' result$L$loglik                   # penalized training log-likelihood
 #' }
 #' @export
 <span id="main">main</span> &lt;- function(
@@ -501,7 +566,7 @@ litr::render("create-LCDmix.Rmd")</code></pre>
   )
   
   if (debug &amp;&amp; !is.null(iter_res$error)) {
-    # here iter_res$final contains your last parameters
+    # <a href="create-LCDmix.html#iteration">iteration</a>() caught the error: iter_res holds the message (error) and the iteration (failed_iter)
     warning("EM failed at iteration ", iter_res$failed_iter, 
             ": ", iter_res$error)
     return(list(
@@ -536,36 +601,39 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     L        = L
   ))
 }</code></pre>
-<pre class="r"><code>#' Bin responses by biomass weights into fixed or data-driven bins
+<pre class="r"><code>#' Bin responses into equal-width bins and sum their weights
 #'
 #' @description
-#' Given a list of response vectors/matrices \code{Y} and corresponding biomass weights,
-#' this function either treats them as already binned (when \code{n_bins = 0}) or
-#' partitions the range of pooled responses into \code{n_bins} equal-width bins,
-#' computing for each time point \(t\):
-#' - \code{Y_bin[[t]]}: the bin centers with nonzero total weight  
-#' - \code{bin_mass[[t]]}: the sum of biomass weights in each occupied bin  
+#' Pools the responses of all time points, cuts their range into
+#' \code{n_bins} equal-width bins, and returns for each time point the centers
+#' of the occupied bins and the total weight in each. All time points share
+#' the same grid. With \code{n_bins = 0} there is no binning: each distinct
+#' response value is its own bin, and the weights of equal values are summed.
 #'
-#' @param Y A list of length \code{TT}, where \code{Y[[t]]} is a numeric vector or single-column matrix of responses at time \(t\).
-#' @param biomass A list of the same length \code{TT}, where \code{biomass[[t]]} is a numeric vector of weights for each observation in \code{Y[[t]]}.
-#' @param n_bins Integer number of equal-width bins to create across the pooled range of \code{Y}.  
-#'   If \code{n_bins = 0}, no binning is performed and each unique response value is treated as its own “bin.”  
-#'   Default: \code{40}.
+#' @param Y A list of length \code{TT}; \code{Y[[t]]} is a numeric vector or a
+#'   one-column matrix of responses at time \eqn{t}.
+#' @param biomass A list of length \code{TT}; \code{biomass[[t]]} holds one
+#'   nonnegative weight per element of \code{Y[[t]]}.
+#' @param n_bins Number of equal-width bins, or \code{0} for no binning.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{Y_bin}{List of length \code{TT}; each element is a single-column matrix of bin centers (numeric) with positive total weight.}
-#'   \item{bin_mass}{List of length \code{TT}; each element is a numeric vector of total biomass weights per bin, aligned with \code{Y_bin[[t]]}.}
+#'   \item{Y_bin}{List of length \code{TT}; element \eqn{t} is an
+#'     \eqn{M_t \times 1} matrix of the centers of the occupied bins, in
+#'     increasing order.}
+#'   \item{bin_mass}{List of length \code{TT}; element \eqn{t} is a numeric
+#'     vector of length \eqn{M_t}, the total weight in each of those bins.}
 #' }
+#' The names of \code{Y} are kept when \code{n_bins &gt; 0}.
 #'
 #' @examples
 #' \dontrun{
-#' Y_list     &lt;- list(rnorm(100), rnorm(150))
+#' Y_list       &lt;- list(rnorm(100), rnorm(150))
 #' biomass_list &lt;- lapply(Y_list, function(y) runif(length(y), 0.5, 2))
-#' # Data-driven bins
+#' # 20 equal-width bins
 #' binned &lt;- <a href="create-LCDmix.html#binning">binning</a>(Y_list, biomass_list, n_bins = 20)
 #' str(binned)
-#' # No binning: treat each unique Y as its own bin
+#' # No binning: each distinct Y value is its own bin
 #' binned2 &lt;- <a href="create-LCDmix.html#binning">binning</a>(Y_list, biomass_list, n_bins = 0)
 #' }
 #' @export
@@ -633,48 +701,70 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     bin_mass = bin_mass
   ))
 }</code></pre>
-<pre class="r"><code>#' Initialize mixture-of-experts model parameters via Gaussian mixture regression
+<pre class="r"><code>#' Compute starting values from a Gaussian mixture of regressions
 #'
 #' @description
-#' Performs the initialization for the mixture-of-experts model pipeline:
-#' 1. Fit a Gaussian mixture regression (GMR) via \code{flowmix::flowmix}.  
-#' 2. Extract initial mixture parameters (\code{alpha_init}, \code{theta0_init}, \code{theta_init}).  
-#' 3. Compute initial residuals, responsibilities, and posterior weights.  
-#' 4. Perform one M-step update for intercepts.  
-#' 5. Estimate initial log-concave component densities.  
-#' 6. Compute the initial surrogate log-likelihood.
+#' Computes the starting point of the EM-type algorithm:
 #'
-#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
-#' @param X A numeric matrix of dimension \eqn{TT \times p}; covariate values for each time point.
-#' @param bin_mass A list of length \code{TT}; each element is a numeric vector of length \eqn{M_t} giving sum of biomass per bin.
-#' @param K Integer; number of mixture components.
-#' @param lambda_alpha Numeric; L1 regularization parameter for mixture weights in GMR.
-#' @param lambda_theta Numeric; L1 regularization parameter for regression slopes in GMR.
-#' @param resp_threshold Numeric; threshold on responsibilities for bin assignment.
-#' @param maxdev \code{NULL} or a positive number; passed to \code{flowmix::flowmix()}.
+#' 1. Fits a Gaussian mixture of regressions with \code{flowmix::flowmix()}
+#'    (one random start, \code{nrep = 1}).
+#' 2. Takes the gate coefficients from that fit, centered so that component 1
+#'    is the reference (row 1 is 0), and the intercepts and slopes.
+#' 3. Computes the residuals and the starting responsibilities from the
+#'    Gaussian component densities \eqn{N(0, \sigma_k^2)}, evaluated at the
+#'    residuals and multiplied by the gate probabilities.
+#' 4. Re-centers the intercepts with \code{<a href="create-LCDmix.html#mstep_shift">mstep_shift</a>()}.
+#' 5. Fits the starting log-concave densities with \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()}.
+#' 6. Computes the starting value of the surrogate objective \eqn{Q} with
+#'    \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()}.
+#'
+#' The flowmix start is random. Call \code{set.seed()} first for reproducible
+#' values.
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
+#' @param X A numeric \eqn{TT \times p} covariate matrix; row \code{X[t, ]}
+#'   belongs to time \eqn{t}.
+#' @param bin_mass A list of length \code{TT}; each element is a numeric vector
+#'   of length \eqn{M_t}, the total weight (biomass) in each bin.
+#' @param K Number of mixture components.
+#' @param lambda_alpha L1 penalty on the gate coefficients. Passed to flowmix
+#'   as \code{prob_lambda} and used in \eqn{Q}.
+#' @param lambda_theta L1 penalty on the expert slopes. Passed to flowmix as
+#'   \code{mean_lambda} and used in \eqn{Q}.
+#' @param resp_threshold Bins whose responsibility for component \eqn{k} is
+#'   above this value are active for \eqn{k} (\code{idx_init}).
+#' @param maxdev \code{NULL} or a positive number; passed to
+#'   \code{flowmix::flowmix()}. See \code{<a href="create-LCDmix.html#main">main</a>()}.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{flow}{Result object returned by \code{flowmix::flowmix}.}
-#'   \item{idx_init}{List of length \code{TT} of \eqn{M_t \times K} logical matrices indicating high-confidence bin assignments.}
-#'   \item{resp_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior probabilities (responsibilities).}
-#'   \item{weight_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights (responsibilities × \code{bin_mass}).}
-#'   \item{theta0_init}{List of length \code{K} of initial intercepts.}
-#'   \item{theta_init}{List of length \code{K} of initial slope vectors.}
-#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of initial mixture parameters from GMR.}
-#'   \item{resi_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of residuals.}
-#'   \item{g_init}{List of length \code{K} of log-concave density objects from \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.}
-#'   \item{Q}{Numeric; value of the surrogate log-likelihood at initialization.}
-#'   \item{Q_every}{Numeric; same as \code{Q} (for consistency with iterative output).}
+#'   \item{flow}{The fit returned by \code{flowmix::flowmix()}.}
+#'   \item{idx_init}{List of \code{TT} logical \eqn{M_t \times K} matrices;
+#'     \code{TRUE} where \code{resp_init} is above \code{resp_threshold}.}
+#'   \item{resp_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+#'     responsibilities. They are not thresholded; each row sums to 1.}
+#'   \item{weight_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+#'     posterior weights, \code{resp_init} times \code{bin_mass}.}
+#'   \item{theta0_init}{List of \code{K} intercepts, after \code{<a href="create-LCDmix.html#mstep_shift">mstep_shift</a>()}.}
+#'   \item{theta_init}{List of \code{K} slope vectors, from flowmix.}
+#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients; row 1
+#'     is 0.}
+#'   \item{resi_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+#'     residuals for \code{theta0_init} and \code{theta_init}.}
+#'   \item{g_init}{List of \code{K} log-concave fits from \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()}.}
+#'   \item{Q}{Starting value of \eqn{Q}: a number named \code{"Q"} that
+#'     carries the attributes of \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()}.}
+#'   \item{Q_every}{The same value; \code{<a href="create-LCDmix.html#iteration">iteration</a>()} appends to it.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' TT      &lt;- 4; K &lt;- 2; p &lt;- 3; n_bins &lt;- 5
-#' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
-#' bin_mass&lt;- lapply(Y_bin, function(y) runif(nrow(y)))
-#' X       &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' init    &lt;- <a href="create-LCDmix.html#initialization">initialization</a>(
+#' TT       &lt;- 4; K &lt;- 2; p &lt;- 3; n_bins &lt;- 5
+#' Y_bin    &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
+#' bin_mass &lt;- lapply(Y_bin, function(y) runif(nrow(y)))
+#' X        &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' init     &lt;- <a href="create-LCDmix.html#initialization">initialization</a>(
 #'   Y_bin, X, bin_mass, K,
 #'   lambda_alpha   = 1e-3,
 #'   lambda_theta   = 1e-3,
@@ -771,30 +861,30 @@ litr::render("create-LCDmix.Rmd")</code></pre>
     Q_every     = Q_init
   ))
 }</code></pre>
-<pre class="r"><code>#' Compute posterior mixing probabilities π_{t,k} = P(Z^{(t)} = k | X^{(t)})
+<pre class="r"><code>#' Gate probabilities of the mixture components
 #'
 #' @description
-#' Given a sequence of covariate vectors over \code{TT} time points and a parameter
-#' matrix \code{alpha} of size \eqn{K \times (p+1)}, this function computes the
-#' \eqn{TT \times K} matrix of posterior probabilities
-#' \eqn{\pi_{t,k} = P(Z^{(t)} = k \mid X^{(t)})} via a row-wise softmax of the linear predictors.
+#' Computes, for every time point \eqn{t} and component \eqn{k},
+#' \deqn{\pi_{tk} = P(Z_t = k \mid X_t) = \frac{\exp(\alpha_{k0} + X_t^\top \alpha_k)}{\sum_{l=1}^K \exp(\alpha_{l0} + X_t^\top \alpha_l)}.}
+#' These are the gate (prior) probabilities: they depend on the covariates
+#' only, not on the response.
 #'
-#' @param X A numeric matrix with \code{TT} rows (time points) and \code{p} covariate columns.
-#' @param alpha A numeric matrix of dimension \eqn{K \times (p+1)}, where each row
-#'   corresponds to one mixture component \code{k}. Column 1 is the intercept,
-#'   and columns 2 through \eqn{p+1} are the slopes for that component.
+#' @param X A numeric matrix with \code{TT} rows (time points) and \code{p}
+#'   covariate columns.
+#' @param alpha A numeric \eqn{K \times (p+1)} matrix; row \eqn{k} belongs to
+#'   component \eqn{k}. Column 1 is the intercept and columns 2 to
+#'   \eqn{p+1} are the slopes.
 #'
-#' @return A numeric \eqn{TT \times K} matrix \code{pi_mat}, where
-#'   \code{pi_mat[t, k]} is the posterior probability of component \code{k}
-#'   at time point \code{t}. Each row of \code{pi_mat} sums to 1.
+#' @return A numeric \eqn{TT \times K} matrix; entry \code{[t, k]} is
+#'   \eqn{\pi_{tk}}. Each row sums to 1.
 #'
 #' @examples
 #' \dontrun{
-#' # Simulate 3 time points, 2 covariates, 2 mixture components
+#' # 3 time points, 2 covariates, 2 components
 #' X     &lt;- matrix(rnorm(3 * 2), nrow = 3, ncol = 2)
 #' alpha &lt;- matrix(
-#'   c(0.1,  1.0, -0.5,   # component 1: intercept = 0.1, slopes = (1, -0.5)
-#'     0.2, -1.0,  0.3),  # component 2: intercept = 0.2, slopes = (-1, 0.3)
+#'   c(0.1,  1.0, -0.5,   # component 1: intercept 0.1, slopes (1, -0.5)
+#'     0.2, -1.0,  0.3),  # component 2: intercept 0.2, slopes (-1, 0.3)
 #'   nrow = 2, byrow = TRUE
 #' )
 #' pi_mat &lt;- <a href="create-LCDmix.html#pi_k">pi_k</a>(X, alpha)
@@ -831,43 +921,44 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(pi_mat)
 }</code></pre>
-<pre class="r"><code>#' Update component intercepts in the M-step using binned data
+<pre class="r"><code>#' Update the component intercepts (centering step)
 #'
 #' @description
-#' Computes the updated intercepts \eqn{\theta_{0k}} for each mixture component \eqn{k}
-#' by solving the weighted shift equations on binned responses. Here \code{Y_bin} and
-#' \code{weights} both have at most \code{n_bins} rows per time point (empty bins removed).
+#' For each component \eqn{k}, sets the intercept to the weighted mean of
+#' \eqn{y - X_t^\top \theta_k} over the active bins:
+#' \deqn{\theta_{0k} = \frac{\sum_t \sum_{i \in I_{tk}} w_{tik} (y_{ti} - X_t^\top \theta_k)}{\sum_t \sum_{i \in I_{tk}} w_{tik}}.}
+#' Afterwards the weighted mean residual of each component is 0.
 #'
-#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix
-#'   of binned response values for time point \eqn{t}, where \eqn{M_t \le n\_bins}.
-#' @param X A numeric matrix of size \eqn{TT \times p}, where each row \code{X[t, ]} is
-#'   the covariate vector at time \eqn{t}.
-#' @param weights A list of length \code{TT}; each element is a numeric vector of length
-#'   \eqn{M_t} giving the total biomass per bin (i.e.\ the \code{bin_mass} output
-#'   from \code{<a href="create-LCDmix.html#binning">binning</a>()}, with empty bins removed).
-#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K}
-#'   logical or integer matrix where \code{idx[[t]][i, k]} is \code{TRUE} if the
-#'   \(i\)th bin at time \emph{t} contributes to component \emph{k}.
-#' @param slopes A list of length \code{K}; each element is a numeric vector of length
-#'   \eqn{p} giving the current slope parameters \eqn{\boldsymbol{\theta}_k}.
+#' This is the exact maximizer of \eqn{Q} over the intercept only when the
+#' component density is Gaussian. For a general log-concave density it centers
+#' the residuals but does not maximize \eqn{Q}, which is why the algorithm is a
+#' generalized EM algorithm and not an ECM algorithm. \code{<a href="create-LCDmix.html#iteration">iteration</a>()}
+#' checks the ascent of the whole iteration.
 #'
-#' @return A list of length \code{K}, where element \code{k} is the updated intercept
-#'   \eqn{\theta_{0k}} for component \eqn{k}.
+#' @param Y_bin A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
+#' @param X A numeric \eqn{TT \times p} covariate matrix.
+#' @param weights A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of posterior weights (responsibility times bin
+#'   weight), as returned in \code{weight} by \code{<a href="create-LCDmix.html#estep_lcd">estep_lcd</a>()}.
+#' @param idx A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} logical matrix; \code{idx[[t]][i, k]} is \code{TRUE}
+#'   if bin \eqn{i} at time \eqn{t} is active for component \eqn{k}.
+#' @param slopes A list of length \code{K}; each element is the slope vector
+#'   \eqn{\theta_k} of length \eqn{p}.
+#'
+#' @return A list of length \code{K}; element \eqn{k} is the new intercept
+#'   \eqn{\theta_{0k}}. It is \code{NaN} if component \eqn{k} has no active bin.
 #'
 #' @examples
 #' \dontrun{
-#' TT      &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
-#' # Simulate binned responses and bin_mass
+#' TT &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
 #' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
-#' bin_mass&lt;- lapply(Y_bin, function(m) runif(nrow(m)))
-#' # Dummy X and idx
 #' X       &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' idx &lt;- lapply(Y_bin, function(m) matrix(sample(c(TRUE,FALSE),
-#'                       length(m) * K, replace = TRUE),
-#'                       ncol = K))
+#' weights &lt;- lapply(Y_bin, function(m) matrix(runif(nrow(m) * K), ncol = K))
+#' idx     &lt;- lapply(weights, function(w) w &gt; 0.1)
 #' slopes  &lt;- replicate(K, runif(p), simplify = FALSE)
-#' # Compute updated intercepts
-#' intercepts &lt;- <a href="create-LCDmix.html#mstep_shift">mstep_shift</a>(Y_bin, X, bin_mass, idx, slopes)
+#' intercepts &lt;- <a href="create-LCDmix.html#mstep_shift">mstep_shift</a>(Y_bin, X, weights, idx, slopes)
 #' }
 #' @export
 <span id="mstep_shift">mstep_shift</span> &lt;- function(
@@ -901,27 +992,23 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(intercepts)
 }</code></pre>
-<pre class="r"><code>#' Compute residuals for binned responses given mixture parameters
+<pre class="r"><code>#' Compute residuals for binned responses given the expert coefficients
 #'
 #' @description
-#' For each time point \(t\) and mixture component \(k\), compute the residuals
-#' \[
-#'   r_{t,i,k} \;=\; Y_{\mathrm{bin},t,i}
-#'     \;-\;\bigl(\,\text{intercepts}[[k]] \;+\; X[t, ] \,\cdot\, \text{slopes}[[k]]\bigr).
-#' \]
+#' For each time point \eqn{t}, bin \eqn{i} and component \eqn{k}, computes
+#' \deqn{u_{tik} = y_{ti} - \theta_{0k} - X_t^\top \theta_k.}
 #'
-#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1}
-#'   matrix of binned response values at time point \code{t}.
-#' @param X A numeric matrix of size \eqn{TT \times p}; row \code{X[t, ]} is the
-#'   covariate vector for time point \code{t}.
+#' @param Y_bin A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
+#' @param X A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+#'   covariate vector at time \eqn{t}.
 #' @param intercepts A list of length \code{K}; \code{intercepts[[k]]} is the
-#'   intercept parameter \eqn{\theta_{0k}} for component \eqn{k}.
-#' @param slopes A list of length \code{K}; \code{slopes[[k]]} is a numeric vector
-#'   of length \eqn{p} containing the slope parameters \(\boldsymbol{\theta}_k\).
+#'   intercept \eqn{\theta_{0k}}.
+#' @param slopes A list of length \code{K}; \code{slopes[[k]]} is the slope
+#'   vector \eqn{\theta_k} of length \eqn{p}.
 #'
-#' @return A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix
-#'   of residuals, where row \(i\), column \(k\) is the residual for bin \(i\)
-#'   at time \(t\) and component \(k\).
+#' @return A list of length \code{TT}; element \eqn{t} is an
+#'   \eqn{M_t \times K} matrix whose entry \code{[i, k]} is \eqn{u_{tik}}.
 #'
 #' @examples
 #' \dontrun{
@@ -961,35 +1048,46 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(residuals)
 }</code></pre>
-<pre class="r"><code>#' Estimate component densities via log-concave density estimation (M-step)
+<pre class="r"><code>#' Update the component densities (log-concave M-step)
 #'
 #' @description
-#' For each mixture component \(k\), gathers the residuals across all time points
-#' for bins assigned to component \(k\), weighs them by their posterior weights,
-#' and fits a log-concave density using \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.
+#' For each component \eqn{k}:
 #'
-#' @param residuals A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
-#' @param weights A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   matrix of posterior weights (e.g., responsibilities) corresponding to \code{residuals}.
-#' @param idx A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   logical or integer matrix.  \code{idx[[t]][i,k]} indicates whether the \(i\)th bin
-#'   at time \(t\) contributes to component \(k\).
-#' @param dedup_tol Numeric; residuals closer together than this are merged
-#'   before fitting. Binning produces residuals differing only at machine
-#'   precision, which prevents the log-concave active-set search from reaching
-#'   its maximizer. Set to \code{0} to disable merging. Default \code{1e-10}.
+#' 1. Pools the residuals of the bins that are active for \eqn{k} over all
+#'    time points, with their posterior weights.
+#' 2. Merges residuals closer than \code{dedup_tol} and sums their weights.
+#'    The smallest and the largest residual are kept exactly, because the
+#'    support of the estimate is their range.
+#' 3. Normalizes the weights to sum to 1 and fits the weighted log-concave
+#'    maximum likelihood estimate with \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}.
 #'
-#' @return A list of length \code{K}, where element \code{k} is the output of
-#'   \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}—the estimated log-concave density for component \(k\).
+#' Stops with an error whose message starts with "degenerate component" when
+#' a component has fewer than two distinct residuals; \code{<a href="create-LCDmix.html#count_degenerate">count_degenerate</a>()}
+#' counts these failures in saved cross-validation results. A message is
+#' printed when a component has fewer than five distinct residuals.
+#'
+#' @param residuals A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of residuals.
+#' @param weights A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of posterior weights.
+#' @param idx A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} logical matrix of active bins.
+#' @param dedup_tol Residuals closer together than this are merged before
+#'   fitting. Residuals that differ only by rounding error stop the active-set
+#'   search of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} before it reaches the maximizer.
+#'   Use \code{0} to switch merging off.
+#'
+#' @return A list of length \code{K}; element \eqn{k} is the
+#'   \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit for component \eqn{k}. Its support is the
+#'   range of the pooled residuals of component \eqn{k}.
 #'
 #' @examples
 #' \dontrun{
 #' TT &lt;- 3; K &lt;- 2
-#' # Simulate residuals and weights (5 bins × 2 components)
+#' # Residuals and weights for 5 bins and 2 components
 #' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-#' weights   &lt;- lapply(residuals, function(m) abs(m))  # just for demo
-#' # Include all bins for both components
+#' weights   &lt;- lapply(residuals, function(m) abs(m))  # for the example only
+#' # All bins active for both components
 #' idx &lt;- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
 #' densities &lt;- <a href="create-LCDmix.html#mstep_g">mstep_g</a>(residuals, weights, idx)
 #' }
@@ -1063,56 +1161,67 @@ litr::render("create-LCDmix.Rmd")</code></pre>
 
   return(densities)
 }</code></pre>
-<pre class="r"><code>#' Modified log‐concave density estimation with optional preprocessing
+<pre class="r"><code>#' Weighted log-concave maximum likelihood estimate with safeguards
 #'
 #' @description
-#' Fits a univariate log‐concave density to data \code{x} using the
-#' \pkg{logcondens} routines.  If \code{w} is \code{NA}, a preprocessing step
-#' chooses an appropriate weight vector and grid; otherwise \code{x} and \code{w}
-#' are assumed sorted and used directly.  The estimator is refined by adding
-#' knots until convergence.
+#' A modified copy of \code{logcondens::activeSetLogCon()}, the active-set
+#' algorithm for the log-concave maximum likelihood estimate. Knots are added
+#' one at a time until the estimate converges. Two changes stop the knot
+#' search early and keep the last good fit instead of failing:
 #'
-#' @param x Numeric vector of data points at which to estimate a log‐concave density.
-#' @param xgrid Optional numeric vector of grid points for preprocessing.  If
-#'   provided, \code{w} must be \code{NA}.  Default: \code{NULL}.
-#' @param print Logical; if \code{TRUE}, iteration progress and likelihood values
-#'   are printed.  Default: \code{FALSE}.
-#' @param w Numeric vector of nonnegative weights for each \code{x}, or \code{NA}
-#'   to compute weights automatically.  Default: \code{NA}.
+#' - When the line search stalls. Continuing has been seen to drive the
+#'   log-density to numerical divergence a few iterations later.
+#' - When \code{logcondens::LocalMLE()} fails or returns non-finite values
+#'   (fixW). This happens when a support point has a very small weight: its
+#'   log-density falls below about -745, \code{exp()} returns 0, and the Newton
+#'   step is \code{NaN}.
+#'
+#' The field \code{refine_stop} records which of the two, if any, applied.
+#'
+#' @param x Numeric vector of data points. It need not be sorted.
+#' @param xgrid Optional grid for \code{logcondens::preProcess()}; allowed only
+#'   when \code{w = NA}.
+#' @param print Logical; if \code{TRUE}, prints the log-likelihood and the
+#'   number of knots at each step.
+#' @param w \code{NA}, to compute weights with \code{logcondens::preProcess()},
+#'   or a vector of nonnegative weights, one per element of \code{x}, that
+#'   sums to 1 (\code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()} passes normalized weights).
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{\code{xn}}{Sorted original \code{x} values.}
-#'   \item{\code{x}}{Processed \code{x} after any preprocessing.}
-#'   \item{\code{w}}{Weights corresponding to \code{x}.}
-#'   \item{\code{phi}}{Numeric vector of estimated log‐density values at \code{x}.}
-#'   \item{\code{IsKnot}}{Integer or logical vector indicating which points are knots.}
-#'   \item{\code{L}}{Final log‐likelihood value.}
-#'   \item{\code{Fhat}}{Estimated CDF values at \code{x}.}
-#'   \item{\code{H}}{Numeric vector of directional derivatives (used in knot selection).}
-#'   \item{\code{n}}{Number of original data points (\code{length(xn)}).}
-#'   \item{\code{m}}{Same as \code{n}.}
-#'   \item{\code{knots}}{Vector of \code{x} values selected as knots.}
-#'   \item{\code{mode}}{Value of \code{x} at which \code{phi} is maximized.}
-#'   \item{\code{sig}}{Estimated standard deviation used for preprocessing.}
+#'   \item{\code{xn}}{The input \code{x}, sorted.}
+#'   \item{\code{x}}{The sorted support points of the fit (equal to \code{xn}
+#'     when \code{w} is given).}
+#'   \item{\code{w}}{The weights, in the order of \code{x}.}
+#'   \item{\code{phi}}{The log-density at \code{x}. It is linear between
+#'     consecutive points and \code{-Inf} outside \code{range(x)}.}
+#'   \item{\code{IsKnot}}{0/1 vector; 1 where \code{x} is a knot of \code{phi}.}
+#'   \item{\code{L}}{Final value of the log-likelihood.}
+#'   \item{\code{Fhat}}{Distribution function at \code{x}.}
+#'   \item{\code{H}}{Directional derivatives used to choose the next knot.}
+#'   \item{\code{n}}{\code{length(xn)}.}
+#'   \item{\code{m}}{\code{length(x)}, the number of support points.}
+#'   \item{\code{knots}}{\code{x[IsKnot == 1]}.}
+#'   \item{\code{mode}}{The <a href="create-LCDmix.html#value">value</a>(s) of \code{x} where \code{phi} is largest.}
+#'   \item{\code{sig}}{Standard deviation estimate of \code{x} (weighted when
+#'     \code{w} is given).}
+#'   \item{\code{refine_stop}}{\code{"none"}, \code{"line search stalled"} or
+#'     \code{"LocalMLE failed"}.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Example: estimate log‐concave density of a mixture sample
 #' set.seed(42)
-#' x1 &lt;- rnorm(100, mean = -2)
-#' x2 &lt;- rnorm(150, mean =  3)
-#' x  &lt;- c(x1, x2)
+#' x &lt;- c(rnorm(100, mean = -2), rnorm(150, mean = 3))
 #'
-#' # Default call (weights computed automatically)
+#' # Weights computed by logcondens::preProcess()
 #' res1 &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(x)
-#' plot(res1$xn, res1$phi, type = "l", xlab = "x", ylab = "log‐density")
+#' plot(res1$x, res1$phi, type = "l", xlab = "x", ylab = "log-density")
 #'
-#' # Provide custom weights (e.g., uniform)
-#' w &lt;- rep(1, length(x))
-#' res2 &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(x, w = w)
-#' lines(res2$xn, res2$phi, col = "blue")
+#' # Equal weights that sum to 1
+#' res2 &lt;- <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(x, w = rep(1 / length(x), length(x)))
+#' lines(res2$x, res2$phi, col = "blue")
+#' res2$refine_stop
 #' }
 #' @export
 <span id="modified_logcondens">modified_logcondens</span> &lt;- function(x, xgrid = NULL, print = FALSE, w = NA){
@@ -1251,50 +1360,67 @@ X^{(t)})\)</span>,<br>
 - <span class="math inline">\(w_{t,i,k}\)</span> are
 responsibilities,<br>
 - <span class="math inline">\(N=\sum_{t,i,k}w_{t,i,k}\)</span>.</p>
-<pre class="r"><code>#' Compute the surrogate log-likelihood Q
+<pre class="r"><code>#' Compute the surrogate objective Q
 #'
 #' @description
-#' Evaluates the (normalized) surrogate log-likelihood
-#' \deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in \mathcal{I}_{tk}}
-#'   w_{tik}\left[\log \hat f_k(u_{tik}) + \log \<a href="create-LCDmix.html#pi_k">pi_k</a>(X_t)\right]
-#'   - \lambda_\alpha \|\alpha\|_1 - \lambda_\theta \|\theta\|_1 .}
+#' Evaluates the normalized surrogate objective
+#' \deqn{Q = \frac{1}{N}\sum_{t}\sum_{k}\sum_{i \in I_{tk}} w_{tik}\left[\log \hat f_k(u_{tik}) + \log \pi_{tk}\right] - \lambda_\alpha \sum_k \sum_{j \ge 1} |\alpha_{kj}| - \lambda_\theta \sum_k \|\theta_k\|_1,}
+#' where \eqn{I_{tk}} is the set of active bins (\code{idx}), \eqn{w_{tik}} are
+#' the posterior weights (\code{resp}), \eqn{N} is the sum of all entries of
+#' \code{resp}, \eqn{\hat f_k} is the fitted density of component \eqn{k},
+#' \eqn{u_{tik}} is the residual and \eqn{\pi_{tk}} is the gate probability.
+#' The intercept column of \code{alpha} is not penalized. The log-density is
+#' evaluated at the residual of the bin center; it is not integrated over the
+#' bin (\code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} scores bins by their probability).
 #'
-#' Residuals may either be supplied directly through \code{residuals}, or
-#' recomputed internally from \code{(intercepts, slopes)} when both
-#' \code{Y_bin} and \code{intercepts} are given. The second form exists because
-#' \code{slopes} otherwise enters only through the L1 penalty: passing stale
-#' residuals alongside updated slopes measures the penalty change and nothing
-#' else, which makes the M-step diagnostic in \code{<a href="create-LCDmix.html#iteration">iteration</a>()} vacuous.
+#' Residuals may be supplied directly through \code{residuals}, or recomputed
+#' from \code{(intercepts, slopes)} when both \code{Y_bin} and
+#' \code{intercepts} are given. The second form exists because \code{slopes}
+#' otherwise enters only through the L1 penalty: passing old residuals with
+#' new slopes measures the change in the penalty and nothing else, which makes
+#' the checkpoint diagnostics in \code{<a href="create-LCDmix.html#iteration">iteration</a>()} meaningless.
 #'
-#' @param X A numeric \eqn{TT \times p} covariate matrix (rows = time points).
-#' @param densities A list of length \eqn{K} of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} objects.
-#' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
-#'   residuals. Ignored when both \code{Y_bin} and \code{intercepts} are supplied.
+#' @param X A numeric \eqn{TT \times p} covariate matrix.
+#' @param densities A list of length \eqn{K} of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}
+#'   fits.
+#' @param residuals A list of length \eqn{TT}, each an \eqn{M_t \times K}
+#'   matrix of residuals. Ignored when both \code{Y_bin} and
+#'   \code{intercepts} are supplied.
 #' @param slopes A list of length \eqn{K} of slope vectors.
-#' @param alpha A numeric \eqn{K \times (p+1)} matrix of gating parameters.
-#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical matrix.
+#' @param alpha A numeric \eqn{K \times (p+1)} matrix of gate coefficients.
+#' @param idx A list of length \eqn{TT}, each an \eqn{M_t \times K} logical
+#'   matrix of active bins.
 #' @param resp A list of length \eqn{TT}, each an \eqn{M_t \times K} matrix of
 #'   posterior weights \eqn{w_{tik}}.
-#' @param lambda_alpha Nonnegative numeric L1 penalty on non-intercept columns of \code{alpha}.
-#' @param lambda_theta Nonnegative numeric L1 penalty on \code{slopes}.
-#' @param Y_bin Optional list of length \eqn{TT} of binned responses. Supply
-#'   together with \code{intercepts} to recompute residuals internally.
-#' @param intercepts Optional list of length \eqn{K} of intercepts. Supply
-#'   together with \code{Y_bin} to recompute residuals internally.
+#' @param lambda_alpha Nonnegative L1 penalty on the non-intercept columns of
+#'   \code{alpha}.
+#' @param lambda_theta Nonnegative L1 penalty on \code{slopes}.
+#' @param Y_bin Optional list of length \eqn{TT} of bin centers. Supply it
+#'   together with \code{intercepts} to recompute the residuals.
+#' @param intercepts Optional list of length \eqn{K} of intercepts. Supply it
+#'   together with \code{Y_bin} to recompute the residuals.
 #'
-#' @return A single numeric: the normalized surrogate log-likelihood minus the
-#'   L1 penalties. Carries three attributes, used by the LP ablation and ignored
-#'   by ordinary arithmetic:
+#' @details
+#' Note for developers: \code{<a href="create-LCDmix.html#iteration">iteration</a>()} and \code{<a href="create-LCDmix.html#initialization">initialization</a>()} call
+#' \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()} with positional arguments. Add new arguments only at the
+#' end of the signature, and keep the return value a single number.
+#'
+#' @return A single number: the normalized surrogate log-likelihood minus the
+#'   L1 penalties. It carries four attributes, which ordinary arithmetic
+#'   ignores:
 #'   \describe{
 #'     \item{\code{n_eval}}{Number of active bins evaluated.}
 #'     \item{\code{n_outside}}{Number of those whose residual fell outside the
-#'       fitted support, so the log-density was \code{-Inf} and the bin was
-#'       dropped from the sum.}
+#'       support of the fitted density, so the log-density was \code{-Inf}
+#'       and the bin was dropped from the sum.}
 #'     \item{\code{mass_outside}}{Total posterior weight of the dropped bins.}
+#'     \item{\code{max_over}}{Largest distance by which a dropped residual lies
+#'       outside the support (0 if no bin was dropped).}
 #'   }
-#'   Bins outside the support are silently excluded from \eqn{Q}; a larger
-#'   \code{n_outside} therefore means \eqn{Q} is computed over less of the data,
-#'   and \eqn{Q} values with different \code{n_outside} are not comparable.
+#'   Bins outside the support are excluded from \eqn{Q} without an error. A
+#'   larger \code{n_outside} therefore means that \eqn{Q} is computed over
+#'   less of the data, and \eqn{Q} values with different \code{n_outside} are
+#'   not comparable.
 #'
 #' @examples
 #' \dontrun{
@@ -1310,7 +1436,7 @@ responsibilities,<br>
 #' slopes &lt;- replicate(K, rnorm(p), simplify = FALSE)
 #' alpha  &lt;- matrix(rnorm(K * (p + 1)), nrow = K)
 #'
-#' ## (a) residuals supplied directly -- unchanged behavior
+#' ## (a) residuals supplied directly
 #' Q_val &lt;- <a href="create-LCDmix.html#comp_Q">comp_Q</a>(
 #'   X, densities, residuals, slopes, alpha,
 #'   idx, resp,
@@ -1419,44 +1545,77 @@ responsibilities,<br>
 
   return(Q_val)
 }</code></pre>
-<pre class="r"><code>#' Run EM-style iterations for log-concave mixture-of-experts model
+<pre class="r"><code>#' Run the EM-type iterations of the log-concave mixture-of-experts model
 #'
 #' @description
-#' Performs up to \code{max_iter} iterations of the EM algorithm:
-#' 1. E-step via \code{<a href="create-LCDmix.html#estep_lcd">estep_lcd</a>()}  
-#' 2. M-steps:
-#'    - Update mixture weights with \code{<a href="create-LCDmix.html#mstep_alpha">mstep_alpha</a>()}  
-#'    - Update regression slopes/intercepts via \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} and \code{<a href="create-LCDmix.html#mstep_shift">mstep_shift</a>()}  
-#'    - Update log‐concave component densities with \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()}  
-#' Tracks the surrogate log‐likelihood \code{Q} and stops early if the relative increase falls below \code{iter_eta}, or if it decreases.
+#' Starts from \code{init_res} and repeats, for \eqn{m = 1, 2, \ldots}:
 #'
-#' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.
-#' @param X Numeric \eqn{TT \times p} covariate matrix (rows = time points).
-#' @param bin_mass List of length \code{TT}; each element is a numeric vector of length \eqn{M_t} of biomass weights.
-#' @param init_res List returned by \code{<a href="create-LCDmix.html#initialization">initialization</a>()}, containing:\cr
-#'   \code{idx_init}, \code{resp_init}, \code{weight_init}, \code{resi_init},\cr
-#'   \code{alpha_init}, \code{theta0_init}, \code{theta_init}, \code{g_init}, \code{Q_every}.
-#' @param lambda_alpha Nonnegative numeric L1 penalty on mixture‐weight coefficients.
-#' @param lambda_theta Nonnegative numeric L1 penalty on regression slopes.
-#' @param iter_eta Numeric; relative change threshold for stopping. Default: \code{1e-4}.
-#' @param max_iter Integer; maximum number of EM iterations. Default: \code{30}.
-#' @param resp_threshold Numeric in [0,1]; responsibilities below this are set to zero. Default: \code{1e-3}.
+#' 1. E-step with \code{<a href="create-LCDmix.html#estep_lcd">estep_lcd</a>()}. Then
+#'    \eqn{Q_{ref} = Q(\Theta^{(m)} \mid \Theta^{(m)})}, the objective at the
+#'    current parameters under the new responsibilities (checkpoint A).
+#' 2. Gate update with \code{<a href="create-LCDmix.html#mstep_alpha">mstep_alpha</a>()} (checkpoint B).
+#' 3. Expert coefficient update with \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} (checkpoint C). It
+#'    uses the active bins of the previous E-step (\code{idx_old}) on purpose:
+#'    the support bounds of the linear program must match the density that was
+#'    fitted to those residuals, or the current point can be infeasible.
+#' 4. Intercept centering with \code{<a href="create-LCDmix.html#mstep_shift">mstep_shift</a>()} (checkpoint D).
+#' 5. Density update with \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()}.
+#' 6. \eqn{Q_E = Q(\Theta^{(m+1)} \mid \Theta^{(m)})} with \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()}
+#'    (checkpoint E).
+#'
+#' Stopping rule: let \eqn{inc = (Q_E - Q_{ref}) / |Q_{ref}|}. If
+#' \eqn{inc &lt; 0}, the iteration is discarded, the parameters of the previous
+#' iteration are kept, and the loop stops. Otherwise the loop stops when
+#' \eqn{inc \le} \code{iter_eta} or \eqn{m =} \code{max_iter}, with the new
+#' parameters.
+#'
+#' @param init_res The list returned by \code{<a href="create-LCDmix.html#initialization">initialization</a>()}.
+#' @param iter_eta Stopping tolerance on the relative ascent \eqn{inc}; see the
+#'   stopping rule above.
+#' @inheritParams main
+#' @inheritParams initialization
+#'
+#' @details
+#' Note for developers: \code{<a href="create-LCDmix.html#main">main</a>()} calls \code{<a href="create-LCDmix.html#iteration">iteration</a>()} with positional
+#' arguments. Add new arguments only at the end of the signature.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{idx_new}{Final list of \eqn{TT} logical matrices of “active” bins per component.}
-#'   \item{resp_new}{Final list of \eqn{TT} responsibility matrices.}
-#'   \item{weight_new}{Final list of \eqn{TT} posterior‐weight matrices.}
-#'   \item{resi_new}{Final list of \eqn{TT} residual matrices.}
-#'   \item{alpha_new}{Final \eqn{K \times (p+1)} mixture‐weight matrix.}
-#'   \item{theta0_new}{List of length \eqn{K} of final intercepts.}
-#'   \item{theta_new}{List of length \eqn{K} of final slope vectors.}
-#'   \item{g_new}{List of length \eqn{K} of final log‐concave densities.}
-#'   \item{lambda_alpha}{Echo of input penalty on α.}
-#'   \item{lambda_theta}{Echo of input penalty on θ.}
-#'   \item{Q}{Vector of surrogate log‐likelihood values at each iteration.}
-#'   \item{Q_every}{Same as \code{Q}, for compatibility with initialization.}
+#'   \item{idx_new, resp_new, weight_new}{E-step output that belongs to the
+#'     returned parameters.}
+#'   \item{resi_new}{Residuals at the returned parameters.}
+#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients; row 1 is 0.}
+#'   \item{theta0_new, theta_new}{Lists of \code{K} intercepts and \code{K}
+#'     slope vectors.}
+#'   \item{g_new}{List of \code{K} log-concave fits.}
+#'   \item{lambda_alpha, lambda_theta}{The penalties, returned unchanged.}
+#'   \item{Q}{The starting \eqn{Q}, then \eqn{Q_E} of each iteration,
+#'     including a last iteration that was discarded because \eqn{Q}
+#'     decreased.}
+#'   \item{Q_every}{With \code{calc_Q_every = FALSE}, the same as \code{Q}.
+#'     With \code{TRUE}, \eqn{1 + 5 \times} \code{iter_num} values: the
+#'     starting \eqn{Q}, then checkpoints A to E of each iteration.
+#'     \code{Q_every[5 * m + 1] - Q_every[5 * m - 3]} is the ascent of
+#'     iteration \eqn{m}.}
+#'   \item{n_outside_every}{Attribute \code{n_outside} of \code{<a href="create-LCDmix.html#comp_Q">comp_Q</a>()} at
+#'     each recorded checkpoint: 5 values per iteration with
+#'     \code{calc_Q_every = TRUE} (no starting value), otherwise 1.}
+#'   \item{theta_diag}{List with one element per iteration: the \code{diag}
+#'     list returned by \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()}.}
+#'   \item{lp_check_every}{With \code{calc_Q_every = TRUE}, one
+#'     \eqn{K \times 2} matrix per iteration with columns \code{n_out} (bins
+#'     given to the \eqn{\theta} update whose new residual lies outside the
+#'     support \eqn{[L_k, U_k]}, tolerance 1e-8) and \code{max_over} (largest
+#'     distance outside). Empty otherwise.}
+#'   \item{error, failed_iter}{\code{NULL}, or with \code{debug = TRUE} the
+#'     error message and the iteration at which the loop failed.}
+#'   \item{iter_num}{Number of the last iteration that was started. If it was
+#'     discarded, the returned parameters come from iteration
+#'     \code{iter_num - 1}.}
 #' }
+#' After an error with \code{debug = TRUE}, the parameter fields hold the
+#' values at the moment of the error, which can be partly updated by the
+#' failed iteration.
 #'
 #' @export
 <span id="iteration">iteration</span> &lt;- function(
@@ -1494,21 +1653,6 @@ responsibilities,<br>
   n_outside_every &lt;- integer(0)      # NEW: parallel to Q_every
   theta_diag &lt;- list()
   lp_check_every  &lt;- list()                       # NEW
-  
-  last_state &lt;- list(
-    idx_old     = idx_old,
-    resp_old    = resp_old,
-    weight_old  = weight_old,
-    resi_old    = resi_old,
-    alpha_old   = alpha_old,
-    theta0_old  = theta0_old,
-    theta_old   = theta_old, 
-    g_old       = g_old,
-    Q           = Q,
-    Q_every     = Q_every,
-    theta_diag  = theta_diag,
-    n_outside_every = n_outside_every,
-    iter_num    = 0)
   
   idx_new    &lt;- idx_old
   resp_new   &lt;- resp_old
@@ -1670,33 +1814,13 @@ responsibilities,<br>
     theta0_old &lt;- theta0_new
     theta_old  &lt;- theta_new
     g_old      &lt;- g_new
-    
-    # Store the current parameters
-    last_state &lt;- list(
-      idx_old     = idx_old,
-      resp_old    = resp_old,
-      weight_old  = weight_old,
-      resi_old    = resi_old,
-      alpha_old   = alpha_old,
-      theta0_old  = theta0_old,
-      theta_old   = theta_old, 
-      g_old       = g_old,
-      Q           = Q,
-      Q_every     = Q_every,
-      n_outside_every = n_outside_every,
-      theta_diag      = theta_diag,
-      lp_check_every  = lp_check_every,               # NEW
-      iter_num        = i
-      )
   }
-    list(final = last_state,
-         error = NULL)
+    list(error = NULL)
     }, error = function(e){
     # on *any* error inside the loop:
     if (debug) {
-      # return the last successful state + the error message
+      # return the error message and the iteration at which it happened
       list(
-        final       = last_state,
         error       = conditionMessage(e),
         failed_iter = i
       )
@@ -1724,52 +1848,52 @@ responsibilities,<br>
     failed_iter     = res$failed_iter,      # NEW
     iter_num    = i))
 }</code></pre>
-<pre class="r"><code>#' Perform the E-step using log-concave component densities
+<pre class="r"><code>#' E-step with log-concave component densities
 #'
 #' @description
-#' Given current model parameters and log-concave density estimates, computes:
-#'   - Soft responsibilities \(\mathrm{resp}_{t,i,k}\)  
-#'   - Posterior weights (responsibilities × biomass per bin)  
-#'   - Logical indices of “effectively nonzero” responsibilities  
-#' for each time point \(t\) and component \(k\), thresholding responsibilities
-#' below \code{resp_threshold} to zero for numerical stability and speed.
+#' Computes, for each time point \eqn{t}, bin \eqn{i} and component \eqn{k},
+#' the responsibility
+#' \deqn{r_{tik} = \frac{\pi_{tk} \hat f_k(u_{tik})}{\sum_l \pi_{tl} \hat f_l(u_{til})},}
+#' with each density evaluated at the residual of the bin center.
+#' Responsibilities below \code{resp_threshold} are set to 0. The others are
+#' not renormalized, so a row can sum to slightly less than 1. A bin outside
+#' the support of every component gives 0/0, that is \code{NaN}.
 #'
-#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param bin_mass A list of length \code{TT}, where each element is a numeric
-#'   vector of length \eqn{M_t} giving the biomass weight per bin at time \(t\).
-#' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K}
-#'   matrix of residuals for bins at time \(t\).
-#' @param alpha A numeric \eqn{K \times (p+1)} matrix of mixture parameters
-#'   (column 1 = intercepts, columns 2:\(p+1\) = slopes).
-#' @param densities A list of length \code{K}, each an object returned by
-#'   \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} representing the log‐concave density for one component.
-#' @param resp_threshold Numeric in \([0,1]\); responsibilities below this value
-#'   are set to zero. Default: \code{1e-3}.
+#' @param X A numeric \eqn{TT \times p} covariate matrix.
+#' @param bin_mass A list of length \code{TT}; each element is a numeric vector
+#'   of length \eqn{M_t}, the weight of each bin.
+#' @param residuals A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of residuals.
+#' @param alpha A numeric \eqn{K \times (p+1)} matrix of gate coefficients
+#'   (column 1 holds the intercepts).
+#' @param densities A list of length \code{K} of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}
+#'   fits.
+#' @param resp_threshold A number in \eqn{[0, 1]}; responsibilities below it
+#'   are set to 0.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{resp}{List of length \code{TT} of \eqn{M_t \times K} matrices of responsibilities.}
-#'   \item{weight}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights.}
-#'   \item{idx}{List of length \code{TT} of \eqn{M_t \times K} logical matrices, where
-#'       \code{idx[[t]][i,k]} = \code{TRUE} if \code{resp[[t]][i,k]} &gt; 0.}
+#'   \item{resp}{List of \code{TT} \eqn{M_t \times K} matrices of
+#'     responsibilities, after thresholding.}
+#'   \item{weight}{List of \code{TT} \eqn{M_t \times K} matrices of posterior
+#'     weights, \code{resp} times \code{bin_mass}.}
+#'   \item{idx}{List of \code{TT} \eqn{M_t \times K} logical matrices;
+#'     \code{TRUE} where \code{resp} is positive.}
 #' }
 #'
 #' @examples
 #' \dontrun{
 #' TT &lt;- 4; K &lt;- 3; p &lt;- 2
-#' # Simulate residuals (5 bins × K) and biomass
-#' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5*K), ncol = K))
+#' # Residuals (5 bins, K components) and bin weights
+#' residuals &lt;- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
 #' bin_mass  &lt;- lapply(residuals, function(m) runif(nrow(m)))
-#' # Dummy densities
 #' densities &lt;- replicate(K,
 #'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(100), w = rep(1/100, 100)),
 #'   simplify = FALSE
 #' )
-#' # Random mixture parameters
-#' alpha &lt;- matrix(rnorm(K*(p+1)), nrow = K)
-#' # One E‐step
+#' alpha &lt;- matrix(rnorm(K * (p + 1)), nrow = K)
 #' e_res &lt;- <a href="create-LCDmix.html#estep_lcd">estep_lcd</a>(
-#'   X              = matrix(rnorm(TT*p), nrow = TT),
+#'   X              = matrix(rnorm(TT * p), nrow = TT),
 #'   bin_mass       = bin_mass,
 #'   residuals      = residuals,
 #'   alpha          = alpha,
@@ -1833,31 +1957,43 @@ responsibilities,<br>
     idx    = idx_list
   ))
 }</code></pre>
-<pre class="r"><code>#' Update mixture‐weight parameters via penalized multinomial regression
+<pre class="r"><code>#' Update the gate coefficients by penalized multinomial regression
 #'
 #' @description
-#' Fits a weighted multinomial logistic regression of component‐assignment weights
-#' on covariates with an L1 penalty to update the mixture‐weight parameters \code{alpha}.
+#' Fits an L1-penalized multinomial logistic regression with \code{glmnet}.
+#' The response at time \eqn{t} is the vector of summed posterior weights of
+#' the active bins, \eqn{s_{tk} = \sum_{i \in I_{tk}} w_{tik}}; glmnet treats
+#' each row as proportions with weight \eqn{\sum_k s_{tk}}. glmnet runs on a
+#' path of 30 values from \code{100 * lambda_alpha} down to
+#' \code{lambda_alpha}, and the coefficients at \code{lambda_alpha} are
+#' returned, centered so that component 1 is the reference (row 1 is 0).
 #'
-#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param weights A list of length \eqn{TT}, each element an \eqn{M_t \times K}
-#'   matrix of posterior weights (e.g.\ responsibilities × biomass) for each bin and component.
-#' @param idx A list of length \eqn{TT}, each element an \eqn{M_t \times K}
-#'   logical matrix indicating which bins have effectively nonzero posterior weight.
-#' @param lambda_alpha Positive numeric L1 penalty on the non‐intercept mixture‐weight coefficients.
+#' If the proportions \eqn{s_{tk} / \sum_l s_{tl}} are the same at every time
+#' point (to 1e-10), or if glmnet fails, the exact intercept-only solution is
+#' returned: the log of the total weight of each component, with all slopes 0.
 #'
-#' @return A numeric \eqn{K \times (p+1)} matrix \code{alpha}, where each row corresponds to
-#'   one mixture component, the first column is the intercept, and the remaining \eqn{p}
-#'   columns are the slope coefficients.
+#' glmnet uses its default \code{standardize = TRUE}, so the penalty acts on
+#' the coefficients of the standardized covariates. See the Details of
+#' \code{<a href="create-LCDmix.html#main">main</a>()} on covariate scale.
+#'
+#' @param X A numeric \eqn{TT \times p} covariate matrix.
+#' @param weights A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of posterior weights.
+#' @param idx A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} logical matrix of active bins.
+#' @param lambda_alpha Positive L1 penalty on the non-intercept gate
+#'   coefficients.
+#'
+#' @return A numeric \eqn{K \times (p+1)} matrix: row \eqn{k} holds the
+#'   intercept and the \eqn{p} slopes of component \eqn{k}; row 1 is 0.
 #'
 #' @examples
 #' \dontrun{
 #' TT &lt;- 5; p &lt;- 3; K &lt;- 2
 #' X &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-#' # Simulate posterior weights and threshold mask
 #' post_w &lt;- lapply(1:TT, function(i) matrix(runif(4 * K), ncol = K))
-#' mask  &lt;- lapply(post_w, function(w) w &gt; 0.1)
-#' alpha &lt;- <a href="create-LCDmix.html#mstep_alpha">mstep_alpha</a>(X, post_w, mask, lambda_alpha = 1e-3)
+#' mask   &lt;- lapply(post_w, function(w) w &gt; 0.1)
+#' alpha  &lt;- <a href="create-LCDmix.html#mstep_alpha">mstep_alpha</a>(X, post_w, mask, lambda_alpha = 1e-3)
 #' }
 #' @export
 <span id="mstep_alpha">mstep_alpha</span> &lt;- function(
@@ -1901,52 +2037,60 @@ responsibilities,<br>
   alpha_mat  &lt;- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
   return(alpha_mat)
 }</code></pre>
-<pre class="r"><code>#' M‐step update of all component regression parameters under log‐concavity
+<pre class="r"><code>#' Update the expert coefficients of all components
 #'
 #' @description
-#' For each mixture component \(k\), performs the M‐step update of intercept \(\theta_{0k}\)
-#' and slope vector \(\theta_k\) by invoking the LP solver with log‐concave constraints
-#' (\code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}), returning updated lists of intercepts and slopes.
+#' For each component \eqn{k}, updates the intercept and the slopes with
+#' \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()} (\code{update = "lp"}, the method of the paper) or
+#' \code{<a href="create-LCDmix.html#mstep_theta_optim">mstep_theta_optim</a>()} (\code{update = "optim"}, the comparison arm of
+#' the LP ablation), and records diagnostics that are computed the same way
+#' for both. The returned intercept is the update's own intercept;
+#' \code{<a href="create-LCDmix.html#iteration">iteration</a>()} then replaces it with \code{<a href="create-LCDmix.html#mstep_shift">mstep_shift</a>()}.
 #'
-#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses at time \(t\).
-#' @param X A numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param weights A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights.
-#' @param residuals A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals.
-#' @param densities A list of length \code{K}, each an object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} for one component.
-#' @param idx A list of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix indicating effective bin membership.
-#' @param intercepts A list of length \code{K} of current intercept parameters \(\theta_{0k}\).
-#' @param slopes A list of length \code{K} of current slope vectors \(\theta_k\).
-#' @param lambda_theta Nonnegative numeric L1 penalty on slopes.
-#' @param maxdev \code{NULL} or a positive number; see \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}.
-#'    Only the LP update supports it.
+#' @inheritParams mstep_theta_lp
+#' @param densities A list of length \code{K} of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}
+#'   fits, one per component.
+#' @param intercepts A list of length \code{K} of current intercepts.
+#' @param slopes A list of length \code{K} of current slope vectors.
+#' @param update \code{"lp"} or \code{"optim"}; see \code{<a href="create-LCDmix.html#main">main</a>()}.
+#' @param maxdev \code{NULL} or a positive number; see
+#'   \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}. Only \code{update = "lp"} supports it; with
+#'   \code{"optim"} a non-\code{NULL} value is an error.
 #'
-#' @return A list with elements:
+#' @return A list with components:
 #' \describe{
-#'   \item{theta0}{List of length \code{K} of updated intercepts \(\theta_{0k}\).}
-#'   \item{theta}{List of length \code{K} of updated slope vectors \(\theta_k\).}
+#'   \item{theta0}{List of \code{K} updated intercepts.}
+#'   \item{theta}{List of \code{K} updated slope vectors.}
+#'   \item{diag}{List of \code{K} diagnostic lists, each with \code{arm}
+#'     (the value of \code{update}), \code{seconds} (time of the update),
+#'     \code{n_active} (number of active bins), \code{n_outside} (active bins
+#'     whose new residual lies outside the support of the density),
+#'     \code{convergence}, \code{obj_start}, \code{obj_end} (from
+#'     \code{<a href="create-LCDmix.html#mstep_theta_optim">mstep_theta_optim</a>()}; \code{NA} for the LP), and
+#'     \code{maxdev_n_relaxed}, \code{maxdev_max_excess} (from
+#'     \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()} with \code{maxdev}; \code{NA} otherwise).}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' TT      &lt;- 3; K &lt;- 2; p &lt;- 2; n_bins &lt;- 5
-#' Y_bin   &lt;- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol=1))
-#' X       &lt;- matrix(rnorm(TT*p), nrow=TT, ncol=p)
-#' weights &lt;- lapply(Y_bin, function(m) matrix(runif(length(m)*K), ncol=K))
-#' resi    &lt;- lapply(Y_bin, function(m) matrix(rnorm(length(m)*K), ncol=K))
-#' mask    &lt;- lapply(Y_bin, function(m) matrix(TRUE, nrow(m), ncol=K))
-#' densities &lt;- replicate(K,
-#'   <a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>(rnorm(50), w = rep(1/50,50)),
-#'   simplify = FALSE
-#' )
-#' intercepts &lt;- replicate(K, 0, simplify = FALSE)
+#' TT &lt;- 6; K &lt;- 2; p &lt;- 2
+#' X          &lt;- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+#' Y_bin      &lt;- lapply(1:TT, function(t) matrix(sort(rnorm(20)), ncol = 1))
+#' intercepts &lt;- list(-0.5, 0.5)
 #' slopes     &lt;- replicate(K, rep(0, p), simplify = FALSE)
+#' resi       &lt;- <a href="create-LCDmix.html#comp_resi">comp_resi</a>(Y_bin, X, intercepts, slopes)
+#' weights    &lt;- lapply(Y_bin, function(m) matrix(runif(nrow(m) * K), ncol = K))
+#' idx        &lt;- lapply(weights, function(w) w &gt; 0)
+#' # The densities must be fitted to the current residuals, or the
+#' # linear program has no feasible point
+#' densities  &lt;- <a href="create-LCDmix.html#mstep_g">mstep_g</a>(resi, weights, idx)
 #' result &lt;- <a href="create-LCDmix.html#mstep_theta">mstep_theta</a>(
 #'   Y_bin, X, weights, resi,
-#'   densities, mask,
+#'   densities, idx,
 #'   intercepts, slopes,
 #'   lambda_theta = 1e-3
 #' )
-#' str(result)
+#' str(result$theta)
 #' }
 #' @export
 <span id="mstep_theta">mstep_theta</span> &lt;- function(
@@ -2034,35 +2178,71 @@ responsibilities,<br>
     diag   = diag_list          # NEW; ignored by existing callers
   )
 }</code></pre>
-<pre class="r"><code>#' M‐step update of intercept and slopes via linear programming under log-concavity
+<pre class="r"><code>#' Update the coefficients of one expert by linear programming
 #'
 #' @description
-#' Updates the intercept \eqn{\theta_{0k}} and slope vector \eqn{\theta_k} for mixture
-#' component \eqn{k} by solving a linear program that enforces the log‐concave density
-#' constraints given by \code{density_k}, maximizes the weighted log‐likelihood, and
-#' applies an L1 penalty on the slopes.
+#' The fitted log-density \eqn{\hat g_k} of component \eqn{k} is concave and
+#' piecewise linear, so maximizing
+#' \deqn{\sum_i w_i \hat g_k(y_i - \theta_{0k} - x_i^\top \theta_k) - N \lambda_\theta \|\theta_k\|_1}
+#' over \eqn{(\theta_{0k}, \theta_k)} is a linear program. The sum runs over the
+#' active bins of component \eqn{k}, and \eqn{N} is the sum of all posterior
+#' weights, so the objective is \eqn{N} times the part of \eqn{Q} that depends
+#' on \eqn{\theta_k}. The linear program has
 #'
-#' @param Y_bin List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.
-#' @param X Numeric \eqn{TT \times p} matrix of covariates (rows = time points).
-#' @param weights List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.
-#' @param residuals List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.
-#' @param density_k An object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.
-#' @param idx List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.
-#' @param intercept_k Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.
-#' @param slopes_k Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.
-#' @param lambda_theta Nonnegative numeric; L1 penalty on the slope parameters.
-#' @param component Integer in \(\{1,\dots,K\}\); index of the component to update.
-#' @param maxdev \code{NULL} (default, no constraint) or a positive number. Bounds
-#'   the deviation of the component mean from its intercept,
-#'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} for all \eqn{t}, as in flowmix.
-#'   If the current slopes already exceed \code{maxdev} at some \eqn{t}, the bound
-#'   there is relaxed to the current deviation, so the LP stays feasible and the
-#'   update cannot decrease Q. How often that happens is returned.
+#' - one variable \eqn{z_i} per active bin, with
+#'   \eqn{z_i \le \phi_j + b_j (u_i - x_j)} for every linear piece \eqn{j}
+#'   of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j});
+#' - support constraints: at every time point with active bins, all residuals
+#'   stay in \eqn{[L_k, U_k]}, the range of the current residuals, which is
+#'   the support of \eqn{\hat g_k};
+#' - optionally, the \code{maxdev} constraints;
+#' - the objective \eqn{\sum_i w_i z_i - N \lambda_\theta \|\theta_k\|_1}.
+#'
+#' Every variable is split into a positive and a negative part. The program is
+#' solved with \code{Rsymphony::Rsymphony_solve_LP()}; if that does not return
+#' an optimal solution, with \code{lpSolve::lp()}. The function stops with an
+#' error if neither does.
+#'
+#' @param Y_bin A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
+#' @param X A numeric \eqn{TT \times p} covariate matrix.
+#' @param weights A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of posterior weights.
+#' @param residuals A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of current residuals. Only their range over the
+#'   active bins of the component is used, as \eqn{[L_k, U_k]}.
+#' @param density_k The \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit of the component
+#'   (fields \code{x}, \code{phi} and \code{IsKnot} are used).
+#' @param idx A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} logical matrix of active bins. \code{<a href="create-LCDmix.html#iteration">iteration</a>()}
+#'   passes the active bins of the previous E-step, the bins that
+#'   \code{density_k} was fitted to.
+#' @param intercept_k Current intercept. Not used by the linear program; it is
+#'   an argument so that both updates take the same arguments.
+#' @param slopes_k Current slope vector of length \eqn{p}. Used only by the
+#'   \code{maxdev} guard.
+#' @param lambda_theta Nonnegative L1 penalty on the slopes.
+#' @param component Index \eqn{k} of the component to update.
+#' @param lp_time_limit Time limit in seconds for Rsymphony. If it is reached,
+#'   lpSolve is tried without a time limit.
+#' @param maxdev \code{NULL} (default, no constraint) or a positive number.
+#'   Bounds the deviation of the component mean from its intercept,
+#'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
+#'   as in flowmix. If the current slopes already exceed \code{maxdev} at some
+#'   \eqn{t}, the bound there is relaxed to the current deviation (the guard),
+#'   so the linear program stays feasible and the update cannot decrease
+#'   \eqn{Q}. The return value reports how often that happened.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{theta0_k}{Numeric; updated intercept for component \eqn{k}.}
-#'   \item{theta_k}{Numeric vector of length \eqn{p}; updated slopes for component \eqn{k}.}
+#'   \item{theta0_k}{Updated intercept.}
+#'   \item{theta_k}{Updated slope vector of length \eqn{p}.}
+#'   \item{maxdev_n_relaxed}{Number of time points where the guard relaxed the
+#'     bound (current deviation above \code{maxdev} by more than 1e-8);
+#'     \code{NA} when \code{maxdev} is \code{NULL}.}
+#'   \item{maxdev_max_excess}{Largest amount by which the current deviation
+#'     exceeds \code{maxdev} (0 if never); \code{NA} when \code{maxdev} is
+#'     \code{NULL}.}
 #' }
 #'
 #' @export
@@ -2234,19 +2414,21 @@ responsibilities,<br>
 <pre class="r"><code>#' Piecewise-linear log-density with linear extension beyond the support
 #'
 #' @description
-#' Builds an evaluator for the fitted log-concave log-density \eqn{\hat g_k},
-#' linear between knots and extended beyond \eqn{[L_k, U_k]} using the boundary
-#' slopes. The extension keeps the function finite, concave, and piecewise
-#' linear everywhere, which is what makes the quasi-Newton arm a fair
-#' comparator rather than a strawman: with the honest \code{-Inf} convention
-#' \code{optim} stalls on its first step outside the support and the comparison
-#' proves nothing.
+#' Builds an evaluator for the fitted log-concave log-density
+#' \eqn{\hat g_k}: linear between knots, and continued beyond
+#' \eqn{[L_k, U_k]} with the slopes of the two boundary pieces. The function
+#' is then finite, concave and piecewise linear everywhere. This is
+#' deliberate: the quasi-Newton arm of the LP ablation needs a finite
+#' objective outside the support. With the \code{-Inf} convention,
+#' \code{optim} stops at its first step outside the support and the
+#' comparison shows nothing.
 #'
-#' @param density_k Object from \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} with fields
-#'   \code{x}, \code{phi}, \code{IsKnot}.
+#' @param density_k A \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit (fields \code{x},
+#'   \code{phi} and \code{IsKnot} are used). It needs at least two knots.
 #'
-#' @return A list with \code{<a href="create-LCDmix.html#value">value</a>(u)}, \code{<a href="create-LCDmix.html#slope">slope</a>(u)}, and the support
-#'   endpoints \code{L}, \code{U}.
+#' @return A list with \code{<a href="create-LCDmix.html#value">value</a>(u)} (the log-density at \code{u}),
+#'   \code{<a href="create-LCDmix.html#slope">slope</a>(u)} (its slope at \code{u}; the right-hand slope at a knot)
+#'   and the support endpoints \code{L} and \code{U}.
 #' @keywords internal
 <span id="make_logdens_ext">make_logdens_ext</span> &lt;- function(density_k) {
   knot  &lt;- as.logical(density_k$IsKnot)
@@ -2291,27 +2473,39 @@ responsibilities,<br>
 
   list(value = value, slope = slope, L = L, U = U)
 }</code></pre>
-<pre class="r"><code>#' M-step update of intercept and slopes by quasi-Newton (no LP, no constraints)
+<pre class="r"><code>#' Update the coefficients of one expert by quasi-Newton (LP ablation arm)
 #'
 #' @description
-#' Comparison arm for the LP ablation. Maximizes the same weighted
-#' log-likelihood with the same L1 penalty as \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}, but with
-#' \code{optim(method = "L-BFGS-B")} and without the log-concavity epigraph
-#' constraints or the support-feasibility bounds.
+#' Comparison arm of the LP ablation. Maximizes the same weighted
+#' log-likelihood with the same L1 penalty as \code{<a href="create-LCDmix.html#mstep_theta_lp">mstep_theta_lp</a>()}, but
+#' with \code{optim(method = "L-BFGS-B")} and without the support constraints.
+#' The log-density is evaluated with \code{<a href="create-LCDmix.html#make_logdens_ext">make_logdens_ext</a>()}, which
+#' continues it linearly beyond the support.
 #'
 #' The slope vector is split as \eqn{\theta = \theta^+ - \theta^-} with both
-#' parts nonnegative, mirroring the LP's variable structure so that the two arms
-#' differ in solver rather than in problem statement, and so the non-smooth L1
-#' penalty is handled the same way in both.
+#' parts nonnegative, as in the linear program, so that the two arms differ in
+#' the solver and not in the problem, and the L1 penalty is handled the same
+#' way in both.
 #'
 #' @inheritParams mstep_theta_lp
-#' @param maxit Integer; \code{optim} iteration cap. Default 500.
-#' @param use_gradient Logical; supply the analytic (sub)gradient. Default TRUE.
+#' @param residuals Not used; an argument so that both updates take the same
+#'   arguments.
+#' @param intercept_k Current intercept; the starting value of \code{optim}.
+#' @param slopes_k Current slope vector; the starting value of \code{optim}.
+#' @param lp_time_limit Not used; an argument so that both updates take the
+#'   same arguments.
+#' @param maxit Maximum number of \code{optim} iterations.
+#' @param use_gradient Logical; supply the analytic (sub)gradient to
+#'   \code{optim}.
 #'
-#' @return A list with \code{theta0_k}, \code{theta_k}, and diagnostics
-#'   \code{convergence}, \code{obj_start}, \code{obj_end}, \code{n_outside},
-#'   \code{counts}. \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} reads only the first two, so the
-#'   diagnostics are free to carry.
+#' @return A list with \code{theta0_k}, \code{theta_k} and the diagnostics
+#'   \code{convergence} (code from \code{optim}; 99 if \code{optim} stopped
+#'   with an error), \code{obj_start}, \code{obj_end} (objective before and
+#'   after), \code{n_outside} (active bins whose new residual lies outside the
+#'   support) and \code{counts} (from \code{optim}). If the component has no
+#'   active bin, the current values are returned with \code{NA} diagnostics.
+#'   \code{<a href="create-LCDmix.html#mstep_theta">mstep_theta</a>()} uses only \code{theta0_k} and \code{theta_k} for the
+#'   fit.
 #' @export
 <span id="mstep_theta_optim">mstep_theta_optim</span> &lt;- function(
   Y_bin,
@@ -2486,35 +2680,32 @@ responsibilities,<br>
   }
   return(TRUE)
 }</code></pre>
-<pre class="r"><code>#' Compute a weighted histogram from a log‐concave density object
+<pre class="r"><code>#' Weighted histogram of the data behind a log-concave fit
 #'
 #' @description
-#' Given an object returned by \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}, which contains the
-#' sample points \code{xn} and their associated weights \code{w}, this function
-#' constructs a normalized histogram (as a density estimate) over \code{n_bins}
-#' equal‐width bins spanning the range of \code{xn}.
+#' Builds a histogram density of the weighted points that a
+#' \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit was computed from (for a component of
+#' \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()}: the pooled residuals and their weights), on
+#' \code{n_bins} equal-width bins over their range. It uses \code{g$xn} and
+#' \code{g$w}, which are in the same order only when the fit was made with
+#' weights given, as \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()} does.
 #'
-#' @param g A list (output of \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()}) containing:
-#'   \describe{
-#'     \item{\code{xn}}{Numeric vector of sample points.}
-#'     \item{\code{w}}{Numeric vector of nonnegative weights corresponding to each element of \code{xn}.}
-#'   }
-#' @param n_bins Integer; number of equal‐width bins to use. Default: \code{30}.
+#' @param g A \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit, with fields \code{xn} (points)
+#'   and \code{w} (their weights).
+#' @param n_bins Number of equal-width bins.
 #'
 #' @return A list with components:
 #' \describe{
-#'   \item{\code{midpoints}}{Numeric vector of length \code{n_bins}; the center of each bin.}
-#'   \item{\code{densities}}{Numeric vector of length \code{n_bins}; the estimated density
-#'     (normalized histogram) at each midpoint, such that the total area integrates to 1.}
+#'   \item{\code{midpoints}}{Numeric vector of length \code{n_bins}; the bin
+#'     centers.}
+#'   \item{\code{densities}}{Numeric vector of length \code{n_bins}; the
+#'     histogram heights, scaled so that the total area is 1.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' # Suppose g_k is one component from <a href="create-LCDmix.html#mstep_g">mstep_g</a>()
-#' w_hist &lt;- <a href="create-LCDmix.html#weighted_hist">weighted_hist</a>(
-#'   g = g_k,
-#'   n_bins         = 50
-#' )
+#' # g_k is one component of <a href="create-LCDmix.html#mstep_g">mstep_g</a>()
+#' w_hist &lt;- <a href="create-LCDmix.html#weighted_hist">weighted_hist</a>(g = g_k, n_bins = 50)
 #' plot(w_hist$midpoints, w_hist$densities, type = "h",
 #'      xlab = "Residual value", ylab = "Density")
 #' }
@@ -2551,27 +2742,34 @@ responsibilities,<br>
     densities = as.numeric(densities)
   ))
 }</code></pre>
-<pre class="r"><code>#' Compute the weighted quantile of a numeric sample
+<pre class="r"><code>#' Weighted quantile with linear interpolation
 #'
 #' @description
-#' Returns the \code{prob}-th weighted quantile of the values \code{x} with
-#' corresponding nonnegative weights \code{w}. The observations are sorted by
-#' \code{x}, and the smallest \code{x} such that the cumulative weight
-#' reaches \code{prob * sum(w)} is returned.
+#' Returns the \code{prob}-quantile of \code{x} with weights \code{w}. Points
+#' with \code{NA} in \code{x}, or with a weight that is 0, negative or not
+#' finite, are dropped. After sorting, let \eqn{C_j} be the cumulative weight
+#' and \eqn{c} = \code{prob} times the total weight, and let \eqn{j} be the
+#' first index with \eqn{C_j \ge c}. The result is
+#' \deqn{x_{(j-1)} + \frac{c - C_{j-1}}{w_{(j)}} (x_{(j)} - x_{(j-1)}),}
+#' kept within \eqn{[x_{(j-1)}, x_{(j)}]}. If \eqn{j = 1}, the smallest
+#' \code{x} is returned; if a neighbor is not finite (for example
+#' \code{-Inf}), \eqn{x_{(j)}} is returned without interpolation.
+#' \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} uses this function for the median and for the trimming
+#' threshold.
 #'
-#' @param x Numeric vector of data values.
-#' @param w Numeric vector of nonnegative weights of the same length as \code{x}.
-#' @param prob Numeric scalar in \[0,1\]; the desired quantile level (e.g.\ 0.05 for
-#'   the 5th percentile). Default: \code{0.05}.
+#' @param x Numeric vector of values; \code{-Inf} is allowed.
+#' @param w Numeric vector of weights of the same length as \code{x}.
+#' @param prob The quantile level, a number in \eqn{[0, 1]}.
 #'
-#' @return Numeric scalar: the weighted \code{prob}-quantile of \code{x}.
+#' @return A single number, or \code{NA} if no point is left after dropping.
 #'
 #' @examples
 #' \dontrun{
-#' x   &lt;- c(10, 20, 30, 40, 50)
-#' w   &lt;- c(1, 1, 1, 1, 6)     # more weight on the largest value
-#' q05 &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.05)  # should be 10
-#' q95 &lt;- <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.95)  # should be 50
+#' x &lt;- c(10, 20, 30, 40, 50)
+#' w &lt;- c(1, 1, 1, 1, 6)                 # more weight on the largest value
+#' <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.05)  # 10
+#' <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.5)   # 41.67
+#' <a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>(x, w, prob = 0.95)  # 49.17
 #' }
 #' @export
 <span id="weighted_quantile">weighted_quantile</span> &lt;- function(
@@ -2596,11 +2794,21 @@ responsibilities,<br>
   frac &lt;- (threshold - cum_w[idx - 1]) / sorted_w[idx]      # was: / (sorted_w[idx] - sorted_w[idx-1])
   min(hi, max(lo, lo + frac * (hi - lo)))                   # clamp: floating overshoot past hi
 }</code></pre>
-<pre class="r"><code>#' Width of one bin on the binning grid.
+<pre class="r"><code>#' Width of one bin on the binning grid
 #'
-#' NOTE: <a href="create-LCDmix.html#binning">binning</a>() builds equally spaced cutpoints, so the smallest gap between
-#' distinct bin centers is the bin width. Empty grid positions leave gaps that
+#' @description
+#' \code{<a href="create-LCDmix.html#binning">binning</a>()} builds equally spaced cut points, so the smallest gap
+#' between distinct bin centers is the bin width. Empty bins leave gaps that
 #' are multiples of it, which is why the minimum is used and not the mean.
+#' Gives a warning if a gap is not a whole multiple of the minimum (relative
+#' tolerance 1e-6).
+#'
+#' @param Y_test A list of bin centers (vectors or one-column matrices), as in
+#'   \code{Y_bin}.
+#'
+#' @return The bin width, or \code{NA} if there are fewer than two distinct
+#'   bin centers.
+#' @keywords internal
 <span id="infer_bin_width">infer_bin_width</span> &lt;- function(Y_test) {
   centers &lt;- sort(unique(as.numeric(unlist(Y_test))))
   if (length(centers) &lt; 2L) {
@@ -2613,57 +2821,68 @@ responsibilities,<br>
   }
   return(width)
 }
-#' Evaluate held-out (penalized) log-likelihood for LCDmix
+#' Log-likelihood of a fitted LCDmix model on binned data
 #'
-#' Computes per-observation held-out log-likelihoods for a fitted LCDmix
-#' \code{model} on test data \code{(Y_test, X_test)} and returns the untrimmed
-#' and trimmed **penalized** weighted means. Trimming is performed over
-#' \emph{all rows, including \code{-Inf} rows}, so that models with different
-#' proportions of finite rows remain comparable. The trimmed threshold is a
-#' weighted quantile of the log-likelihoods using \code{<a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>()}.
-#' The data are binned, so a bin is an interval. Scoring it by the density at
-#' its center rewards a fitted density that is peaked inside the bin, which is
-#' why the bin probability is used instead.
+#' @description
+#' Computes, for every bin \eqn{i} at every time point \eqn{t}, the log of the
+#' fitted mixture density,
+#' \deqn{\ell_{ti} = \log \sum_k \pi_{tk} \hat f_{k,ti},}
+#' and returns weighted means of \eqn{\ell_{ti}} (weights
+#' \code{biomass_test}) minus the L1 penalty of the model. With
+#' \code{score = "bin_prob"} (the default), \eqn{\hat f_{k,ti}} is the
+#' probability of the bin under component \eqn{k} divided by the bin width
+#' \eqn{h}, \eqn{(\hat F_k(u + h/2) - \hat F_k(u - h/2)) / h}, where \eqn{u} is
+#' the residual of the bin center. With \code{score = "center"} it is the
+#' density at the bin center. The data are binned, so a bin is an interval;
+#' scoring by the density at the center rewards a component that is peaked
+#' inside one bin, which is why the bin probability is the default. A bin
+#' outside the support of every component gets \eqn{\ell_{ti} = -\infty}.
 #'
-#' @param model List; fitted LCDmix object containing at least:
-#'   \code{g_new} (list of K log-concave density fits),
-#'   \code{theta_new} (list/array of slopes),
-#'   \code{theta0_new} (list of intercepts),
-#'   \code{alpha_new} (K × (p+1) gating coefficients),
-#'   \code{lambda_alpha}, \code{lambda_theta} (penalties).
-#' @param Y_test List of length \eqn{TT}; test responses for each time point
-#'   (\eqn{t = 1,\dots,TT}). Element \eqn{t} is a numeric vector of length
-#'   \eqn{n_t}.
-#' @param X_test Numeric matrix \eqn{TT \times p}; covariates aligned by time.
-#'   Row \eqn{t} is used with \code{Y_test[[t]]}.
-#' @param biomass_test List of length \eqn{TT}; per-time weights (flattened to
-#'   a vector of length \eqn{N = \sum_t n_t} via \code{unlist(biomass_test)}).
-#' @param trim_prob Numeric in \eqn{[0,1)}; fraction of weight to trim based on
-#'   the weighted quantile of \emph{all} log-likelihoods (including \code{-Inf}).
-#' @param bin_width Numeric; the width of a bin. \code{NULL} (the default)
-#'   infers it from \code{Y_test}, which is correct for the equally spaced grid
-#'   that \code{<a href="create-LCDmix.html#binning">binning</a>()} builds.
-#' @param score Either \code{"bin_prob"} (the default) to score each bin by its
-#'   probability divided by the bin width, that is the average density over the
-#'   bin, or \code{"center"} for the density at the bin center, which was the
-#'   behavior before this fix.
+#' \code{<a href="create-LCDmix.html#main">main</a>()} calls this function on the training data (the result is
+#' \code{fit$L}); \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()} calls it on the held-out time points.
 #'
-#' @details
-#' For each time \eqn{t} and component \eqn{k}, residuals are
-#' \eqn{r_{t,i,k} = y_{t,i} - (\theta_{0k} + x_t^\top \theta_k)}.
-#' Densities are evaluated via
-#' \code{logcondens::evaluateLogConDens(r_{t,i,k}, g_k)[,3]} (density column).
-#' Mixture densities are \eqn{\sum_k \pi_{t,k} f_k(r_{t,i,k})}, with
-#' \eqn{\pi_{t,k}} from \code{<a href="create-LCDmix.html#pi_k">pi_k</a>(X_test, alpha)}; per-row log-likelihoods are
-#' the \eqn{\log} of those mixture densities. Penalization subtracts
-#' \eqn{\lambda_\alpha \lVert \alpha_{\cdot,-1}\rVert_1 + \lambda_\theta \sum_k \lVert \theta_k\rVert_1}.
+#' @param model A fitted model: the \code{iter} element of a \code{<a href="create-LCDmix.html#main">main</a>()} fit.
+#'   The fields \code{g_new}, \code{theta0_new}, \code{theta_new},
+#'   \code{alpha_new}, \code{lambda_alpha} and \code{lambda_theta} are used.
+#' @param Y_test A list of length \eqn{TT}; element \eqn{t} holds the bin
+#'   centers at time \eqn{t} (a vector or a one-column matrix).
+#' @param X_test A numeric \eqn{TT \times p} covariate matrix; row \eqn{t}
+#'   goes with \code{Y_test[[t]]}.
+#' @param biomass_test A list of length \eqn{TT}; the weight of each bin.
+#' @param trim_prob A number in \eqn{[0, 1)}: the fraction of the total weight
+#'   trimmed from the bottom for \code{trimmed_loglik}. The threshold is the
+#'   weighted \code{trim_prob}-quantile (\code{<a href="create-LCDmix.html#weighted_quantile">weighted_quantile</a>()}) of all
+#'   \eqn{\ell_{ti}}, \code{-Inf} included, so models with different numbers of
+#'   \code{-Inf} bins are trimmed in the same way.
+#' @param bin_width The width of a bin. \code{NULL} (the default) infers it
+#'   from \code{Y_test} with \code{<a href="create-LCDmix.html#infer_bin_width">infer_bin_width</a>()}, which is correct for the
+#'   equally spaced grid that \code{<a href="create-LCDmix.html#binning">binning</a>()} builds. If it cannot be
+#'   inferred, the function warns and scores at the bin centers.
+#' @param score \code{"bin_prob"} (the default) to score each bin by its
+#'   probability divided by the bin width, that is, the average density over
+#'   the bin; \code{"center"} for the density at the bin center.
 #'
-#' @return A list with:
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{prop_inf}}{Proportion of rows where the per-row log-likelihood is not finite.}
-#'   \item{\code{finite_loglik}}{Untrimmed \emph{penalized} weighted mean over finite rows; \code{-Inf} if any \code{-Inf} present.}
-#'   \item{\code{trimmed_loglik}}{Trimmed \emph{penalized} weighted mean (trim over all rows, ties kept with \code{&gt;=}).}
+#'   \item{\code{prop_inf}}{Share of the total weight in bins with
+#'     \eqn{\ell_{ti} = -\infty}.}
+#'   \item{\code{loglik}}{Weighted mean of \eqn{\ell_{ti}} over all bins, minus
+#'     the penalty; \code{-Inf} if any bin has \eqn{\ell_{ti} = -\infty}.}
+#'   \item{\code{finite_loglik}}{The same over the bins with finite
+#'     \eqn{\ell_{ti}} only.}
+#'   \item{\code{med_loglik}}{Weighted median of \eqn{\ell_{ti}}, minus the
+#'     penalty.}
+#'   \item{\code{trimmed_loglik}}{Weighted mean of \eqn{\ell_{ti}} over the
+#'     bins at or above the trimming threshold, minus the penalty.}
+#'   \item{\code{penalty}}{\eqn{\lambda_\alpha \sum_k \sum_{j \ge 1} |\alpha_{kj}| + \lambda_\theta \sum_k \|\theta_k\|_1},
+#'     with the penalties stored in \code{model}. Add it back to get an
+#'     unpenalized value.}
+#'   \item{\code{sum_w}}{Total weight.}
+#'   \item{\code{sum_trimmed_w}}{Weight of the bins kept after trimming.}
 #' }
+#' If every bin has \eqn{\ell_{ti} = -\infty}, \code{prop_inf} is 1, the four
+#' log-likelihoods are \code{-Inf}, and \code{penalty}, \code{sum_w} and
+#' \code{sum_trimmed_w} are \code{NA}.
 #'
 #' @seealso \code{\link{pi_k}}, \code{\link{weighted_quantile}},
 #'   \code{\link[logcondens]{evaluateLogConDens}}
@@ -2677,7 +2896,7 @@ responsibilities,<br>
 #'   biomass_test = bin_mass[test_idx],
 #'   trim_prob    = 0.03
 #' )
-#' res$trimmed_loglik
+#' res$trimmed_loglik + res$penalty   # unpenalized trimmed log-likelihood
 #' }
 #'
 #' @export
@@ -2865,8 +3084,26 @@ responsibilities,<br>
   )
   return(iimat)
 }</code></pre>
-<pre class="r"><code>#' @keywords internal
-#' 
+<pre class="r"><code>#' Error message of a failed fit
+#'
+#' @description
+#' Builds the error text that \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()} and
+#' \code{<a href="create-LCDmix.html#refit_onejob">refit_onejob</a>()} save when a fit fails. A fit fails in one of two
+#' ways: \code{<a href="create-LCDmix.html#main">main</a>()} stops with an error, which the caller catches
+#' (\code{err_msg}); or, with \code{debug = TRUE}, \code{<a href="create-LCDmix.html#iteration">iteration</a>()} catches
+#' the error and \code{<a href="create-LCDmix.html#main">main</a>()} returns normally with \code{iter = NULL}
+#' (\code{fit$iter_partial$error}).
+#'
+#' @param fit The value returned by \code{<a href="create-LCDmix.html#main">main</a>()}, or \code{NULL} if
+#'   \code{<a href="create-LCDmix.html#main">main</a>()} stopped with an error.
+#' @param err_msg The caught error message, or \code{NULL}.
+#'
+#' @return A character string: \code{err_msg} if it is not \code{NULL};
+#'   otherwise the error stored in \code{fit$iter_partial}, followed by
+#'   " [failed at iteration i]"; otherwise a fixed text saying that the cause
+#'   is unknown.
+#' @keywords internal
+#'
 #' @export
 <span id="fit_error_text">fit_error_text</span> &lt;- function(fit, err_msg) {
   ## Error thrown out of <a href="create-LCDmix.html#main">main</a>() -- tryCatch already captured it.
@@ -2908,18 +3145,55 @@ responsibilities,<br>
            n_relaxed_total = sum(n_rel, na.rm = TRUE),
            max_excess      = max(excess, na.rm = TRUE)))
 }</code></pre>
-<pre class="r"><code>#' @title Internal: run a single CV job (one fold/seed/λ-pair)
-#' @description Executes one CV job: fit on train split, evaluate on hold-out,
-#'   and write a per-job RDS file. Returns a concise log string.
-#' @param job named numeric vector/data.frame row with fields:
-#'   alpha_idx, theta_idx, seed_idx, fold_idx, lambda_alpha, lambda_theta
-#' @param Y_bin list of responses; @param X matrix; @param bin_mass list of weights
-#' @param folds list of fold indices as from flowmix::make_cv_folds()
-#' @param K,max_iter,iter_eta,resp_threshold,trim_prob standard LCDmix args
-#' @param save_dir directory to write "&lt;alpha&gt;-&lt;theta&gt;-&lt;seed&gt;-&lt;fold&gt;.rds"
-#' @return character (one log line); writes result file as side-effect
+<pre class="r"><code>#' Run one cross-validation job and save its result
+#'
+#' @description
+#' Fits the model with one penalty pair and one seed on all time points except
+#' one fold, evaluates it on the held-out fold with \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()}, and
+#' saves the result to
+#' \code{save_dir/&lt;alpha_idx&gt;-&lt;theta_idx&gt;-&lt;seed_idx&gt;-&lt;fold_idx&gt;.rds}. It calls
+#' \code{set.seed(seed_idx)} before \code{<a href="create-LCDmix.html#main">main</a>()}, so the seed selects the
+#' random flowmix start. Called by \code{<a href="create-LCDmix.html#cv_lcd">cv_lcd</a>()} and \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()}.
+#'
+#' @param job A named numeric vector with \code{alpha_idx}, \code{theta_idx},
+#'   \code{seed_idx}, \code{fold_idx}, \code{lambda_alpha} and
+#'   \code{lambda_theta}: one row of \code{<a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>()}.
+#' @param folds A list with one element per fold, the indices of the held-out
+#'   time points, as returned by \code{flowmix::make_cv_folds()}.
+#' @param save_dir Directory for the result file.
+#' @inheritParams main
+#' @inheritParams initialization
+#'
+#' @return \code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+#'   file is a list with components:
+#' \describe{
+#'   \item{eval_trimmed_loglik, eval_finite_loglik, eval_med_loglik}{Held-out
+#'     log-likelihoods from \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} (bins scored by probability)
+#'     with the penalty added back, that is, unpenalized.}
+#'   \item{eval_prop_inf, eval_penalty, eval_w, eval_trimmed_w}{Held-out share
+#'     of weight with log-likelihood \code{-Inf}, penalty, total held-out
+#'     weight, and held-out weight kept after trimming.}
+#'   \item{fit_loglik, fit_trimmed_loglik, fit_med_loglik}{Training
+#'     log-likelihoods from \code{fit$L}, penalized. \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()}
+#'     uses \code{fit_trimmed_loglik} to choose among seeds.}
+#'   \item{iter_num}{Number of EM iterations.}
+#'   \item{n_outside_total}{Sum of \code{n_outside_every}.}
+#'   \item{lp_max_over, lp_n_out_total}{Largest distance outside the support
+#'     and total count from \code{lp_check_every}; \code{NA} unless
+#'     \code{calc_Q_every = TRUE}.}
+#'   \item{n_ascent_violations}{Number of iterations with
+#'     \eqn{Q_E &lt; Q_{ref}}; \code{NA} unless \code{calc_Q_every = TRUE}.}
+#'   \item{Q_every, n_outside_every, lp_check_every}{Traces from
+#'     \code{<a href="create-LCDmix.html#iteration">iteration</a>()}; \code{NULL} unless \code{calc_Q_every = TRUE}.}
+#'   \item{maxdev_diag}{The result of \code{<a href="create-LCDmix.html#maxdev_summary">maxdev_summary</a>()}.}
+#'   \item{err_msg, failed_iter}{\code{NA} on success; on failure, the text
+#'     from \code{<a href="create-LCDmix.html#fit_error_text">fit_error_text</a>()} and the iteration at which the fit
+#'     failed.}
+#'   \item{log_msg}{Printed output of the fit.}
+#' }
+#' On failure all numeric fields are \code{NA} and the traces are \code{NULL}.
 #' @keywords internal
-#' 
+#'
 #' @export
 <span id="cv_lcd_onejob">cv_lcd_onejob</span> &lt;- function(
   job,
@@ -3079,7 +3353,40 @@ responsibilities,<br>
   )
   return(TRUE)
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Cross-validation of the penalty pair for one dataset
+#'
+#' @description
+#' Runs \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()} in parallel for every combination of fold,
+#' seed, \code{lambda_alpha} and \code{lambda_theta}, and saves one file per
+#' job in \code{save_dir}, together with \code{index_matrix.rds}. A job whose
+#' file already exists is not run again, so an interrupted run can be resumed.
+#' The folds are blocks of consecutive time points from
+#' \code{flowmix::make_cv_folds()}. Use \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} on
+#' \code{save_dir} to choose the penalty pair, then \code{<a href="create-LCDmix.html#refit_lcd">refit_lcd</a>()}.
+#'
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
+#'
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param alpha_lambdas,theta_lambdas Candidate values of \code{lambda_alpha}
+#'   and \code{lambda_theta}. They are sorted in increasing order first.
+#' @param nfold Number of folds.
+#' @param seeds Seeds (restarts) for every fold and penalty pair. If
+#'   \code{NULL}, \code{1:cv_reps}.
+#' @param save_dir Output directory; it is created if needed.
+#' @param n_cores Number of worker processes, or \code{"max"} for all physical
+#'   cores.
+#' @param cv_reps Number of seeds, used only when \code{seeds} is \code{NULL}.
+#' @param blocksize Block size passed to \code{flowmix::make_cv_folds()}.
+#'
+#' @return A list with \code{index_matrix} (from \code{<a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>()}) and
+#'   \code{summary} (a text with the number of failed jobs).
+#'
+#' @seealso \code{\link{cv_lcd_simul}} for many datasets,
+#'   \code{\link{cv_lcd_summary}}, \code{\link{refit_lcd}}
+#'
+#' @export
 <span id="cv_lcd">cv_lcd</span> &lt;- function(
   Y_bin,
   X,
@@ -3180,63 +3487,43 @@ responsibilities,<br>
   return(list(index_matrix = index_matrix, 
               summary = summary))
 }</code></pre>
-<pre class="r"><code>#' Run LCDmix CV across many simulated datasets (outer-parallel, chunked)
+<pre class="r"><code>#' Cross-validation of the penalty pair for many simulated datasets
 #'
-#' Processes a collection of simulated datasets using a single parallel cluster
-#' (no nested parallel). For each simulation file, builds CV folds, constructs
-#' an index over folds × seeds × (\code{lambda_alpha}, \code{lambda_theta}),
-#' and evaluates all jobs. Results for each simulation are written into
-#' \code{save_dir/sim_&lt;s&gt;/}, one \code{*.rds} per job, and an
-#' \code{index_matrix.Rdata} for summary. Existing files are skipped, so runs
-#' are resumable.
+#' @description
+#' Runs every cross-validation job of every dataset in one parallel cluster
+#' (no nested parallelism). For dataset \eqn{s}, the results go to
+#' \code{base_dir/sim_&lt;s&gt;/}: one file per job from \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()},
+#' and \code{index_matrix.rds}. A job whose file already exists is not run
+#' again, so an interrupted run can be resumed. Each worker reads its dataset
+#' from \code{sim_files} and builds the folds with
+#' \code{flowmix::make_cv_folds()}. Use \code{<a href="create-LCDmix.html#cv_lcd_summary_simul">cv_lcd_summary_simul</a>()} to
+#' choose the penalty pair of each dataset, then \code{<a href="create-LCDmix.html#refit_lcd_simul">refit_lcd_simul</a>()}.
 #'
-#' @param sim_files Character vector of length \eqn{S}; paths to simulation files.
-#'   Each file must provide objects named \code{Y_bin}, \code{X}, and \code{bin_mass}.
-#'   Files may be \code{.rds} (containing a list) or \code{.RData}.
-#' @param K Integer; number of mixture components.
-#' @param alpha_lambdas Numeric vector of candidate \code{lambda_alpha} values.
-#' @param theta_lambdas Numeric vector of candidate \code{lambda_theta} values.
-#' @param nfold Integer; number of CV folds per simulation. Default \code{5}.
-#' @param seeds Integer vector of seeds (one per repeat). If \code{NULL}, supply
-#'   \code{cv_reps}. Default \code{NULL}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL}. Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per fit. Default \code{30}.
-#' @param iter_eta Numeric; convergence threshold on relative change in the
-#'   surrogate objective. Default \code{1e-4}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used inside
-#'   \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()}. Default \code{0.03}.
-#' @param blocksize Integer; block size for \code{flowmix::make_cv_folds()}.
-#'   Default \code{20}.
-#' @param save_dir Character; base directory for outputs. Per-simulation results
-#'   are written to \code{save_dir/sim_&lt;s&gt;/}. Default \code{"./result"}.
-#' @param n_cores Integer or \code{"max"}; number of workers for the single
-#'   outer cluster. \code{"max"} uses all physical cores minus one. Default \code{"max"}.
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
 #'
-#' @details
-#' This function uses a single outer cluster to process a \emph{grand} index of
-#' all simulation jobs in chunks, avoiding nested parallel. For reproducibility,
-#' job seeds are  (\code{seed_idx})
-#' before fitting. Each per-job RDS file contains:
-#' \code{prop_inf}, \code{trimmed_loglik}, \code{finite_loglik}, \code{L},
-#' and \code{log_msg}. After completion, run \code{\link{cv_lcd_summary}} on each
-#' simulation's subdirectory to obtain per-sim CV scores and optimal penalties.
+#' @param sim_files Paths of \code{.rds} files, one per dataset; each holds a
+#'   list with \code{Y_bin}, \code{X} and \code{bin_mass}, as written by
+#'   \code{<a href="create-LCDmix.html#simulate_and_save">simulate_and_save</a>()}.
+#' @param base_dir Output directory.
+#' @inheritParams cv_lcd
+#' @inheritParams main
 #'
-#' @return A list with:
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{grand_index}}{Data frame of all jobs with a \code{sim_idx} column.}
-#'   \item{\code{logs}}{Character vector of per-chunk log strings.}
+#'   \item{\code{grand_jobs}}{Data frame with one row per job: \code{sim_idx}
+#'     and the columns of \code{<a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>()}.}
+#'   \item{\code{summary}}{A text with the number of failed jobs.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary}},
-#'   \code{\link{eval_lcd}}, \code{\link[flowmix]{make_cv_folds}}
+#' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary_simul}},
+#'   \code{\link{refit_lcd_simul}}, \code{\link{eval_lcd}},
+#'   \code{\link[flowmix]{make_cv_folds}}
 #'
 #' @examples
 #' \dontrun{
-#' # 25 simulations, 5x5 lambda grid, 10 repeats, 5 folds (31,250 jobs total):
-#' sims &lt;- sprintf("sim_data_%02d.rds", 1:25)
+#' # 25 datasets, 5 x 5 penalty grid, 10 seeds, 5 folds (31,250 jobs)
+#' sims &lt;- file.path("sim_data", sprintf("sim_%d.rds", 1:25))
 #'
 #' res &lt;- <a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>(
 #'   sim_files     = sims,
@@ -3245,17 +3532,13 @@ responsibilities,<br>
 #'   theta_lambdas = 10^seq(-4, -2, length.out = 5),
 #'   nfold         = 5,
 #'   seeds         = 1:10,
-#'   save_dir      = "cv_runs",
-#'   n_cores       = 64,          # USC CARC cap
+#'   base_dir      = "cv_runs",
+#'   n_cores       = 64
 #' )
 #'
-#' # Summarize each simulation (stored under cv_runs/sim_&lt;s&gt;/):
-#' for (s in seq_along(sims)) {
-#'   sim_dir &lt;- file.path("cv_runs", sprintf("sim_%d", s))
-#'   load(file.path(sim_dir, "index_matrix.Rdata"))  # loads index_matrix
-#'   summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(index_matrix, save_dir = sim_dir)
-#'   print(list(sim = s, opt = summ$opt_lambdas, cv_score = max(summ$reduced_mat[, "cv_score"], na.rm = TRUE)))
-#' }
+#' # Chosen penalty pair of each dataset (results in cv_runs/sim_&lt;s&gt;/)
+#' summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary_simul">cv_lcd_summary_simul</a>(base_dir = "cv_runs", num_sims = 25)
+#' opt_list &lt;- lapply(summ, function(x) x$opt_lambdas)
 #' }
 #'
 #' @export
@@ -3389,54 +3672,62 @@ responsibilities,<br>
   return(list(grand_jobs = grand_jobs,
               summary = summary))
 }</code></pre>
-<pre class="r"><code>#' Summarize LCDmix cross-validation runs and choose optimal penalties
+<pre class="r"><code>#' Choose the penalty pair from saved cross-validation results
 #'
-#' Reads per-run CV results saved by \code{\link{cv_lcd}} from
-#' \code{save_dir}, aggregates them into a long CV table, computes a reduced
-#' summary by (\code{alpha_idx}, \code{theta_idx}), and selects the optimal
-#' (\code{lambda_alpha}, \code{lambda_theta}) by maximizing the mean
-#' trimmed held-out (penalized) log-likelihood across folds.
+#' @description
+#' Reads the files that \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()} saved in \code{save_dir} and
+#' computes a cross-validation score for every penalty pair:
 #'
-#' @param index_matrix Numeric matrix generated by \code{\link{cv_idx_mat}}
-#'   with columns \code{alpha_idx}, \code{theta_idx}, \code{seed_idx},
-#'   \code{fold_idx}, \code{lambda_alpha}, \code{lambda_theta}.
-#' @param save_dir Character; directory where per-run files
-#'   \code{"&lt;alpha_idx&gt;-&lt;theta_idx&gt;-&lt;seed_idx&gt;-&lt;fold_idx&gt;.rds"} (or simulation
-#'   variant with \code{sim_idx} prefix) are stored. Default \code{"./result"}.
-#' @param simul Logical; if \code{TRUE}, look for filenames that include
-#'   \code{sim_idx} as a leading component. Default \code{FALSE}.
-#' @param sim_idx Integer; simulation index used only when \code{simul = TRUE}.
+#' 1. For each pair and fold, keeps the seed (restart) with the largest
+#'    training log-likelihood: \code{fit_trimmed_loglik} (penalized) if
+#'    \code{cv_by_trimmed = TRUE}, otherwise \code{fit_med_loglik}.
+#' 2. Averages the held-out score of the kept fits over the folds:
+#'    \code{eval_trimmed_loglik} (or \code{eval_med_loglik}), which is
+#'    unpenalized and scores bins by their probability.
+#' 3. Chooses the pair with the largest score. \code{NA} scores count as
+#'    \code{-Inf}.
 #'
-#' @details
-#' Each per-run RDS file is expected to contain (at least) the elements:
-#' \code{L} (training objective), \code{prop_inf} (proportion of non-finite
-#' per-row log-likelihoods on the hold-out), and \code{trimmed_loglik}
-#' (trimmed penalized held-out log-likelihood). Missing files are skipped with
-#' a warning. Within each (\code{alpha_idx}, \code{theta_idx}, \code{fold_idx})
-#' group, the row with the largest \code{L} is kept (breaking ties by order).
-#' The CV score for a penalty pair is the mean of \code{trimmed_loglik} across
-#' folds (with \code{na.rm = TRUE}). For selecting optimal penalties, \code{NA}
-#' CV scores are treated as \code{-Inf} to ensure a deterministic choice.
+#' A missing file gives a warning and is treated as a failed fit.
 #'
-#' @return A list with:
+#' The two stages use different criteria on purpose, as in flowmix
+#' (\code{flowmix::one_job()} scores held-out data with both penalties set to
+#' 0, and \code{flowmix::cv_aggregate()} keeps the restart with the best
+#' penalized training objective). Step 1 compares restarts of the same
+#' penalized problem, so it uses a penalized criterion. Step 2
+#' estimates how well each fit predicts new data; the penalty is part of the
+#' fitting objective, not of the predictive density, so it is left out.
+#'
+#' @param index_matrix The matrix from \code{<a href="create-LCDmix.html#cv_idx_mat">cv_idx_mat</a>()}, saved as
+#'   \code{index_matrix.rds} by \code{<a href="create-LCDmix.html#cv_lcd">cv_lcd</a>()} and \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()}.
+#' @param save_dir Directory with the per-job files.
+#' @param cv_by_trimmed \code{TRUE} to use trimmed log-likelihoods,
+#'   \code{FALSE} to use weighted medians.
+#' @param equal_w \code{TRUE} to give each fold the same weight in step 2;
+#'   \code{FALSE} to weight each fold by its held-out weight (the weight kept
+#'   after trimming when \code{cv_by_trimmed = TRUE}).
+#'
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{CVmat}}{Data frame: the full long-form table with one row per run,
-#'     including \code{L}, \code{prop_inf}, and \code{trimmed_loglik}.}
-#'   \item{\code{reduced_mat}}{Numeric matrix: one row per (\code{alpha_idx}, \code{theta_idx}),
-#'     including \code{lambda_alpha}, \code{lambda_theta}, the mean CV score
-#'     (\code{cv_score}), and counts of non-\code{NA} \code{L} (\code{counts}).}
-#'   \item{\code{opt_lambdas}}{Numeric length-2 vector:
-#'     \code{c(lambda_alpha, lambda_theta)} for the maximizing pair.}
-#'   \item{\code{max_prop_inf}}{Maximum \code{prop_inf} observed over all runs (useful for diagnostics).}
+#'   \item{\code{CVmat}}{Data frame: \code{index_matrix} with the
+#'     \code{fit_*} and \code{eval_*} values of each job.}
+#'   \item{\code{reduced_mat}}{Matrix with one row per pair: \code{alpha_idx},
+#'     \code{theta_idx}, \code{lambda_alpha}, \code{lambda_theta},
+#'     \code{cv_score}, and \code{counts} (jobs, over all seeds and folds,
+#'     with finite training and held-out values).}
+#'   \item{\code{opt_lambdas}}{\code{c(lambda_alpha, lambda_theta)} of the
+#'     chosen pair.}
+#'   \item{\code{max_prop_inf}}{Largest \code{eval_prop_inf} over all jobs.}
+#'   \item{\code{cv_by_trimmed}, \code{equal_w}}{The arguments, returned
+#'     unchanged.}
 #' }
 #'
-#' @seealso \code{\link{cv_lcd}}, \code{\link{eval_lcd}},
-#'   \code{\link{cv_idx_mat}}
+#' @seealso \code{\link{cv_lcd}}, \code{\link{cv_lcd_summary_simul}},
+#'   \code{\link{eval_lcd}}, \code{\link{cv_idx_mat}}
 #'
 #' @examples
 #' \dontrun{
-#' # After running <a href="create-LCDmix.html#cv_lcd">cv_lcd</a>(...):
-#' load(file.path("cv_runs", "index_matrix.Rdata"))  # loads index_matrix
+#' # After <a href="create-LCDmix.html#cv_lcd">cv_lcd</a>(..., save_dir = "cv_runs"):
+#' index_matrix &lt;- readRDS(file.path("cv_runs", "index_matrix.rds"))
 #' summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>(index_matrix, save_dir = "cv_runs")
 #' summ$opt_lambdas
 #' }
@@ -3571,7 +3862,23 @@ responsibilities,<br>
     equal_w       = equal_w
   ))
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Choose the penalty pair for each simulated dataset
+#'
+#' @description
+#' Calls \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} on \code{base_dir/sim_&lt;s&gt;/} for
+#' \eqn{s = 1, \ldots,} \code{num_sims}, the layout that
+#' \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()} writes. Folds get equal weight
+#' (\code{equal_w = TRUE}).
+#'
+#' @param base_dir The \code{base_dir} given to \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()}.
+#' @param num_sims Number of datasets.
+#' @param cv_by_trimmed Passed to \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()}.
+#'
+#' @return A list of length \code{num_sims}; element \eqn{s} is the
+#'   \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} result of dataset \eqn{s}, so
+#'   \code{out[[s]]$opt_lambdas} is its chosen pair.
+#'
+#' @export
 <span id="cv_lcd_summary_simul">cv_lcd_summary_simul</span> &lt;- function(base_dir, num_sims, cv_by_trimmed = T) {
   out &lt;- vector("list", num_sims)
   for (s in seq_len(num_sims)) {
@@ -3581,7 +3888,34 @@ responsibilities,<br>
   }
   return(out)
 }</code></pre>
-<pre class="r"><code>#' @title Internal: run one LCDmix refit (single seed) and cache
+<pre class="r"><code>#' Fit the model once with one seed and save the result
+#'
+#' @description
+#' Calls \code{set.seed(seed)} and \code{<a href="create-LCDmix.html#main">main</a>()} on the full data with the
+#' given penalty pair, and saves the result to
+#' \code{save_dir/refit_&lt;seed&gt;.rds}. Called by \code{<a href="create-LCDmix.html#refit_lcd">refit_lcd</a>()} and
+#' \code{<a href="create-LCDmix.html#refit_lcd_simul">refit_lcd_simul</a>()}, which run several seeds (restarts) and keep the
+#' best.
+#'
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param seed Seed (restart index); it selects the random flowmix start.
+#' @param save_dir Directory for the result file.
+#'
+#' @return \code{TRUE} if the fit succeeded, \code{FALSE} otherwise. The saved
+#'   file is a list with components:
+#' \describe{
+#'   \item{fit}{The \code{<a href="create-LCDmix.html#main">main</a>()} result; \code{NULL} on failure.}
+#'   \item{fit_L}{\code{fit$L$loglik}, the penalized training log-likelihood
+#'     (bins scored by probability), used to choose among seeds; \code{NULL}
+#'     on failure.}
+#'   \item{fit_L_unpen}{The same without the penalty, for reporting;
+#'     \code{NULL} on failure.}
+#'   \item{maxdev_diag}{The result of \code{<a href="create-LCDmix.html#maxdev_summary">maxdev_summary</a>()} (success only).}
+#'   \item{err_msg, failed_iter}{The text from \code{<a href="create-LCDmix.html#fit_error_text">fit_error_text</a>()} and the
+#'     iteration at which the fit failed (failure only).}
+#'   \item{log_msg}{Printed output of the fit.}
+#' }
 #' @keywords internal
 #' @export
 <span id="refit_onejob">refit_onejob</span> &lt;- function(
@@ -3670,58 +4004,52 @@ responsibilities,<br>
     ), file = out_path)
   return(TRUE)
 }</code></pre>
-<pre class="r"><code>#' Refit LCDmix multiple times and select the best training fit
+<pre class="r"><code>#' Refit the model with several seeds and keep the best fit
 #'
-#' Runs multiple refits of an LCDmix model on the full training data using a
-#' grid of random seeds (one outer parallel cluster; no nested parallel). Each
-#' refit is cached to \code{save_dir/refit_&lt;seed&gt;.rds} so the procedure is
-#' fully resumable. The best fit is chosen by the largest training objective
-#' \eqn{L} among the completed refits.
+#' @description
+#' Runs \code{<a href="create-LCDmix.html#refit_onejob">refit_onejob</a>()} for every seed in parallel (one cluster, no
+#' nested parallelism) on the full data with the chosen penalty pair. Each
+#' refit is saved to \code{save_dir/refit_&lt;seed&gt;.rds}; a seed whose file
+#' already exists is not run again, so an interrupted run can be resumed.
+#' After the run, the saved files are read and the fit with the largest
+#' \code{fit_L} (the penalized training log-likelihood) is returned.
 #'
-#' @param Y_bin List of responses (one element per time point/bin), as used by \code{<a href="create-LCDmix.html#main">main</a>()}.
-#' @param X Numeric matrix of covariates with \code{nrow(X) == length(Y_bin)}.
-#' @param bin_mass List of nonnegative weights aligned with \code{Y_bin}.
-#' @param K Integer; number of mixture components.
-#' @param opt_lambdas Numeric vector of length 2 giving \code{c(lambda_alpha, lambda_theta)}.
-#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is \code{NULL}.
-#'   The seeds will be \code{1:cv_reps}.
-#' @param max_iter Integer; maximum EM iterations. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective. Default \code{1e-4}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are set to zero. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used by \code{<a href="create-LCDmix.html#eval_lcd">eval_lcd</a>()} during fitting. Default \code{0.03}.
-#' @param save_dir Character; directory to write/read cached refits (\code{refit_&lt;seed&gt;.rds}). Default \code{"./refits"}.
-#' @param n_cores Integer or \code{"max"}; number of workers for the single outer cluster. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} for verbose diagnostics. Default \code{FALSE}.
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
 #'
-#' @details
-#' Each seed triggers a call to \code{<a href="create-LCDmix.html#refit_onejob">refit_onejob</a>()}, which caches its result to
-#' disk and returns a log string and the final training objective \eqn{L}.
-#' Existing cache files are reused and not recomputed.
+#' @inheritParams main
+#' @inheritParams initialization
+#' @param opt_lambdas \code{c(lambda_alpha, lambda_theta)}, for example the
+#'   \code{opt_lambdas} of \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()}.
+#' @param seeds Seeds to run. If \code{NULL}, \code{1:cv_reps}.
+#' @param cv_reps Number of seeds, used only when \code{seeds} is \code{NULL}.
+#' @param save_dir Directory for the refit files; it is created if needed.
+#' @param n_cores Number of worker processes, or \code{"max"} for all physical
+#'   cores.
 #'
-#' @return A list with:
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{logs}}{Character vector of log messages (one per seed plus a summary line).}
-#'   \item{\code{refit_scores}}{Numeric vector of per-seed training objectives \eqn{L} (may contain \code{NA}).}
-#'   \item{\code{best_fit}}{The list returned by \code{<a href="create-LCDmix.html#refit_onejob">refit_onejob</a>()} for the best seed
-#'     (largest \eqn{L}); \code{NULL} if all refits failed.}
+#'   \item{\code{summary}}{A text with the number of failed refits.}
+#'   \item{\code{loglik}}{Numeric vector, \code{fit_L} of each seed
+#'     (\code{NA} for a failed seed).}
+#'   \item{\code{best_fit}}{The \code{<a href="create-LCDmix.html#main">main</a>()} result of the seed with the
+#'     largest \code{fit_L}; \code{NULL}, with a warning, if every refit
+#'     failed.}
 #' }
 #'
-#' @seealso \code{\link{refit_onejob}}
+#' @seealso \code{\link{refit_onejob}}, \code{\link{cv_lcd}}
 #'
 #' @examples
 #' \dontrun{
-#' # Given Y_bin, X, bin_mass, and chosen penalties:
-#' opt &lt;- c(lambda_alpha = 1e-3, lambda_theta = 1e-3)
 #' out &lt;- <a href="create-LCDmix.html#refit_lcd">refit_lcd</a>(
 #'   Y_bin = Y_bin, X = X, bin_mass = bin_mass, K = 2,
-#'   opt_lambdas = opt,
+#'   opt_lambdas = c(1e-3, 1e-3),
 #'   seeds = 1:10,
 #'   save_dir = "refits",
 #'   n_cores = 8
 #' )
-#' out$best_fit$L       # best training objective
-#' out$best_fit$file    # path to the cached best refit
+#' out$loglik                  # penalized training log-likelihood per seed
+#' out$best_fit$iter$theta_new # slopes of the best fit
 #' }
 #'
 #' @export
@@ -3812,68 +4140,61 @@ responsibilities,<br>
               loglik   = L_vec,
               best_fit = best_fit))
 }</code></pre>
-<pre class="r"><code>#' Refit LCDmix across many simulations and record best files (no rereads)
+<pre class="r"><code>#' Refit the model with several seeds for many simulated datasets
 #'
-#' For each simulation, runs multiple refits across the given seeds using a
-#' single outer parallel cluster (no nested parallel). Each refit is cached to
-#' \code{base_dir/sim_&lt;s&gt;/refit/refit_&lt;seed&gt;.rds}. The function returns:
-#' (i) a per-job table with refit metrics, (ii) logs, and (iii) a per-simulation
-#' \emph{best table} giving the simulation index, its \code{lambda_alpha} and
-#' \code{lambda_theta}, and the filename of the best refit chosen by the largest
-#' training objective \eqn{L}. The best table is built directly from in-memory
-#' results—no disk rereads.
+#' @description
+#' Runs \code{<a href="create-LCDmix.html#refit_onejob">refit_onejob</a>()} for every combination of dataset and seed in one
+#' parallel cluster (no nested parallelism), each dataset with its own
+#' penalty pair. Refit \code{seed} of dataset \eqn{s} is saved to
+#' \code{base_dir/sim_&lt;s&gt;/refit/refit_&lt;seed&gt;.rds}; a file that already exists
+#' is not computed again. After the run, the saved files are read and, for
+#' each dataset, the seed with the largest \code{fit_L} (the penalized
+#' training log-likelihood) is recorded.
 #'
-#' @param sim_files Character vector; paths to simulation files. Each file must
-#'   contain \code{Y_bin}, \code{X}, and \code{bin_mass}. Files may be \code{.rds}
-#'   (containing a list) or \code{.RData}.
-#' @param opt_lambdas_list List of length \code{length(sim_files)}; each element
-#'   is \code{c(lambda_alpha, lambda_theta)} to use for that simulation.
-#' @param K Integer; number of mixture components.
-#' @param seeds Integer vector of seeds to run. If \code{NULL}, supply \code{cv_reps}.
-#' @param cv_reps Integer; number of repeats used only when \code{seeds} is
-#'   \code{NULL} (seeds become \code{1:cv_reps}). Default \code{NULL}.
-#' @param max_iter Integer; maximum EM iterations per refit. Default \code{30}.
-#' @param iter_eta Numeric; convergence tolerance for the surrogate objective.
-#'   Default \code{1e-4}.
-#' @param resp_threshold Numeric in \eqn{[0,1]}; responsibilities below this are
-#'   zeroed for stability. Default \code{1e-3}.
-#' @param trim_prob Numeric in \eqn{[0,1)}; trimming fraction used during fitting.
-#'   Default \code{0.03}.
-#' @param base_dir Character; base directory for outputs. Refit caches are written
-#'   under \code{base_dir/sim_&lt;s&gt;/refit/}. Default \code{"./cv_saves"}.
-#' @param n_cores Integer or \code{"max"}; number of workers for the single outer
-#'   cluster. Default \code{"max"}.
-#' @param debug Logical; forwarded to \code{<a href="create-LCDmix.html#main">main</a>()} for verbose diagnostics.
-#'   Default \code{FALSE}.
+#' The workers load the installed LCDmix package, so install the current
+#' version before running.
 #'
-#' @return A list with:
+#' @param sim_files Paths of \code{.rds} files, one per dataset; each holds a
+#'   list with \code{Y_bin}, \code{X} and \code{bin_mass}.
+#' @param opt_lambdas_list A list of the same length as \code{sim_files};
+#'   element \eqn{s} is \code{c(lambda_alpha, lambda_theta)} for dataset
+#'   \eqn{s}.
+#' @param base_dir Output directory, usually the \code{base_dir} of
+#'   \code{<a href="create-LCDmix.html#cv_lcd_simul">cv_lcd_simul</a>()}.
+#' @inheritParams refit_lcd
+#' @inheritParams main
+#'
+#' @return A list with components:
 #' \describe{
-#'   \item{\code{jobs}}{Data frame of per-job metrics with columns
-#'         \code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta},
-#'         \code{L}, and \code{file}.}
-#'   \item{\code{logs}}{Character vector of chunk logs.}
-#'   \item{\code{best_table}}{Data frame with columns
-#'         \code{sim}, \code{lambda_alpha}, \code{lambda_theta}, \code{best_file};
-#'         one row per simulation, where \code{best_file} is the cached filename
-#'         of the refit with the largest \eqn{L} (or \code{NA} if none succeeded).}
+#'   \item{\code{grand_jobs}}{Data frame with one row per refit:
+#'     \code{sim_idx}, \code{seed}, \code{lambda_alpha}, \code{lambda_theta}.}
+#'   \item{\code{summary}}{A text with the number of failed refits.}
+#'   \item{\code{loglik_lst}}{List with one numeric vector per dataset:
+#'     \code{fit_L} of each seed (\code{NA} for a failed seed).}
+#'   \item{\code{best_table}}{Data frame with one row per dataset: \code{sim},
+#'     \code{lambda_alpha}, \code{lambda_theta}, \code{best_idx} (seed of the
+#'     best refit), \code{loglik} (its \code{fit_L}), \code{best_file} (path of
+#'     its file) and \code{n_failed_seeds}. \code{best_idx}, \code{loglik}
+#'     and \code{best_file} are \code{NA}, with a warning, for a dataset whose
+#'     refits all failed.}
 #' }
 #'
 #' @seealso \code{\link{refit_onejob}}, \code{\link{cv_lcd_simul}}
 #'
 #' @examples
 #' \dontrun{
-#' sims &lt;- sprintf("sim_%02d.rds", 1:10)
-#' # suppose each sim has its own chosen penalties from CV:
-#' opt_list &lt;- replicate(10, c(1e-3, 1e-3), simplify = FALSE)
-#' out &lt;- <a href="create-LCDmix.html#refit_lcd_simul">refit_lcd_simul</a>(
+#' sims &lt;- file.path("sim_data", sprintf("sim_%d.rds", 1:10))
+#' summ &lt;- <a href="create-LCDmix.html#cv_lcd_summary_simul">cv_lcd_summary_simul</a>(base_dir = "cv_saves", num_sims = 10)
+#' out  &lt;- <a href="create-LCDmix.html#refit_lcd_simul">refit_lcd_simul</a>(
 #'   sim_files        = sims,
-#'   opt_lambdas_list = opt_list,
+#'   opt_lambdas_list = lapply(summ, function(x) x$opt_lambdas),
 #'   K                = 2,
-#'   seeds            = 1:8,
+#'   seeds            = 1:10,
 #'   base_dir         = "cv_saves",
 #'   n_cores          = 32
 #' )
 #' out$best_table
+#' best_fit_1 &lt;- readRDS(out$best_table$best_file[1])$fit
 #' }
 #'
 #' @export
@@ -4023,7 +4344,68 @@ responsibilities,<br>
               loglik_lst = loglik_lst,
               best_table = best_table))
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Simulate one dataset from the two-component simulation design
+#'
+#' @description
+#' Draws binned data from a mixture of two regressions over \code{TT} time
+#' points:
+#'
+#' - Covariates: \code{X = (par, ramp, noise1, ..., noise(p-2))}. \code{par}
+#'   is the first \code{TT} values of the series in \code{simul_helper.rds},
+#'   scaled to mean 0 and standard deviation 1. \code{ramp} rises linearly
+#'   from 0 to 1 over the first half of the time points and stays at 1 over
+#'   the second half; it is not standardized. The noise covariates are
+#'   independent \eqn{N(0, 1)}.
+#' - Expert means: component 1 has intercept 0 and slope \code{theta_par} on
+#'   \code{par}; component 2 has intercept \code{gap} and slope
+#'   \code{-theta_par} on \code{par}. All other slopes are 0.
+#' - Gate: \eqn{P(Z_t = 2) = \mathrm{logit}^{-1}(\mathrm{logit}(0.10) + (\mathrm{logit}(0.30) - \mathrm{logit}(0.10))\, ramp_t)},
+#'   which rises from 0.10 at \code{ramp = 0} to 0.30 at \code{ramp = 1}. All
+#'   other gate coefficients are 0.
+#' - Errors: the same mean-zero distribution in both components, chosen by
+#'   \code{noisetype}: \code{"gaussian"}, \eqn{N(0, 1)}; \code{"skewed"},
+#'   skew-normal with shape \code{skew_alpha}, scaled to variance 1 and
+#'   shifted to mean 0; \code{"heavytail"}, \eqn{t} with \code{df} degrees of
+#'   freedom, scaled to variance 1; \code{"laplace"}, Laplace with scale 1
+#'   (variance 2); \code{"exponential"}, \eqn{Exp(1) - 1}.
+#' - Each time point has \code{nt} observations with weight 1, binned with
+#'   \code{<a href="create-LCDmix.html#binning">binning</a>()} into \code{B} equal-width bins over the pooled range.
+#'
+#' @param sim_seed Seed for \code{set.seed()}; \code{NULL} leaves the random
+#'   number generator as it is.
+#' @param nt Number of observations per time point (a multiple of 5).
+#' @param TT Number of time points. Use an even number, so that the two halves
+#'   of \code{ramp} have equal length.
+#' @param theta_par Slope on \code{par}: \code{+theta_par} for component 1 and
+#'   \code{-theta_par} for component 2.
+#' @param p Number of covariates, at least 3.
+#' @param B Number of bins.
+#' @param noisetype One of \code{"gaussian"}, \code{"skewed"},
+#'   \code{"heavytail"}, \code{"laplace"} and \code{"exponential"}.
+#' @param df Degrees of freedom for \code{"heavytail"} (at least 3).
+#' @param skew_alpha Shape parameter for \code{"skewed"}.
+#' @param gap Intercept of component 2 (component 1 has intercept 0).
+#' @param sim_helper_dir Directory that holds \code{simul_helper.rds}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{Y_bin, X, bin_mass}{The data, in the form \code{<a href="create-LCDmix.html#main">main</a>()} takes with
+#'     \code{binned = TRUE}.}
+#'   \item{noisetype, df, skew_alpha}{The arguments, returned unchanged.}
+#'   \item{mnmat}{\eqn{TT \times 2} matrix of the true component means.}
+#'   \item{prob}{\eqn{TT \times 2} matrix of the true gate probabilities.}
+#'   \item{alpha, theta}{True gate and expert coefficients, each a
+#'     \eqn{(p+1) \times 2} matrix with rows intercept, \code{par},
+#'     \code{ramp}, \code{noise1}, ... . \code{alpha} is the transpose of the
+#'     \eqn{K \times (p+1)} layout used by the rest of the package, so the
+#'     gate probabilities are \code{<a href="create-LCDmix.html#pi_k">pi_k</a>(X, t(alpha))}.}
+#'   \item{omega, mn_shift}{Scale and mean shift of the skew-normal
+#'     (\code{"skewed"} only; \code{NULL} otherwise).}
+#'   \item{variance}{Variance of the \eqn{t} distribution before scaling
+#'     (\code{"heavytail"} only; \code{NULL} otherwise).}
+#' }
+#'
+#' @export
 <span id="gen_simul_data">gen_simul_data</span> &lt;- function(
   sim_seed       = NULL,
   nt             = 1000,
@@ -4136,34 +4518,27 @@ responsibilities,<br>
               variance = variance
               ))
 }</code></pre>
-<pre class="r"><code>#' Simulate multiple skew‐normal mixture datasets and save to disk
+<pre class="r"><code>#' Simulate many datasets and save them to disk
 #'
 #' @description
-#' For each combination of \code{seed}, \code{intercept_gap}, and
-#' \code{skew_alpha}, this function calls \code{generate_skewed_data()}
-#' with the supplied simulation parameters and writes the result out
-#' (one list per file) as \code{sim_&lt;i&gt;.rds} in \code{sim_dir}.  
-#' It returns the data‐frame of all parameter combinations (in the same
-#' row‐order as the saved files).
+#' Calls \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()} once for every combination of
+#' \code{sim_seeds}, \code{gaps} and, depending on \code{noisetype},
+#' \code{skew_alphas} (\code{"skewed"}) or \code{df} (\code{"heavytail"}), and
+#' saves dataset \eqn{i} as \code{sim_dir/sim_&lt;i&gt;.rds}.
 #'
-#' @param sim_seeds      Integer vector of random seeds.
-#' @param gaps           Numeric vector of intercept gaps between the two components.
-#' @param skew_alphas    Numeric vector of skew‐normal shape parameters.
-#' @param sim_dir        Character; directory to hold \code{sim_&lt;i&gt;.rds} files.
-#'                       Will be created if it does not exist.  Default: \code{"sim_data"}.
-#' @param nt             Number of observations per time‐point in the second half.
-#'                       Passed to \code{generate_skewed_data()}. Default: 1000.
-#' @param TT             Total number of time‐points to simulate. Default: 100.           
-#' @param theta_par      The slope magnitude for the “baseline” covariate.
-#'                       Default: 0.5.
-#' @param p              Number of covariates (including \code{par} and \code{ramp}).
-#'                       Default: 10.
-#' @param B              Number of histogram bins for each time‐point.
-#'                       Default: 30.
-#' 
-#' @return A data.frame with columns \code{seed}, \code{intercept_gap},
-#'   \code{skew_alpha}, where each row \code{i} corresponds to file
-#'   \code{sim_dir/sim_i.rds}.
+#' @param sim_seeds Seeds, one dataset each.
+#' @param gaps Values of \code{gap}, the intercept of component 2.
+#' @param df Degrees of freedom for \code{"heavytail"}; a vector gives one
+#'   dataset per value.
+#' @param skew_alphas Shape parameters for \code{"skewed"}; a vector gives one
+#'   dataset per value.
+#' @param sim_dir Output directory; it is created if needed.
+#' @inheritParams gen_simul_data
+#'
+#' @return The data frame of combinations from \code{expand.grid()}, with
+#'   columns \code{sim_seed} and \code{gap}, and \code{skew_alpha}
+#'   (\code{"skewed"}) or \code{df} (\code{"heavytail"}). Row \eqn{i} belongs
+#'   to the file \code{sim_&lt;i&gt;.rds}; \code{sim_seed} varies fastest.
 #'
 #' @export
 <span id="simulate_and_save">simulate_and_save</span> &lt;- function(
@@ -4236,7 +4611,20 @@ responsibilities,<br>
   }
   return(jobs)
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' True error density of a simulated dataset
+#'
+#' @description
+#' Evaluates the density of the error distribution that
+#' \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()} used. Both components share it, and it has mean 0.
+#' \code{<a href="create-LCDmix.html#err_true_quantile">err_true_quantile</a>()} is its inverse; when a noise type is added,
+#' change both functions.
+#'
+#' @param sim A dataset from \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()}.
+#' @param y_grid Numeric vector of residual values.
+#'
+#' @return Numeric vector of densities at \code{y_grid}.
+#'
+#' @export
 <span id="err_true_fun">err_true_fun</span> &lt;- function(
   sim,
   y_grid
@@ -4285,7 +4673,24 @@ responsibilities,<br>
   }
   return(res)
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' True component densities of a simulated dataset at one time point
+#'
+#' @description
+#' Evaluates the density of each of the two components at time \eqn{t},
+#' \eqn{f(y - \mu_{tk})} with \eqn{\mu_{tk}} = \code{sim$mnmat[t, k]} and
+#' \eqn{f} the error density (\code{<a href="create-LCDmix.html#err_true_fun">err_true_fun</a>()}). The gate probabilities
+#' are not included: to get the mixture density, multiply column \eqn{k} by
+#' \code{sim$prob[t, k]} and sum over \eqn{k}.
+#'
+#' @param sim A dataset from \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()}.
+#' @param t Time point.
+#' @param y_grid Numeric vector of response values.
+#'
+#' @return A \code{length(y_grid)} \eqn{\times 2} matrix of densities (a
+#'   vector of length 2 when \code{y_grid} has length 1). The number of
+#'   components is fixed at 2.
+#'
+#' @export
 <span id="dens_true_fun">dens_true_fun</span> &lt;- function(
   sim,
   t,
@@ -4320,7 +4725,25 @@ responsibilities,<br>
     }
   return(res)
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Estimated component densities at one time point
+#'
+#' @description
+#' Evaluates the density of each fitted component at time \eqn{t}, for an
+#' LCDmix fit or a flowmix fit. For LCDmix (\code{est_res} has
+#' \code{alpha_new}), component \eqn{k} is the log-concave density at
+#' \eqn{y - \theta_{0k} - X_t^\top \theta_k}, and 0 outside its support. For
+#' flowmix, it is the normal density with mean \code{est_res$mn[t, 1, k]} and
+#' variance \code{est_res$sigma[k]}. The gate probabilities are not included.
+#'
+#' @param est_res The \code{iter} element of a \code{<a href="create-LCDmix.html#main">main</a>()} fit, or a flowmix
+#'   fit (fields \code{mn} and \code{sigma}).
+#' @param t Time point.
+#' @param y_grid Numeric vector of response values.
+#' @param X Covariate matrix; used for LCDmix only.
+#'
+#' @return A \code{length(y_grid)} \eqn{\times K} matrix of densities.
+#'
+#' @export
 <span id="dens_est_fun">dens_est_fun</span> &lt;- function(
   est_res,
   t,
@@ -4457,11 +4880,18 @@ responsibilities,<br>
   attr(metric, "h")        &lt;- if (length(grid) &gt; 1) min(diff(grid)) else NA_real_
   return(metric)
 }</code></pre>
-<pre class="r"><code>#' Estimated error density of one LCDmix component, zero outside the support.
+<pre class="r"><code>#' Estimated error density of one LCDmix component
 #'
-#' NOTE: evaluateLogConDens() returns a matrix, not a list, so the work order's
-#' `$log.density` does not work. Column 3 is the density, which is what the
-#' package's own <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>() uses.
+#' @description
+#' Returns a function that evaluates a fitted log-concave density at residual
+#' values: \code{logcondens::evaluateLogConDens()} (column 3, the density)
+#' inside the support, and 0 outside it or wherever the evaluation fails.
+#'
+#' @param g One element of \code{g_new}, a \code{<a href="create-LCDmix.html#modified_logcondens">modified_logcondens</a>()} fit.
+#'
+#' @return A function of a numeric vector \code{v} that returns the densities
+#'   at \code{v}.
+#' @keywords internal
 <span id="lcd_err_density">lcd_err_density</span> &lt;- function(g) {
   sup &lt;- range(g$x)
   return(function(v) {
@@ -4476,17 +4906,39 @@ responsibilities,<br>
     return(out)
   })
 }</code></pre>
-<pre class="r"><code>#' Estimated error density of one flowmix component.
+<pre class="r"><code>#' Estimated error density of one flowmix component
 #'
-#' NOTE: flowmix stores a variance in `sigma`, so the standard deviation is
-#' sqrt(sigma_k). The work order's `dnorm(xs, 0, sigma_k)` passes a variance
-#' where a standard deviation belongs. <a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>() uses sqrt(), and so does
-#' this function.
+#' @description
+#' Returns the normal density with mean 0 and variance \code{sigma_k}. flowmix
+#' stores the variance of each component in \code{sigma}, so the standard
+#' deviation is \code{sqrt(sigma_k)}, as in \code{<a href="create-LCDmix.html#dens_est_fun">dens_est_fun</a>()}.
+#'
+#' @param sigma_k Variance of the component (one element of \code{sigma} of a
+#'   flowmix fit).
+#'
+#' @return A function of a numeric vector \code{v} that returns the densities
+#'   at \code{v}.
 #' @export
 <span id="flow_err_density">flow_err_density</span> &lt;- function(sigma_k) {
   return(function(v) stats::dnorm(v, 0, sqrt(sigma_k)))
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Count cross-validation fits that stopped at a degenerate component
+#'
+#' @description
+#' Reads every cross-validation result file under \code{base_dir}
+#' (recursively; files named \code{&lt;a&gt;-&lt;t&gt;-&lt;s&gt;-&lt;f&gt;.rds}, as written by
+#' \code{<a href="create-LCDmix.html#cv_lcd_onejob">cv_lcd_onejob</a>()}) and counts the fits whose error message starts
+#' with "degenerate component". \code{<a href="create-LCDmix.html#mstep_g">mstep_g</a>()} gives this error when a
+#' component has fewer than two distinct residuals. Prints the count and, if
+#' there are any, how many happened at initialization and how many during the
+#' EM iterations.
+#'
+#' @param base_dir Directory to search.
+#'
+#' @return Invisibly, a data frame with the file name and the error message of
+#'   each degenerate fit.
+#'
+#' @export
 <span id="count_degenerate">count_degenerate</span> &lt;- function(base_dir = "cv_saves") {
   fs  &lt;- list.files(base_dir, pattern = "^[0-9]+-[0-9]+-[0-9]+-[0-9]+\\.rds$",
                     recursive = TRUE, full.names = TRUE)
@@ -4502,8 +4954,22 @@ responsibilities,<br>
                                "iteration", "initialization")))
   invisible(data.frame(file = fs[deg], err_msg = msg[deg], stringsAsFactors = FALSE))
 }</code></pre>
-<pre class="r"><code>#' Overlap coefficient between a density and its shift by delta.
-#' Both components share one error density, so this is the whole story.
+<pre class="r"><code>#' Overlap of a density and its shifted copy
+#'
+#' @description
+#' Computes \eqn{\int \min\{f(v), f(v - \delta)\}\, dv}, the overlap coefficient
+#' of \eqn{f} and \eqn{f} shifted by \eqn{\delta}. In the simulation both
+#' components share one error density and their means differ by a shift, so
+#' this measures how much the components overlap: 1 when they are identical,
+#' 0 when they do not overlap. If the integration fails, it is repeated with
+#' the infinite limits replaced by -40 and \code{40 + delta}.
+#'
+#' @param f A density function that accepts a vector.
+#' @param delta The shift.
+#' @param lo,hi Integration limits.
+#'
+#' @return The overlap, a number in \eqn{[0, 1]}.
+#'
 #' @export
 <span id="ovl">ovl</span> &lt;- function(f, delta, lo = -Inf, hi = Inf) {
   <span id="integrand">integrand</span> &lt;- function(v) pmin(f(v), f(v - delta))
@@ -4518,15 +4984,41 @@ responsibilities,<br>
   }
   return(out)
 }</code></pre>
-<pre class="r"><code>#' Half the L1 integral between two densities, so the value lies in [0, 1].
+<pre class="r"><code>#' Total variation distance between two densities on an interval
+#'
+#' @description
+#' Computes \eqn{\frac{1}{2} \int_{lo}^{hi} |\hat f(x) - f(x)|\, dx} with the
+#' trapezoid rule on \code{n} equally spaced points. The value lies in
+#' \eqn{[0, 1]} when both functions are densities and the interval holds
+#' almost all of their mass.
+#'
+#' @param fhat,ftrue Density functions that accept a vector.
+#' @param lo,hi Integration limits.
+#' @param n Number of grid points.
+#'
+#' @return A single number.
+#'
 #' @export
 <span id="tv_density">tv_density</span> &lt;- function(fhat, ftrue, lo, hi, n = 2001) {
   xs &lt;- seq(lo, hi, length.out = n)
   d  &lt;- abs(fhat(xs) - ftrue(xs))
   return(0.5 * sum(diff(xs) * (utils::head(d, -1) + utils::tail(d, -1)) / 2))
 }</code></pre>
-<pre class="r"><code>#' Integration grid: the central range of the true density, widened to cover
-#' the estimated support.
+<pre class="r"><code>#' Integration range for <a href="create-LCDmix.html#tv_density">tv_density</a>()
+#'
+#' @description
+#' Takes the central range of the true distribution, from its
+#' \code{p}-quantile to its \code{(1 - p)}-quantile, widens it to cover
+#' \code{est_support} if that is given, and adds 2 percent of the width on
+#' each side.
+#'
+#' @param qfun Quantile function of the true distribution.
+#' @param est_support Optional \code{c(lower, upper)}, the support of the
+#'   estimated density.
+#' @param p Probability left out in each tail.
+#'
+#' @return \code{c(lo, hi)}.
+#'
 #' @export
 <span id="tv_grid">tv_grid</span> &lt;- function(qfun, est_support = NULL, p = 5e-4) {
   lo &lt;- qfun(p); hi &lt;- qfun(1 - p)
@@ -4536,21 +5028,60 @@ responsibilities,<br>
   pad &lt;- 0.02 * (hi - lo)
   return(c(lo - pad, hi + pad))
 }</code></pre>
-<pre class="r"><code>#' Component order used throughout the pipeline: order by intercept, then by
-#' slopes. Copied from the analysis function in create-LCDmix.Rmd so that the
-#' two never drift apart.
+<pre class="r"><code>#' Order of the components of an LCDmix fit
+#'
+#' @description
+#' Orders the components by intercept, and breaks ties by the slopes in
+#' turn. \code{<a href="create-LCDmix.html#flow_component_order">flow_component_order</a>()} applies the same rule to a flowmix
+#' fit, and \code{<a href="create-LCDmix.html#res_LCDmix_simul">res_LCDmix_simul</a>()} uses it too, so that the components of
+#' different fits are matched to the true components. In
+#' \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()} component 1 has the smaller intercept.
+#'
+#' @param res The \code{iter} element of a \code{<a href="create-LCDmix.html#main">main</a>()} fit (fields
+#'   \code{theta0_new} and \code{theta_new}).
+#'
+#' @return An integer vector of length \eqn{K}: element 1 is the index of the
+#'   component with the smallest intercept, and so on.
+#'
 #' @export
 <span id="lcd_component_order">lcd_component_order</span> &lt;- function(res) {
   theta_mat &lt;- rbind(unlist(res$theta0_new), do.call(cbind, res$theta_new))
   return(do.call(order, as.data.frame(t(theta_mat))))
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Order of the components of a flowmix fit
+#'
+#' @description
+#' The rule of \code{<a href="create-LCDmix.html#lcd_component_order">lcd_component_order</a>()} applied to a flowmix fit: orders
+#' the components by intercept, and breaks ties by the slopes in turn.
+#'
+#' @param flow A flowmix fit (field \code{beta}: a list of \eqn{K} vectors,
+#'   intercept first).
+#'
+#' @return An integer vector of length \eqn{K}: element 1 is the index of the
+#'   component with the smallest intercept, and so on.
+#'
+#' @export
 <span id="flow_component_order">flow_component_order</span> &lt;- function(flow) {
   theta_mat &lt;- do.call(cbind, flow$beta)
   return(do.call(order, as.data.frame(t(theta_mat))))
 }</code></pre>
-<pre class="r"><code>#' @param fit  an LCDmix `iter` list, or a flowmix best-result list
-#' @return numeric vector of length K, in true-component order
+<pre class="r"><code>#' Total variation distance between estimated and true error densities
+#'
+#' @description
+#' For each component, in the order of \code{<a href="create-LCDmix.html#lcd_component_order">lcd_component_order</a>()} or
+#' \code{<a href="create-LCDmix.html#flow_component_order">flow_component_order</a>()}, computes \code{<a href="create-LCDmix.html#tv_density">tv_density</a>()} between the
+#' estimated error density and the true error density of \code{sim}. The
+#' integration range comes from \code{<a href="create-LCDmix.html#tv_grid">tv_grid</a>()} and covers the estimated
+#' support (for flowmix, 6 standard deviations on each side of 0). A
+#' component whose computation fails gets \code{NA}.
+#'
+#' @param sim A dataset from \code{<a href="create-LCDmix.html#gen_simul_data">gen_simul_data</a>()}.
+#' @param fit The \code{iter} element of an LCDmix fit, or a flowmix fit.
+#' @param n Number of grid points for \code{<a href="create-LCDmix.html#tv_density">tv_density</a>()}.
+#'
+#' @return A numeric vector of length \eqn{K}, in the order of the true
+#'   components.
+#'
 #' @export
 <span id="tv_by_component">tv_by_component</span> &lt;- function(sim, fit, n = 2001) {
   <span id="d_true">d_true</span> &lt;- function(v) LCDmix::<a href="create-LCDmix.html#err_true_fun">err_true_fun</a>(sim, v)
@@ -4576,7 +5107,33 @@ responsibilities,<br>
                     error = function(e) NA_real_))
   }, numeric(1)))
 }</code></pre>
-<pre class="r"><code>#' @export
+<pre class="r"><code>#' Plots and printed summaries for one simulated dataset (analysis script)
+#'
+#' @description
+#' Prints the chosen penalty pair, and the LCDmix and flowmix estimates with
+#' their sparsity next to the true values. Draws the Q trace, the binned
+#' data, the mean, median and gate curves, the error densities, and the
+#' mixture densities at \eqn{t = 1} and \eqn{t = 51}. A heatmap of the CV
+#' score is built but not drawn.
+#'
+#' This is an analysis script, not a general-purpose function. It reads
+#' objects from the calling environment and files from the working
+#' directory:
+#'
+#' - \code{summ}: a list of \code{<a href="create-LCDmix.html#cv_lcd_summary">cv_lcd_summary</a>()} results, one per dataset;
+#' - \code{refit_bests}: a list of best refits (\code{<a href="create-LCDmix.html#main">main</a>()} results), one
+#'   per dataset;
+#' - \code{sim_data/sim_&lt;s&gt;.rds} and \code{flow_res_bests.rds}.
+#'
+#' It also calls functions of dplyr, ggplot2 and scales without the package
+#' prefix, so those packages must be attached.
+#'
+#' @param s Dataset index.
+#'
+#' @return \code{NULL}, invisibly. The function is called for its printed
+#'   output and plots.
+#'
+#' @export
 <span id="res_LCDmix_simul">res_LCDmix_simul</span> &lt;- function(s){
   mat = summ[[s]]$reduced_mat
   print(summ[[s]]$opt_lambdas)
@@ -5007,19 +5564,27 @@ responsibilities,<br>
 <pre class="r"><code>litr::document() # &lt;-- use instead of devtools::document()</code></pre>
 <pre><code>## ℹ Updating LCDmix documentation
 ## ℹ Loading LCDmix
-## ✖ In topic 'tv_by_component.Rd': Skipping; no name and/or title.
 ## Writing 'NAMESPACE'
 ## Writing 'binning.Rd'
 ## Writing 'comp_Q.Rd'
 ## Writing 'comp_l1_dist.Rd'
 ## Writing 'comp_resi.Rd'
+## Writing 'count_degenerate.Rd'
 ## Writing 'cv_idx_mat.Rd'
+## Writing 'cv_lcd.Rd'
 ## Writing 'cv_lcd_onejob.Rd'
 ## Writing 'cv_lcd_simul.Rd'
 ## Writing 'cv_lcd_summary.Rd'
+## Writing 'cv_lcd_summary_simul.Rd'
+## Writing 'dens_est_fun.Rd'
+## Writing 'dens_true_fun.Rd'
+## Writing 'err_true_fun.Rd'
 ## Writing 'err_true_quantile.Rd'
 ## Writing 'estep_lcd.Rd'
+## Writing 'fit_error_text.Rd'
+## Writing 'flow_component_order.Rd'
 ## Writing 'flow_err_density.Rd'
+## Writing 'gen_simul_data.Rd'
 ## Writing 'infer_bin_width.Rd'
 ## Writing 'eval_lcd.Rd'
 ## Writing 'initialization.Rd'
@@ -5043,7 +5608,9 @@ responsibilities,<br>
 ## Writing 'refit_lcd.Rd'
 ## Writing 'refit_lcd_simul.Rd'
 ## Writing 'refit_onejob.Rd'
+## Writing 'res_LCDmix_simul.Rd'
 ## Writing 'simulate_and_save.Rd'
+## Writing 'tv_by_component.Rd'
 ## Writing 'tv_density.Rd'
 ## Writing 'tv_grid.Rd'
 ## Writing 'weighted_hist.Rd'

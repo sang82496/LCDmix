@@ -1,10 +1,17 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Estimated error density of one LCDmix component, zero outside the support.
+#' Estimated error density of one LCDmix component
 #'
-#' NOTE: evaluateLogConDens() returns a matrix, not a list, so the work order's
-#' `$log.density` does not work. Column 3 is the density, which is what the
-#' package's own dens_est_fun() uses.
+#' @description
+#' Returns a function that evaluates a fitted log-concave density at residual
+#' values: \code{logcondens::evaluateLogConDens()} (column 3, the density)
+#' inside the support, and 0 outside it or wherever the evaluation fails.
+#'
+#' @param g One element of \code{g_new}, a \code{modified_logcondens()} fit.
+#'
+#' @return A function of a numeric vector \code{v} that returns the densities
+#'   at \code{v}.
+#' @keywords internal
 lcd_err_density <- function(g) {
   sup <- range(g$x)
   return(function(v) {

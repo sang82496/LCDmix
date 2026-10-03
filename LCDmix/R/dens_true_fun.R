@@ -1,5 +1,22 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' True component densities of a simulated dataset at one time point
+#'
+#' @description
+#' Evaluates the density of each of the two components at time \eqn{t},
+#' \eqn{f(y - \mu_{tk})} with \eqn{\mu_{tk}} = \code{sim$mnmat[t, k]} and
+#' \eqn{f} the error density (\code{err_true_fun()}). The gate probabilities
+#' are not included: to get the mixture density, multiply column \eqn{k} by
+#' \code{sim$prob[t, k]} and sum over \eqn{k}.
+#'
+#' @param sim A dataset from \code{gen_simul_data()}.
+#' @param t Time point.
+#' @param y_grid Numeric vector of response values.
+#'
+#' @return A \code{length(y_grid)} \eqn{\times 2} matrix of densities (a
+#'   vector of length 2 when \code{y_grid} has length 1). The number of
+#'   components is fixed at 2.
+#'
 #' @export
 dens_true_fun <- function(
   sim,

@@ -1,26 +1,38 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' M-step update of intercept and slopes by quasi-Newton (no LP, no constraints)
+#' Update the coefficients of one expert by quasi-Newton (LP ablation arm)
 #'
 #' @description
-#' Comparison arm for the LP ablation. Maximizes the same weighted
-#' log-likelihood with the same L1 penalty as \code{mstep_theta_lp()}, but with
-#' \code{optim(method = "L-BFGS-B")} and without the log-concavity epigraph
-#' constraints or the support-feasibility bounds.
+#' Comparison arm of the LP ablation. Maximizes the same weighted
+#' log-likelihood with the same L1 penalty as \code{mstep_theta_lp()}, but
+#' with \code{optim(method = "L-BFGS-B")} and without the support constraints.
+#' The log-density is evaluated with \code{make_logdens_ext()}, which
+#' continues it linearly beyond the support.
 #'
 #' The slope vector is split as \eqn{\theta = \theta^+ - \theta^-} with both
-#' parts nonnegative, mirroring the LP's variable structure so that the two arms
-#' differ in solver rather than in problem statement, and so the non-smooth L1
-#' penalty is handled the same way in both.
+#' parts nonnegative, as in the linear program, so that the two arms differ in
+#' the solver and not in the problem, and the L1 penalty is handled the same
+#' way in both.
 #'
 #' @inheritParams mstep_theta_lp
-#' @param maxit Integer; \code{optim} iteration cap. Default 500.
-#' @param use_gradient Logical; supply the analytic (sub)gradient. Default TRUE.
+#' @param residuals Not used; an argument so that both updates take the same
+#'   arguments.
+#' @param intercept_k Current intercept; the starting value of \code{optim}.
+#' @param slopes_k Current slope vector; the starting value of \code{optim}.
+#' @param lp_time_limit Not used; an argument so that both updates take the
+#'   same arguments.
+#' @param maxit Maximum number of \code{optim} iterations.
+#' @param use_gradient Logical; supply the analytic (sub)gradient to
+#'   \code{optim}.
 #'
-#' @return A list with \code{theta0_k}, \code{theta_k}, and diagnostics
-#'   \code{convergence}, \code{obj_start}, \code{obj_end}, \code{n_outside},
-#'   \code{counts}. \code{mstep_theta()} reads only the first two, so the
-#'   diagnostics are free to carry.
+#' @return A list with \code{theta0_k}, \code{theta_k} and the diagnostics
+#'   \code{convergence} (code from \code{optim}; 99 if \code{optim} stopped
+#'   with an error), \code{obj_start}, \code{obj_end} (objective before and
+#'   after), \code{n_outside} (active bins whose new residual lies outside the
+#'   support) and \code{counts} (from \code{optim}). If the component has no
+#'   active bin, the current values are returned with \code{NA} diagnostics.
+#'   \code{mstep_theta()} uses only \code{theta0_k} and \code{theta_k} for the
+#'   fit.
 #' @export
 mstep_theta_optim <- function(
   Y_bin,

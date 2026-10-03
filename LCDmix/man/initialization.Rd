@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{initialization}
 \alias{initialization}
-\title{Initialize mixture-of-experts model parameters via Gaussian mixture regression}
+\title{Compute starting values from a Gaussian mixture of regressions}
 \usage{
 initialization(
   Y_bin,
@@ -16,56 +16,77 @@ initialization(
 )
 }
 \arguments{
-\item{Y_bin}{A list of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned responses.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{A numeric matrix of dimension \eqn{TT \times p}; covariate values for each time point.}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix; row \code{X[t, ]}
+belongs to time \eqn{t}.}
 
-\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector of length \eqn{M_t} giving sum of biomass per bin.}
+\item{bin_mass}{A list of length \code{TT}; each element is a numeric vector
+of length \eqn{M_t}, the total weight (biomass) in each bin.}
 
-\item{K}{Integer; number of mixture components.}
+\item{K}{Number of mixture components.}
 
-\item{lambda_alpha}{Numeric; L1 regularization parameter for mixture weights in GMR.}
+\item{lambda_alpha}{L1 penalty on the gate coefficients. Passed to flowmix
+as \code{prob_lambda} and used in \eqn{Q}.}
 
-\item{lambda_theta}{Numeric; L1 regularization parameter for regression slopes in GMR.}
+\item{lambda_theta}{L1 penalty on the expert slopes. Passed to flowmix as
+\code{mean_lambda} and used in \eqn{Q}.}
 
-\item{resp_threshold}{Numeric; threshold on responsibilities for bin assignment.}
+\item{resp_threshold}{Bins whose responsibility for component \eqn{k} is
+above this value are active for \eqn{k} (\code{idx_init}).}
 
-\item{maxdev}{\code{NULL} or a positive number; passed to \code{flowmix::flowmix()}.}
+\item{maxdev}{\code{NULL} or a positive number; passed to
+\code{flowmix::flowmix()}. See \code{main()}.}
 }
 \value{
 A list with components:
 \describe{
-\item{flow}{Result object returned by \code{flowmix::flowmix}.}
-\item{idx_init}{List of length \code{TT} of \eqn{M_t \times K} logical matrices indicating high-confidence bin assignments.}
-\item{resp_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior probabilities (responsibilities).}
-\item{weight_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of posterior weights (responsibilities × \code{bin_mass}).}
-\item{theta0_init}{List of length \code{K} of initial intercepts.}
-\item{theta_init}{List of length \code{K} of initial slope vectors.}
-\item{alpha_init}{\eqn{K \times (p+1)} matrix of initial mixture parameters from GMR.}
-\item{resi_init}{List of length \code{TT} of \eqn{M_t \times K} matrices of residuals.}
-\item{g_init}{List of length \code{K} of log-concave density objects from \code{modified_logcondens()}.}
-\item{Q}{Numeric; value of the surrogate log-likelihood at initialization.}
-\item{Q_every}{Numeric; same as \code{Q} (for consistency with iterative output).}
+\item{flow}{The fit returned by \code{flowmix::flowmix()}.}
+\item{idx_init}{List of \code{TT} logical \eqn{M_t \times K} matrices;
+\code{TRUE} where \code{resp_init} is above \code{resp_threshold}.}
+\item{resp_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+responsibilities. They are not thresholded; each row sums to 1.}
+\item{weight_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+posterior weights, \code{resp_init} times \code{bin_mass}.}
+\item{theta0_init}{List of \code{K} intercepts, after \code{mstep_shift()}.}
+\item{theta_init}{List of \code{K} slope vectors, from flowmix.}
+\item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients; row 1
+is 0.}
+\item{resi_init}{List of \code{TT} \eqn{M_t \times K} matrices of
+residuals for \code{theta0_init} and \code{theta_init}.}
+\item{g_init}{List of \code{K} log-concave fits from \code{mstep_g()}.}
+\item{Q}{Starting value of \eqn{Q}: a number named \code{"Q"} that
+carries the attributes of \code{comp_Q()}.}
+\item{Q_every}{The same value; \code{iteration()} appends to it.}
 }
 }
 \description{
-Performs the initialization for the mixture-of-experts model pipeline:
+Computes the starting point of the EM-type algorithm:
 \enumerate{
-\item Fit a Gaussian mixture regression (GMR) via \code{flowmix::flowmix}.
-\item Extract initial mixture parameters (\code{alpha_init}, \code{theta0_init}, \code{theta_init}).
-\item Compute initial residuals, responsibilities, and posterior weights.
-\item Perform one M-step update for intercepts.
-\item Estimate initial log-concave component densities.
-\item Compute the initial surrogate log-likelihood.
+\item Fits a Gaussian mixture of regressions with \code{flowmix::flowmix()}
+(one random start, \code{nrep = 1}).
+\item Takes the gate coefficients from that fit, centered so that component 1
+is the reference (row 1 is 0), and the intercepts and slopes.
+\item Computes the residuals and the starting responsibilities from the
+Gaussian component densities \eqn{N(0, \sigma_k^2)}, evaluated at the
+residuals and multiplied by the gate probabilities.
+\item Re-centers the intercepts with \code{mstep_shift()}.
+\item Fits the starting log-concave densities with \code{mstep_g()}.
+\item Computes the starting value of the surrogate objective \eqn{Q} with
+\code{comp_Q()}.
 }
+
+The flowmix start is random. Call \code{set.seed()} first for reproducible
+values.
 }
 \examples{
 \dontrun{
-TT      <- 4; K <- 2; p <- 3; n_bins <- 5
-Y_bin   <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
-bin_mass<- lapply(Y_bin, function(y) runif(nrow(y)))
-X       <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
-init    <- initialization(
+TT       <- 4; K <- 2; p <- 3; n_bins <- 5
+Y_bin    <- lapply(1:TT, function(t) matrix(rnorm(n_bins), ncol = 1))
+bin_mass <- lapply(Y_bin, function(y) runif(nrow(y)))
+X        <- matrix(rnorm(TT * p), nrow = TT, ncol = p)
+init     <- initialization(
   Y_bin, X, bin_mass, K,
   lambda_alpha   = 1e-3,
   lambda_theta   = 1e-3,

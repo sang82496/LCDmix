@@ -1,34 +1,45 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Estimate component densities via log-concave density estimation (M-step)
+#' Update the component densities (log-concave M-step)
 #'
 #' @description
-#' For each mixture component \(k\), gathers the residuals across all time points
-#' for bins assigned to component \(k\), weighs them by their posterior weights,
-#' and fits a log-concave density using \code{modified_logcondens()}.
+#' For each component \eqn{k}:
 #'
-#' @param residuals A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   matrix of residuals at time point \code{t}, with \eqn{M_t \le n\_bins} bins.
-#' @param weights A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   matrix of posterior weights (e.g., responsibilities) corresponding to \code{residuals}.
-#' @param idx A list of length \code{TT}, where each element is an \eqn{M_t \times K}
-#'   logical or integer matrix.  \code{idx[[t]][i,k]} indicates whether the \(i\)th bin
-#'   at time \(t\) contributes to component \(k\).
-#' @param dedup_tol Numeric; residuals closer together than this are merged
-#'   before fitting. Binning produces residuals differing only at machine
-#'   precision, which prevents the log-concave active-set search from reaching
-#'   its maximizer. Set to \code{0} to disable merging. Default \code{1e-10}.
+#' 1. Pools the residuals of the bins that are active for \eqn{k} over all
+#'    time points, with their posterior weights.
+#' 2. Merges residuals closer than \code{dedup_tol} and sums their weights.
+#'    The smallest and the largest residual are kept exactly, because the
+#'    support of the estimate is their range.
+#' 3. Normalizes the weights to sum to 1 and fits the weighted log-concave
+#'    maximum likelihood estimate with \code{modified_logcondens()}.
 #'
-#' @return A list of length \code{K}, where element \code{k} is the output of
-#'   \code{modified_logcondens()}—the estimated log-concave density for component \(k\).
+#' Stops with an error whose message starts with "degenerate component" when
+#' a component has fewer than two distinct residuals; \code{count_degenerate()}
+#' counts these failures in saved cross-validation results. A message is
+#' printed when a component has fewer than five distinct residuals.
+#'
+#' @param residuals A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of residuals.
+#' @param weights A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} matrix of posterior weights.
+#' @param idx A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times K} logical matrix of active bins.
+#' @param dedup_tol Residuals closer together than this are merged before
+#'   fitting. Residuals that differ only by rounding error stop the active-set
+#'   search of \code{modified_logcondens()} before it reaches the maximizer.
+#'   Use \code{0} to switch merging off.
+#'
+#' @return A list of length \code{K}; element \eqn{k} is the
+#'   \code{modified_logcondens()} fit for component \eqn{k}. Its support is the
+#'   range of the pooled residuals of component \eqn{k}.
 #'
 #' @examples
 #' \dontrun{
 #' TT <- 3; K <- 2
-#' # Simulate residuals and weights (5 bins × 2 components)
+#' # Residuals and weights for 5 bins and 2 components
 #' residuals <- lapply(1:TT, function(t) matrix(rnorm(5 * K), ncol = K))
-#' weights   <- lapply(residuals, function(m) abs(m))  # just for demo
-#' # Include all bins for both components
+#' weights   <- lapply(residuals, function(m) abs(m))  # for the example only
+#' # All bins active for both components
 #' idx <- lapply(residuals, function(m) matrix(TRUE, nrow = nrow(m), ncol = ncol(m)))
 #' densities <- mstep_g(residuals, weights, idx)
 #' }

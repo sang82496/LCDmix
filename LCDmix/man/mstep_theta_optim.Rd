@@ -2,7 +2,7 @@
 % Please edit documentation in create-LCDmix.Rmd.
 \name{mstep_theta_optim}
 \alias{mstep_theta_optim}
-\title{M-step update of intercept and slopes by quasi-Newton (no LP, no constraints)}
+\title{Update the coefficients of one expert by quasi-Newton (LP ablation arm)}
 \usage{
 mstep_theta_optim(
   Y_bin,
@@ -21,44 +21,60 @@ mstep_theta_optim(
 )
 }
 \arguments{
-\item{Y_bin}{List of length \code{TT}; each element is an \eqn{M_t \times 1} matrix of binned response values at time \eqn{t}.}
+\item{Y_bin}{A list of length \code{TT}; each element is an
+\eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.}
 
-\item{X}{Numeric \eqn{TT \times p} matrix of covariates (rows = time points).}
+\item{X}{A numeric \eqn{TT \times p} covariate matrix.}
 
-\item{weights}{List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of posterior weights for each bin and component.}
+\item{weights}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} matrix of posterior weights.}
 
-\item{residuals}{List of length \code{TT}; each element is an \eqn{M_t \times K} matrix of residuals for each bin and component.}
+\item{residuals}{Not used; an argument so that both updates take the same
+arguments.}
 
-\item{density_k}{An object returned by \code{modified_logcondens()} for component \eqn{k}, containing fields \code{x}, \code{phi}, and \code{IsKnot}.}
+\item{density_k}{The \code{modified_logcondens()} fit of the component
+(fields \code{x}, \code{phi} and \code{IsKnot} are used).}
 
-\item{idx}{List of length \code{TT}; each element is an \eqn{M_t \times K} logical matrix where \code{TRUE} indicates bins contributing to component \eqn{k}.}
+\item{idx}{A list of length \code{TT}; each element is an
+\eqn{M_t \times K} logical matrix of active bins. \code{iteration()}
+passes the active bins of the previous E-step, the bins that
+\code{density_k} was fitted to.}
 
-\item{intercept_k}{Numeric scalar; current intercept parameter \eqn{\theta_{0k}}.}
+\item{intercept_k}{Current intercept; the starting value of \code{optim}.}
 
-\item{slopes_k}{Numeric vector of length \eqn{p}; current slope parameters \eqn{\theta_k}.}
+\item{slopes_k}{Current slope vector; the starting value of \code{optim}.}
 
-\item{lambda_theta}{Nonnegative numeric; L1 penalty on the slope parameters.}
+\item{lambda_theta}{Nonnegative L1 penalty on the slopes.}
 
-\item{component}{Integer in \(\{1,\dots,K\}\); index of the component to update.}
+\item{component}{Index \eqn{k} of the component to update.}
 
-\item{maxit}{Integer; \code{optim} iteration cap. Default 500.}
+\item{lp_time_limit}{Not used; an argument so that both updates take the
+same arguments.}
 
-\item{use_gradient}{Logical; supply the analytic (sub)gradient. Default TRUE.}
+\item{maxit}{Maximum number of \code{optim} iterations.}
+
+\item{use_gradient}{Logical; supply the analytic (sub)gradient to
+\code{optim}.}
 }
 \value{
-A list with \code{theta0_k}, \code{theta_k}, and diagnostics
-\code{convergence}, \code{obj_start}, \code{obj_end}, \code{n_outside},
-\code{counts}. \code{mstep_theta()} reads only the first two, so the
-diagnostics are free to carry.
+A list with \code{theta0_k}, \code{theta_k} and the diagnostics
+\code{convergence} (code from \code{optim}; 99 if \code{optim} stopped
+with an error), \code{obj_start}, \code{obj_end} (objective before and
+after), \code{n_outside} (active bins whose new residual lies outside the
+support) and \code{counts} (from \code{optim}). If the component has no
+active bin, the current values are returned with \code{NA} diagnostics.
+\code{mstep_theta()} uses only \code{theta0_k} and \code{theta_k} for the
+fit.
 }
 \description{
-Comparison arm for the LP ablation. Maximizes the same weighted
-log-likelihood with the same L1 penalty as \code{mstep_theta_lp()}, but with
-\code{optim(method = "L-BFGS-B")} and without the log-concavity epigraph
-constraints or the support-feasibility bounds.
+Comparison arm of the LP ablation. Maximizes the same weighted
+log-likelihood with the same L1 penalty as \code{mstep_theta_lp()}, but
+with \code{optim(method = "L-BFGS-B")} and without the support constraints.
+The log-density is evaluated with \code{make_logdens_ext()}, which
+continues it linearly beyond the support.
 
 The slope vector is split as \eqn{\theta = \theta^+ - \theta^-} with both
-parts nonnegative, mirroring the LP's variable structure so that the two arms
-differ in solver rather than in problem statement, and so the non-smooth L1
-penalty is handled the same way in both.
+parts nonnegative, as in the linear program, so that the two arms differ in
+the solver and not in the problem, and the L1 penalty is handled the same
+way in both.
 }

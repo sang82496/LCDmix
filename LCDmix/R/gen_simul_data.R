@@ -1,5 +1,66 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
+#' Simulate one dataset from the two-component simulation design
+#'
+#' @description
+#' Draws binned data from a mixture of two regressions over \code{TT} time
+#' points:
+#'
+#' - Covariates: \code{X = (par, ramp, noise1, ..., noise(p-2))}. \code{par}
+#'   is the first \code{TT} values of the series in \code{simul_helper.rds},
+#'   scaled to mean 0 and standard deviation 1. \code{ramp} rises linearly
+#'   from 0 to 1 over the first half of the time points and stays at 1 over
+#'   the second half; it is not standardized. The noise covariates are
+#'   independent \eqn{N(0, 1)}.
+#' - Expert means: component 1 has intercept 0 and slope \code{theta_par} on
+#'   \code{par}; component 2 has intercept \code{gap} and slope
+#'   \code{-theta_par} on \code{par}. All other slopes are 0.
+#' - Gate: \eqn{P(Z_t = 2) = \mathrm{logit}^{-1}(\mathrm{logit}(0.10) + (\mathrm{logit}(0.30) - \mathrm{logit}(0.10))\, ramp_t)},
+#'   which rises from 0.10 at \code{ramp = 0} to 0.30 at \code{ramp = 1}. All
+#'   other gate coefficients are 0.
+#' - Errors: the same mean-zero distribution in both components, chosen by
+#'   \code{noisetype}: \code{"gaussian"}, \eqn{N(0, 1)}; \code{"skewed"},
+#'   skew-normal with shape \code{skew_alpha}, scaled to variance 1 and
+#'   shifted to mean 0; \code{"heavytail"}, \eqn{t} with \code{df} degrees of
+#'   freedom, scaled to variance 1; \code{"laplace"}, Laplace with scale 1
+#'   (variance 2); \code{"exponential"}, \eqn{Exp(1) - 1}.
+#' - Each time point has \code{nt} observations with weight 1, binned with
+#'   \code{binning()} into \code{B} equal-width bins over the pooled range.
+#'
+#' @param sim_seed Seed for \code{set.seed()}; \code{NULL} leaves the random
+#'   number generator as it is.
+#' @param nt Number of observations per time point (a multiple of 5).
+#' @param TT Number of time points. Use an even number, so that the two halves
+#'   of \code{ramp} have equal length.
+#' @param theta_par Slope on \code{par}: \code{+theta_par} for component 1 and
+#'   \code{-theta_par} for component 2.
+#' @param p Number of covariates, at least 3.
+#' @param B Number of bins.
+#' @param noisetype One of \code{"gaussian"}, \code{"skewed"},
+#'   \code{"heavytail"}, \code{"laplace"} and \code{"exponential"}.
+#' @param df Degrees of freedom for \code{"heavytail"} (at least 3).
+#' @param skew_alpha Shape parameter for \code{"skewed"}.
+#' @param gap Intercept of component 2 (component 1 has intercept 0).
+#' @param sim_helper_dir Directory that holds \code{simul_helper.rds}.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{Y_bin, X, bin_mass}{The data, in the form \code{main()} takes with
+#'     \code{binned = TRUE}.}
+#'   \item{noisetype, df, skew_alpha}{The arguments, returned unchanged.}
+#'   \item{mnmat}{\eqn{TT \times 2} matrix of the true component means.}
+#'   \item{prob}{\eqn{TT \times 2} matrix of the true gate probabilities.}
+#'   \item{alpha, theta}{True gate and expert coefficients, each a
+#'     \eqn{(p+1) \times 2} matrix with rows intercept, \code{par},
+#'     \code{ramp}, \code{noise1}, ... . \code{alpha} is the transpose of the
+#'     \eqn{K \times (p+1)} layout used by the rest of the package, so the
+#'     gate probabilities are \code{pi_k(X, t(alpha))}.}
+#'   \item{omega, mn_shift}{Scale and mean shift of the skew-normal
+#'     (\code{"skewed"} only; \code{NULL} otherwise).}
+#'   \item{variance}{Variance of the \eqn{t} distribution before scaling
+#'     (\code{"heavytail"} only; \code{NULL} otherwise).}
+#' }
+#'
 #' @export
 gen_simul_data <- function(
   sim_seed       = NULL,

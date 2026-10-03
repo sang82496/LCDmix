@@ -1,26 +1,22 @@
 # Generated from create-LCDmix.Rmd: do not edit by hand
 
-#' Compute residuals for binned responses given mixture parameters
+#' Compute residuals for binned responses given the expert coefficients
 #'
 #' @description
-#' For each time point \(t\) and mixture component \(k\), compute the residuals
-#' \[
-#'   r_{t,i,k} \;=\; Y_{\mathrm{bin},t,i}
-#'     \;-\;\bigl(\,\text{intercepts}[[k]] \;+\; X[t, ] \,\cdot\, \text{slopes}[[k]]\bigr).
-#' \]
+#' For each time point \eqn{t}, bin \eqn{i} and component \eqn{k}, computes
+#' \deqn{u_{tik} = y_{ti} - \theta_{0k} - X_t^\top \theta_k.}
 #'
-#' @param Y_bin A list of length \code{TT}; each element is an \eqn{M_t \times 1}
-#'   matrix of binned response values at time point \code{t}.
-#' @param X A numeric matrix of size \eqn{TT \times p}; row \code{X[t, ]} is the
-#'   covariate vector for time point \code{t}.
+#' @param Y_bin A list of length \code{TT}; each element is an
+#'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
+#' @param X A numeric \eqn{TT \times p} matrix; row \code{X[t, ]} is the
+#'   covariate vector at time \eqn{t}.
 #' @param intercepts A list of length \code{K}; \code{intercepts[[k]]} is the
-#'   intercept parameter \eqn{\theta_{0k}} for component \eqn{k}.
-#' @param slopes A list of length \code{K}; \code{slopes[[k]]} is a numeric vector
-#'   of length \eqn{p} containing the slope parameters \(\boldsymbol{\theta}_k\).
+#'   intercept \eqn{\theta_{0k}}.
+#' @param slopes A list of length \code{K}; \code{slopes[[k]]} is the slope
+#'   vector \eqn{\theta_k} of length \eqn{p}.
 #'
-#' @return A list of length \code{TT}; each element is an \eqn{M_t \times K} matrix
-#'   of residuals, where row \(i\), column \(k\) is the residual for bin \(i\)
-#'   at time \(t\) and component \(k\).
+#' @return A list of length \code{TT}; element \eqn{t} is an
+#'   \eqn{M_t \times K} matrix whose entry \code{[i, k]} is \eqn{u_{tik}}.
 #'
 #' @examples
 #' \dontrun{
