@@ -51,7 +51,7 @@ an argument so that both updates take the same arguments.}
 \item{component}{Index \eqn{k} of the component to update.}
 
 \item{lp_time_limit}{Time limit in seconds for Rsymphony. If it is reached,
-lpSolve is tried without a time limit.}
+the function stops with an error.}
 
 \item{maxdev}{\code{NULL} (default, no constraint) or a positive number.
 Bounds the deviation of the component mean from its intercept,
@@ -83,18 +83,33 @@ active bins of component \eqn{k}, and \eqn{N} is the sum of all posterior
 weights, so the objective is \eqn{N} times the part of \eqn{Q} that depends
 on \eqn{\theta_k}. The linear program has
 \itemize{
+\item one variable \eqn{s_t} per time point with active bins, the shift of the
+component at that time, tied to the coefficients by the equality
+\eqn{s_t = \theta_{0k} + X_t^\top \theta_k};
 \item one variable \eqn{z_i} per active bin, with
 \eqn{z_i \le \phi_j + b_j (u_i - x_j)} for every linear piece \eqn{j}
-of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j});
+of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j}),
+where \eqn{u_i = y_i - s_t} is the residual of bin \eqn{i} and \eqn{t}
+is its time point;
 \item support constraints: at every time point with active bins, all residuals
 stay in \eqn{[L_k, U_k]}, the range of the current residuals, which is
-the support of \eqn{\hat g_k};
+the support of \eqn{\hat g_k}; these are a lower and an upper bound on
+\eqn{s_t};
 \item optionally, the \code{maxdev} constraints;
 \item the objective \eqn{\sum_i w_i z_i - N \lambda_\theta \|\theta_k\|_1}.
 }
 
-Every variable is split into a positive and a negative part. The program is
-solved with \code{Rsymphony::Rsymphony_solve_LP()}; if that does not return
-an optimal solution, with \code{lpSolve::lp()}. The function stops with an
-error if neither does.
+The variables \eqn{s_t} are not needed to state the program: the
+constraints of the bins could be written with
+\eqn{(\theta_{0k}, \theta_k)} directly. With \eqn{s_t} each of those
+constraints involves only \eqn{z_i} and \eqn{s_t}, not \eqn{z_i},
+\eqn{\theta_{0k}} and all \eqn{p} slopes, and the program has the same
+solutions. With many covariates this makes it much faster to solve.
+
+The slopes are split into a positive and a negative part, which makes the
+L1 penalty linear; \eqn{z_i}, \eqn{s_t} and \eqn{\theta_{0k}} are free
+variables. The program is solved with
+\code{Rsymphony::Rsymphony_solve_LP()}. The function stops with an error
+if the solver does not return an optimal solution, for example when it
+reaches its time limit.
 }

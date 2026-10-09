@@ -47,7 +47,7 @@ passes the active bins of the previous E-step, the bins that
 \item{lambda_theta}{Nonnegative L1 penalty on the slopes.}
 
 \item{lp_time_limit}{Time limit in seconds for Rsymphony. If it is reached,
-lpSolve is tried without a time limit.}
+the function stops with an error.}
 
 \item{update}{\code{"lp"} or \code{"optim"}; see \code{main()}.}
 

@@ -47,7 +47,6 @@ usethis::use_package("logcondens")
 usethis::use_package("glmnet")
 usethis::use_package("VGAM")
 usethis::use_package("Matrix")
-usethis::use_package("lpSolve")
 usethis::use_package("Rsymphony")
 usethis::use_package("ggplot2")
 usethis::use_package("parallel")
@@ -1946,19 +1945,34 @@ mstep_theta <- function(
 #' weights, so the objective is \eqn{N} times the part of \eqn{Q} that depends
 #' on \eqn{\theta_k}. The linear program has
 #'
+#' - one variable \eqn{s_t} per time point with active bins, the shift of the
+#'   component at that time, tied to the coefficients by the equality
+#'   \eqn{s_t = \theta_{0k} + X_t^\top \theta_k};
 #' - one variable \eqn{z_i} per active bin, with
 #'   \eqn{z_i \le \phi_j + b_j (u_i - x_j)} for every linear piece \eqn{j}
-#'   of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j});
+#'   of \eqn{\hat g_k} (knot \eqn{x_j}, value \eqn{\phi_j}, slope \eqn{b_j}),
+#'   where \eqn{u_i = y_i - s_t} is the residual of bin \eqn{i} and \eqn{t}
+#'   is its time point;
 #' - support constraints: at every time point with active bins, all residuals
 #'   stay in \eqn{[L_k, U_k]}, the range of the current residuals, which is
-#'   the support of \eqn{\hat g_k};
+#'   the support of \eqn{\hat g_k}; these are a lower and an upper bound on
+#'   \eqn{s_t};
 #' - optionally, the \code{maxdev} constraints;
 #' - the objective \eqn{\sum_i w_i z_i - N \lambda_\theta \|\theta_k\|_1}.
 #'
-#' Every variable is split into a positive and a negative part. The program is
-#' solved with \code{Rsymphony::Rsymphony_solve_LP()}; if that does not return
-#' an optimal solution, with \code{lpSolve::lp()}. The function stops with an
-#' error if neither does.
+#' The variables \eqn{s_t} are not needed to state the program: the
+#' constraints of the bins could be written with
+#' \eqn{(\theta_{0k}, \theta_k)} directly. With \eqn{s_t} each of those
+#' constraints involves only \eqn{z_i} and \eqn{s_t}, not \eqn{z_i},
+#' \eqn{\theta_{0k}} and all \eqn{p} slopes, and the program has the same
+#' solutions. With many covariates this makes it much faster to solve.
+#'
+#' The slopes are split into a positive and a negative part, which makes the
+#' L1 penalty linear; \eqn{z_i}, \eqn{s_t} and \eqn{\theta_{0k}} are free
+#' variables. The program is solved with
+#' \code{Rsymphony::Rsymphony_solve_LP()}. The function stops with an error
+#' if the solver does not return an optimal solution, for example when it
+#' reaches its time limit.
 #'
 #' @param Y_bin A list of length \code{TT}; each element is an
 #'   \eqn{M_t \times 1} matrix of bin centers at time \eqn{t}.
@@ -1981,7 +1995,7 @@ mstep_theta <- function(
 #' @param lambda_theta Nonnegative L1 penalty on the slopes.
 #' @param component Index \eqn{k} of the component to update.
 #' @param lp_time_limit Time limit in seconds for Rsymphony. If it is reached,
-#'   lpSolve is tried without a time limit.
+#'   the function stops with an error.
 #' @param maxdev \code{NULL} (default, no constraint) or a positive number.
 #'   Bounds the deviation of the component mean from its intercept,
 #'   \eqn{|X_t^\top \theta_k| \le} \code{maxdev} at every time point \eqn{t},
@@ -2020,76 +2034,81 @@ mstep_theta_lp <- function(
   TT <- length(Y_bin)
   p  <- ncol(X)
 
-  # Collect residuals, weights, responses, and covariates for component
-  res_k <- numeric(0)
-  w_k   <- numeric(0)
-  Y_k   <- numeric(0)
-  X_k   <- matrix(nrow = 0, ncol = p)
-  skip_ts <- integer(0)
-  
-  for (t in seq_len(TT)) {
-    idx_tk <- idx[[t]][, component]
-    if (any(idx_tk)) {
-      res_k <- c(res_k, residuals[[t]][idx_tk, component])
-      w_k   <- c(w_k, weights[[t]][idx_tk, component])
-      Y_k   <- c(Y_k, Y_bin[[t]][idx_tk, 1])
-      X_k   <- rbind(
-                X_k,
-                matrix(rep(X[t, ], sum(idx_tk)), nrow = sum(idx_tk), byrow = TRUE)
-              )
-    } else {
-      skip_ts <- c(skip_ts, t)
-    }
+  # Time points with active bins of the component (the others are skipped),
+  # and the residuals, weights and responses of those bins
+  keep_t <- which(vapply(idx, function(m) any(m[, component]), logical(1)))
+  if (length(keep_t) == 0L) {
+    stop("mstep_theta_lp(): component ", component, " has no active bins")
   }
-  
-  n <- length(Y_k)
-  
+  n_t   <- vapply(idx[keep_t], function(m) sum(m[, component]), numeric(1))
+  res_k <- unlist(lapply(keep_t, function(t) residuals[[t]][idx[[t]][, component], component]))
+  w_k   <- unlist(lapply(keep_t, function(t) weights[[t]][idx[[t]][, component], component]))
+  Y_k   <- unlist(lapply(keep_t, function(t) Y_bin[[t]][idx[[t]][, component], 1]))
+  Y_min <- vapply(keep_t, function(t) min(Y_bin[[t]][idx[[t]][, component], 1]), numeric(1))
+  Y_max <- vapply(keep_t, function(t) max(Y_bin[[t]][idx[[t]][, component], 1]), numeric(1))
+  X_keep <- X[keep_t, , drop = FALSE]
+
+  n      <- length(Y_k)               # number of active bins
+  T_k    <- length(keep_t)            # number of time points with active bins
+  time_i <- rep(seq_len(T_k), n_t)    # for bin i, the position of its time point in keep_t
+
   # Extract knots and slopes of piecewise linear density
   x_m     <- density_k$x[as.logical(density_k$IsKnot)]
   phi_m   <- density_k$phi[as.logical(density_k$IsKnot)]
   J       <- length(x_m) - 1
   b       <- diff(phi_m) / diff(x_m)
   beta0   <- b * x_m[-length(x_m)] - phi_m[-length(phi_m)]
-  
-  # Build constraint matrix and RHS
-  const_mat <- NULL
-  const_vec <- numeric(0)
-  
-  # Epigraph constraints for log‐concavity
-  for (j in seq_len(J)) {
-    tmp   <- cbind(Matrix::Diagonal(n), b[j], b[j] * X_k)
-    block <- cbind(tmp, -tmp)
-    const_mat <- rbind(const_mat, block)
-    const_vec <- c(const_vec, b[j] * Y_k - beta0[j])
-  }
-  
-  # Feasibility constraints: ensure predictions lie within range of residuals
-  if (length(skip_ts) == 0) {
-    TT_new <- TT
-    X_new  <- X
-  } else {
-    TT_new <- TT - length(skip_ts)
-    X_new  <- X[-skip_ts, , drop = FALSE]
-  }
-  tmp1 <- cbind(matrix(0, nrow = TT_new, ncol = n), 1, X_new)
-  block1 <- cbind(tmp1, -tmp1)
-  block2 <- cbind(-tmp1, tmp1)
-  const_mat <- rbind(const_mat, block1, block2)
-  
-  # RHS for feasibility: bounding by min/max of Y_k
+
+  # fixAA: the shift s_t = theta0 + X_t' theta of each time point is a variable.
+  # Columns:  z (n) | s (T_k) | theta0 (1) | theta+ (p) | theta- (p)
+  # z, s and theta0 are free; theta+ and theta- are >= 0.
+  n_free <- n + T_k + 1
+  col_s  <- n + seq_len(T_k)
+  col_t0 <- n + T_k + 1
+  col_tp <- n_free + seq_len(p)
+  col_tm <- n_free + p + seq_len(p)
+  n_col  <- n_free + 2 * p
+
+  # The constraints are collected as (row, column, value) triplets.
+  # Epigraph constraints for log-concavity, one per (active bin, linear piece):
+  #   z_i + b_j * s_t <= b_j * y_i - beta0_j
+  i_e     <- rep(seq_len(n), times = J)
+  j_e     <- rep(seq_len(J), each = n)
+  row_epi <- seq_len(n * J)
+  # Link constraints, one per time point: s_t - theta0 - X_t' (theta+ - theta-) = 0
+  row_link <- n * J + seq_len(T_k)
+
+  tri_i <- c(row_epi, row_epi,
+             row_link, row_link, rep(row_link, times = p), rep(row_link, times = p))
+  tri_j <- c(i_e, col_s[time_i[i_e]],
+             col_s, rep(col_t0, T_k), rep(col_tp, each = T_k), rep(col_tm, each = T_k))
+  tri_x <- c(rep(1, n * J), b[j_e],
+             rep(1, T_k), rep(-1, T_k), -as.vector(X_keep), as.vector(X_keep))
+  const_vec <- c(b[j_e] * Y_k[i_e] - beta0[j_e], rep(0, T_k))
+  const_dir <- c(rep("<=", n * J), rep("==", T_k))
+  n_row <- n * J + T_k
+
+  # Feasibility constraints: the residuals of each time point stay within the
+  # range [L, U] of the current residuals. These are bounds on the shift:
+  #   max(Y_tk) - U <= s_t <= min(Y_tk) - L
   L <- min(res_k); U <- max(res_k)
-  tmp_vec <- numeric(2 * TT_new)
-  cnt <- 1
-  for (t in seq_len(TT)) {
-    idx_tk <- idx[[t]][, component]
-    if (any(idx_tk)) {
-      tmp_vec[cnt]           <- min(Y_bin[[t]][idx_tk]) - L
-      tmp_vec[TT_new + cnt]  <- U - max(Y_bin[[t]][idx_tk])
-      cnt <- cnt + 1
+  s_lo <- Y_max - U
+  s_hi <- Y_min - L
+  # The current shift satisfies both bounds, because L and U are the smallest
+  # and the largest current residual. When the active bins of one time point
+  # span the whole support the two bounds are equal, and rounding can put them
+  # in the wrong order by about 1e-16. Rsymphony rejects crossed bounds, so
+  # bounds that cross by rounding only are set to their midpoint.
+  crossed <- s_lo > s_hi
+  if (any(crossed)) {
+    if (max(s_lo[crossed] - s_hi[crossed]) > 1e-8) {
+      stop("mstep_theta_lp(): the support constraints of component ", component, " cannot be satisfied")
     }
+    s_mid <- (s_lo[crossed] + s_hi[crossed]) / 2
+    s_lo[crossed] <- s_mid
+    s_hi[crossed] <- s_mid
   }
-  const_vec <- c(const_vec, tmp_vec)
-  
+
   # NEW (fixP): maximum-deviation constraints (flowmix), |X_t' theta_k| <= maxdev
   # for all t. Only the slopes enter, so mstep_shift() cannot break them later.
   # Guard: if the current slopes exceed maxdev at some t, the bound there is
@@ -2105,62 +2124,49 @@ mstep_theta_lp <- function(
     maxdev_n_relaxed  <- sum(dev_now > maxdev + 1e-8)
     maxdev_max_excess <- max(0, dev_now - maxdev)
     dev_rhs <- pmax(maxdev, dev_now)
-    tmp2 <- cbind(matrix(0, nrow = TT, ncol = n + 1), X)
-    const_mat <- rbind(const_mat, cbind(tmp2, -tmp2), cbind(-tmp2, tmp2))
+    row_dev <- n_row + seq_len(TT)
+    tri_i <- c(tri_i, rep(row_dev, times = p), rep(row_dev, times = p),
+               rep(TT + row_dev, times = p), rep(TT + row_dev, times = p))
+    tri_j <- c(tri_j, rep(col_tp, each = TT), rep(col_tm, each = TT),
+               rep(col_tp, each = TT), rep(col_tm, each = TT))
+    tri_x <- c(tri_x, as.vector(X), -as.vector(X), -as.vector(X), as.vector(X))
     const_vec <- c(const_vec, dev_rhs, dev_rhs)
+    const_dir <- c(const_dir, rep("<=", 2 * TT))
+    n_row <- n_row + 2 * TT
   }
-  
-  #–– Debugging: print size and memory usage of constraint matrix ––#
-#  print(dim(const_mat))
-#  print(format(object.size(as.matrix(const_mat)), "Gb"))
-#  print(format(object.size(const_mat), "Mb"))
-  
-  # Objective: maximize w_k^T z - N*lambda_theta * |theta_k| - w_k^T z'
+
+  keep  <- tri_x != 0
+  tri_i <- tri_i[keep]; tri_j <- tri_j[keep]; tri_x <- tri_x[keep]
+  const_mat <- Matrix::sparseMatrix(i = tri_i, j = tri_j, x = tri_x, dims = c(n_row, n_col))
+
+  # Objective: maximize w_k^T z - N*lambda_theta * (theta+ + theta-)
   N_total <- sum(unlist(weights))
-  obj_coef <- c(
-    w_k,
-    0,
-    rep(-N_total * lambda_theta, p),
-    -w_k,
-    0,
-    rep(-N_total * lambda_theta, p)
-  )
-  
-  const_dir <- rep("<=", nrow(const_mat))
-  
-  # Solve the linear program
+  obj_coef <- numeric(n_col)
+  obj_coef[seq_len(n)] <- w_k
+  obj_coef[c(col_tp, col_tm)] <- -N_total * lambda_theta
+
+  # Solve the linear program. z and theta0 have no lower bound; s_t lies
+  # between s_lo and s_hi; theta+ and theta- keep the default bound, >= 0.
+  col_free <- c(seq_len(n), col_t0)
   lp_res <- Rsymphony::Rsymphony_solve_LP(
-    obj = obj_coef, 
-    mat = const_mat, 
-    dir = const_dir, 
-    rhs = const_vec,  
+    obj = obj_coef,
+    mat = const_mat,
+    dir = const_dir,
+    rhs = const_vec,
+    bounds = list(lower = list(ind = c(col_free, col_s), val = c(rep(-Inf, length(col_free)), s_lo)),
+                  upper = list(ind = col_s, val = s_hi)),
     max = TRUE,
     time_limit = lp_time_limit)
-  
-  if (lp_res$status != 0) {
-    print("No solution has been stored by Rsymphony. Change the LP solver to lpSolve")
-    # fixS: lpSolve::lp() does not accept the sparse Matrix built above
-    # ("argument is not a matrix"), and a dense copy can need gigabytes, so
-    # pass the constraints as (row, column, value) triplets instead.
-    trip <- Matrix::summary(Matrix::Matrix(const_mat, sparse = TRUE))
-    lp_res <- lpSolve::lp(
-      direction    = "max",
-      objective.in = obj_coef,
-      dense.const  = cbind(trip$i, trip$j, trip$x),
-      const.dir    = const_dir,
-      const.rhs    = const_vec
-    )
-  }
-  
+
+  # No second solver: a fit whose program is not solved to optimality stops here.
   if (lp_res$status != 0) {
     stop("LP did not find an optimal solution (status = ", lp_res$status, ")")
   }
-  
+
   sol <- lp_res$solution
-  theta0_new <- sol[n + 1] - sol[2 * n + p + 2]
-  theta_new  <- sol[(n + 2):(n + p + 1)] -
-                sol[(2 * n + p + 3):(2 * (n + p + 1))]
-  
+  theta0_new <- sol[col_t0]
+  theta_new  <- sol[col_tp] - sol[col_tm]
+
   return(list(
     theta0_k = theta0_new,
     theta_k  = theta_new,

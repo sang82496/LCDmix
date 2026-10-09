@@ -15,7 +15,6 @@ Imports:
     ggplot2,
     glmnet,
     logcondens,
-    lpSolve,
     Matrix,
     parallel,
     Rsymphony,
@@ -23,4 +22,4 @@ Imports:
     stats,
     VGAM
 LitrVersionUsed: 0.9.2
-LitrId: a646ac4697f2f6d10c02d3517f8eb093
+LitrId: 4558eb1b6abd383d1f534c6f74867b9b
