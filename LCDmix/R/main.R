@@ -65,13 +65,23 @@
 #'   update of \eqn{\theta}. Requires \code{update = "lp"}.
 #'
 #' @details
+#' Gate coefficients. As in flowmix, the gate is fitted and stored in the
+#' symmetric multinomial form of \code{glmnet}: every component has its own row
+#' of coefficients, and no component is a reference. Adding a common vector to
+#' all rows does not change \eqn{\pi_k(x)}. At glmnet's solution the intercepts
+#' sum to 0, and for each covariate 0 is a median of the \eqn{K} coefficients,
+#' so the penalty \eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|} that
+#' \code{comp_Q()} and \code{eval_lcd()} compute is the smallest over all such
+#' shifts. flowmix's objective uses the same penalty.
+#'
 #' Covariate scale. The package does not standardize \code{X}. The gate update
 #' calls \code{glmnet} with its default \code{standardize = TRUE}, so in the
-#' original scale the gate penalty is
-#' \eqn{\lambda_\alpha \sum_k \sum_j \mathrm{sd}(x_j) |\alpha_{kj}|}, while
-#' \code{comp_Q()} and \code{eval_lcd()} use
+#' original scale glmnet's penalty is
+#' \eqn{\lambda_\alpha \sum_k \sum_j s_j |\alpha_{kj}|}, where \eqn{s_j} is the
+#' standard deviation of covariate \eqn{j} weighted by the total mass of each
+#' time point, while \code{comp_Q()} and \code{eval_lcd()} use
 #' \eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|}. The two agree when every
-#' column of \code{X} has standard deviation 1. flowmix behaves the same way.
+#' \eqn{s_j} is 1. flowmix behaves the same way.
 #' Center and scale continuous covariates before fitting (0/1 indicators can
 #' stay as they are), and give the same \code{X} to both methods.
 #'

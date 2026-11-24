@@ -51,8 +51,8 @@ responsibilities. They are not thresholded; each row sums to 1.}
 posterior weights, \code{resp_init} times \code{bin_mass}.}
 \item{theta0_init}{List of \code{K} intercepts, after \code{mstep_shift()}.}
 \item{theta_init}{List of \code{K} slope vectors, from flowmix.}
-\item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients; row 1
-is 0.}
+\item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients in the
+symmetric form, as flowmix returns them.}
 \item{resi_init}{List of \code{TT} \eqn{M_t \times K} matrices of
 residuals for \code{theta0_init} and \code{theta_init}.}
 \item{g_init}{List of \code{K} log-concave fits from \code{mstep_g()}.}
@@ -66,8 +66,9 @@ Computes the starting point of the EM-type algorithm:
 \enumerate{
 \item Fits a Gaussian mixture of regressions with \code{flowmix::flowmix()}
 (one random start, \code{nrep = 1}).
-\item Takes the gate coefficients from that fit, centered so that component 1
-is the reference (row 1 is 0), and the intercepts and slopes.
+\item Takes the gate coefficients from that fit as flowmix returns them (the
+symmetric form; see the Details of \code{main()}), and the intercepts and
+slopes.
 \item Computes the residuals and the starting responsibilities from the
 Gaussian component densities \eqn{N(0, \sigma_k^2)}, evaluated at the
 residuals and multiplied by the gate probabilities.

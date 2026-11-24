@@ -7,8 +7,9 @@
 #'
 #' 1. Fits a Gaussian mixture of regressions with \code{flowmix::flowmix()}
 #'    (one random start, \code{nrep = 1}).
-#' 2. Takes the gate coefficients from that fit, centered so that component 1
-#'    is the reference (row 1 is 0), and the intercepts and slopes.
+#' 2. Takes the gate coefficients from that fit as flowmix returns them (the
+#'    symmetric form; see the Details of \code{main()}), and the intercepts and
+#'    slopes.
 #' 3. Computes the residuals and the starting responsibilities from the
 #'    Gaussian component densities \eqn{N(0, \sigma_k^2)}, evaluated at the
 #'    residuals and multiplied by the gate probabilities.
@@ -47,8 +48,8 @@
 #'     posterior weights, \code{resp_init} times \code{bin_mass}.}
 #'   \item{theta0_init}{List of \code{K} intercepts, after \code{mstep_shift()}.}
 #'   \item{theta_init}{List of \code{K} slope vectors, from flowmix.}
-#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients; row 1
-#'     is 0.}
+#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients in the
+#'     symmetric form, as flowmix returns them.}
 #'   \item{resi_init}{List of \code{TT} \eqn{M_t \times K} matrices of
 #'     residuals for \code{theta0_init} and \code{theta_init}.}
 #'   \item{g_init}{List of \code{K} log-concave fits from \code{mstep_g()}.}
@@ -98,8 +99,6 @@ initialization <- function(
   
   # 2) Extract initial parameters
   alpha_init  <- flow_res$alpha
-  alpha_init  <- sweep(alpha_init, 2, alpha_init[1, ], FUN = "-")
-  
   theta0_init <- lapply(flow_res$beta, `[[`, 1)
   theta_init  <- lapply(flow_res$beta, function(b) b[-1])
   

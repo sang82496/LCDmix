@@ -93,7 +93,7 @@ res_LCDmix_simul <- function(s){
   alpha_true = sim$alpha
   theta_true = sim$theta
   
-  alpha_est_flow <- t(sweep(flow$alpha, 2, flow$alpha[1, ], FUN = "-")) # (p+1) × K
+  alpha_est_flow <- t(flow$alpha) # (p+1) × K
   alpha_est_lcd  <- t(res$iter$alpha_new)
   
   theta_est_flow <- do.call(cbind, flow$beta)
@@ -129,6 +129,9 @@ res_LCDmix_simul <- function(s){
   ord2 = do.call(order, as.data.frame(t(theta_est_flow)))
   theta_est_flow = theta_est_flow[, ord2]
   alpha_est_flow = alpha_est_flow[, ord2]
+  
+  alpha_est_lcd = alpha_est_lcd - alpha_est_lcd[,1]
+  alpha_est_flow = alpha_est_flow - alpha_est_flow[,1]
   
   g_est = list()
   flow_mn = list()

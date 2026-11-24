@@ -20,7 +20,8 @@ coefficients.}
 }
 \value{
 A numeric \eqn{K \times (p+1)} matrix: row \eqn{k} holds the
-intercept and the \eqn{p} slopes of component \eqn{k}; row 1 is 0.
+intercept and the \eqn{p} slopes of component \eqn{k}, in the symmetric
+form described above.
 }
 \description{
 Fits an L1-penalized multinomial logistic regression with \code{glmnet}.
@@ -29,11 +30,14 @@ the active bins, \eqn{s_{tk} = \sum_{i \in I_{tk}} w_{tik}}; glmnet treats
 each row as proportions with weight \eqn{\sum_k s_{tk}}. glmnet runs on a
 path of 30 values from \code{100 * lambda_alpha} down to
 \code{lambda_alpha}, and the coefficients at \code{lambda_alpha} are
-returned, centered so that component 1 is the reference (row 1 is 0).
+returned as glmnet gives them, in the symmetric form: no component is a
+reference, the intercepts sum to 0, and for each covariate 0 is a median of
+the \eqn{K} coefficients (see the Details of \code{main()}).
 
 If the proportions \eqn{s_{tk} / \sum_l s_{tl}} are the same at every time
 point (to 1e-10), or if glmnet fails, the exact intercept-only solution is
-returned: the log of the total weight of each component, with all slopes 0.
+returned: the log of the total weight of each component, centered to sum
+to 0, with all slopes 0.
 
 glmnet uses its default \code{standardize = TRUE}, so the penalty acts on
 the coefficients of the standardized covariates. See the Details of

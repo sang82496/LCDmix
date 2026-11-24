@@ -134,13 +134,23 @@ Let's define a function for our R package:
 #'   update of \eqn{\theta}. Requires \code{update = "lp"}.
 #'
 #' @details
+#' Gate coefficients. As in flowmix, the gate is fitted and stored in the
+#' symmetric multinomial form of \code{glmnet}: every component has its own row
+#' of coefficients, and no component is a reference. Adding a common vector to
+#' all rows does not change \eqn{\pi_k(x)}. At glmnet's solution the intercepts
+#' sum to 0, and for each covariate 0 is a median of the \eqn{K} coefficients,
+#' so the penalty \eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|} that
+#' \code{comp_Q()} and \code{eval_lcd()} compute is the smallest over all such
+#' shifts. flowmix's objective uses the same penalty.
+#'
 #' Covariate scale. The package does not standardize \code{X}. The gate update
 #' calls \code{glmnet} with its default \code{standardize = TRUE}, so in the
-#' original scale the gate penalty is
-#' \eqn{\lambda_\alpha \sum_k \sum_j \mathrm{sd}(x_j) |\alpha_{kj}|}, while
-#' \code{comp_Q()} and \code{eval_lcd()} use
+#' original scale glmnet's penalty is
+#' \eqn{\lambda_\alpha \sum_k \sum_j s_j |\alpha_{kj}|}, where \eqn{s_j} is the
+#' standard deviation of covariate \eqn{j} weighted by the total mass of each
+#' time point, while \code{comp_Q()} and \code{eval_lcd()} use
 #' \eqn{\lambda_\alpha \sum_k \sum_j |\alpha_{kj}|}. The two agree when every
-#' column of \code{X} has standard deviation 1. flowmix behaves the same way.
+#' \eqn{s_j} is 1. flowmix behaves the same way.
 #' Center and scale continuous covariates before fitting (0/1 indicators can
 #' stay as they are), and give the same \code{X} to both methods.
 #'
@@ -400,8 +410,9 @@ binning <- function(
 #'
 #' 1. Fits a Gaussian mixture of regressions with \code{flowmix::flowmix()}
 #'    (one random start, \code{nrep = 1}).
-#' 2. Takes the gate coefficients from that fit, centered so that component 1
-#'    is the reference (row 1 is 0), and the intercepts and slopes.
+#' 2. Takes the gate coefficients from that fit as flowmix returns them (the
+#'    symmetric form; see the Details of \code{main()}), and the intercepts and
+#'    slopes.
 #' 3. Computes the residuals and the starting responsibilities from the
 #'    Gaussian component densities \eqn{N(0, \sigma_k^2)}, evaluated at the
 #'    residuals and multiplied by the gate probabilities.
@@ -440,8 +451,8 @@ binning <- function(
 #'     posterior weights, \code{resp_init} times \code{bin_mass}.}
 #'   \item{theta0_init}{List of \code{K} intercepts, after \code{mstep_shift()}.}
 #'   \item{theta_init}{List of \code{K} slope vectors, from flowmix.}
-#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients; row 1
-#'     is 0.}
+#'   \item{alpha_init}{\eqn{K \times (p+1)} matrix of gate coefficients in the
+#'     symmetric form, as flowmix returns them.}
 #'   \item{resi_init}{List of \code{TT} \eqn{M_t \times K} matrices of
 #'     residuals for \code{theta0_init} and \code{theta_init}.}
 #'   \item{g_init}{List of \code{K} log-concave fits from \code{mstep_g()}.}
@@ -491,8 +502,6 @@ initialization <- function(
   
   # 2) Extract initial parameters
   alpha_init  <- flow_res$alpha
-  alpha_init  <- sweep(alpha_init, 2, alpha_init[1, ], FUN = "-")
-  
   theta0_init <- lapply(flow_res$beta, `[[`, 1)
   theta_init  <- lapply(flow_res$beta, function(b) b[-1])
   
@@ -1316,7 +1325,8 @@ comp_Q <- function(
 #'   \item{idx_new, resp_new, weight_new}{E-step output that belongs to the
 #'     returned parameters.}
 #'   \item{resi_new}{Residuals at the returned parameters.}
-#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients; row 1 is 0.}
+#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients in the symmetric
+#'     form (see \code{mstep_alpha()}).}
 #'   \item{theta0_new, theta_new}{Lists of \code{K} intercepts and \code{K}
 #'     slope vectors.}
 #'   \item{g_new}{List of \code{K} log-concave fits.}
@@ -1709,11 +1719,14 @@ estep_lcd <- function(
 #' each row as proportions with weight \eqn{\sum_k s_{tk}}. glmnet runs on a
 #' path of 30 values from \code{100 * lambda_alpha} down to
 #' \code{lambda_alpha}, and the coefficients at \code{lambda_alpha} are
-#' returned, centered so that component 1 is the reference (row 1 is 0).
+#' returned as glmnet gives them, in the symmetric form: no component is a
+#' reference, the intercepts sum to 0, and for each covariate 0 is a median of
+#' the \eqn{K} coefficients (see the Details of \code{main()}).
 #'
 #' If the proportions \eqn{s_{tk} / \sum_l s_{tl}} are the same at every time
 #' point (to 1e-10), or if glmnet fails, the exact intercept-only solution is
-#' returned: the log of the total weight of each component, with all slopes 0.
+#' returned: the log of the total weight of each component, centered to sum
+#' to 0, with all slopes 0.
 #'
 #' glmnet uses its default \code{standardize = TRUE}, so the penalty acts on
 #' the coefficients of the standardized covariates. See the Details of
@@ -1728,7 +1741,8 @@ estep_lcd <- function(
 #'   coefficients.
 #'
 #' @return A numeric \eqn{K \times (p+1)} matrix: row \eqn{k} holds the
-#'   intercept and the \eqn{p} slopes of component \eqn{k}; row 1 is 0.
+#'   intercept and the \eqn{p} slopes of component \eqn{k}, in the symmetric
+#'   form described above.
 #'
 #' @examples
 #' \dontrun{
@@ -1762,8 +1776,8 @@ mstep_alpha <- function(
   intercept_only <- function() {
     tot <- colSums(weight_sum)
     a0  <- log(pmax(tot, .Machine$double.xmin) / sum(tot))
-    a   <- cbind(a0, matrix(0, K, ncol(X)))
-    sweep(a, 2, a[1, ], FUN = "-")
+    a   <- cbind(a0 - mean(a0), matrix(0, K, ncol(X)))
+    return(a)
   }
   rs <- rowSums(weight_sum)
   pr <- weight_sum[rs > 0, , drop = FALSE] / rs[rs > 0]
@@ -1777,7 +1791,6 @@ mstep_alpha <- function(
 
   coefs_list <- glmnet::coef.glmnet(fit, s = lambda_alpha)
   alpha_mat  <- t(as.matrix(do.call(cbind, coefs_list)))
-  alpha_mat  <- sweep(alpha_mat, 2, alpha_mat[1, ], FUN = "-")
   return(alpha_mat)
 }
 ```
@@ -5165,7 +5178,7 @@ res_LCDmix_simul <- function(s){
   alpha_true = sim$alpha
   theta_true = sim$theta
   
-  alpha_est_flow <- t(sweep(flow$alpha, 2, flow$alpha[1, ], FUN = "-")) # (p+1) × K
+  alpha_est_flow <- t(flow$alpha) # (p+1) × K
   alpha_est_lcd  <- t(res$iter$alpha_new)
   
   theta_est_flow <- do.call(cbind, flow$beta)
@@ -5201,6 +5214,9 @@ res_LCDmix_simul <- function(s){
   ord2 = do.call(order, as.data.frame(t(theta_est_flow)))
   theta_est_flow = theta_est_flow[, ord2]
   alpha_est_flow = alpha_est_flow[, ord2]
+  
+  alpha_est_lcd = alpha_est_lcd - alpha_est_lcd[,1]
+  alpha_est_flow = alpha_est_flow - alpha_est_flow[,1]
   
   g_est = list()
   flow_mn = list()

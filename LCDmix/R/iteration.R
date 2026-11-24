@@ -39,7 +39,8 @@
 #'   \item{idx_new, resp_new, weight_new}{E-step output that belongs to the
 #'     returned parameters.}
 #'   \item{resi_new}{Residuals at the returned parameters.}
-#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients; row 1 is 0.}
+#'   \item{alpha_new}{\eqn{K \times (p+1)} gate coefficients in the symmetric
+#'     form (see \code{mstep_alpha()}).}
 #'   \item{theta0_new, theta_new}{Lists of \code{K} intercepts and \code{K}
 #'     slope vectors.}
 #'   \item{g_new}{List of \code{K} log-concave fits.}
